@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lighthouse · Interactive Prototype</title>
+<style>
+  :root{
+    --bg:#0B1626; --panel:#0F1B2D; --card:#16263D; --card2:#1B2E4A; --line:#24344E;
+    --ice:#CADCFC; --slate:#7A8CA6; --white:#F4F7FC;
+    --amber:#F59E0B; --rose:#FB7185; --teal:#38BDF8; --green:#34D399; --dim:#46566E;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{background:var(--bg); color:var(--ice); font:14px/1.45 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; overflow:hidden;}
+  button{font:inherit; cursor:pointer; border:none;}
+
+  /* ---------- top bar ---------- */
+  .topbar{height:54px; display:flex; align-items:center; gap:14px; padding:0 16px; background:var(--panel); border-bottom:1px solid var(--line);}
+  .brand{display:flex; align-items:center; gap:9px; font-weight:800; letter-spacing:2.5px; color:var(--white); font-size:15px;}
+  .beacon{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid var(--amber); position:relative;}
+  .beacon::after{content:''; position:absolute; left:-4px; top:12px; width:8px; height:4px; background:var(--amber); border-radius:0 0 2px 2px;}
+  .chip{padding:3px 10px; border-radius:20px; background:var(--card); font-size:11.5px; letter-spacing:.6px; color:var(--slate); white-space:nowrap;}
+  .chip b{color:var(--ice); font-weight:600;}
+  #postureChip{border:1px solid var(--line); font-weight:700; letter-spacing:1.5px;}
+  #postureChip.QUIET{color:var(--slate);} #postureChip.WATCH{color:var(--teal); border-color:var(--teal);}
+  #postureChip.READY{color:var(--amber); border-color:var(--amber);} #postureChip.ACT{color:var(--rose); border-color:var(--rose); animation:pulse 1.2s infinite;}
+  #actChip{color:var(--amber); font-weight:700;}
+  #clock{font-variant-numeric:tabular-nums; font-weight:700; color:var(--white); min-width:64px; text-align:center; font-size:15px;}
+  .spacer{flex:1;}
+  .ctl{display:flex; align-items:center; gap:8px;}
+  .btn{background:var(--card); color:var(--ice); padding:7px 14px; border-radius:8px; font-weight:600; font-size:13px; border:1px solid var(--line);}
+  .btn:hover{background:var(--card2);}
+  .btn.primary{background:var(--amber); color:#0B1626; border-color:var(--amber);}
+  .btn.primary:hover{filter:brightness(1.08);}
+  select{background:var(--card); color:var(--ice); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font-size:13px;}
+  #gateBanner{display:none; align-items:center; gap:8px; background:rgba(245,158,11,.12); border:1px solid var(--amber); color:var(--amber); padding:5px 12px; border-radius:8px; font-weight:700; font-size:12.5px; animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+  /* ---------- metrics ---------- */
+  .metrics{display:flex; gap:10px; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line);}
+  .stat{flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 12px;}
+  .stat .v{font-size:19px; font-weight:800; color:var(--white); font-variant-numeric:tabular-nums;}
+  .stat .l{font-size:10px; letter-spacing:1.2px; color:var(--slate); text-transform:uppercase; margin-top:1px;}
+  .stat.hl .v{color:var(--amber);}
+
+  /* ---------- layout ---------- */
+  .main{display:grid; grid-template-columns:1fr 442px; grid-template-rows:100%; gap:12px; padding:12px 16px; height:calc(100vh - 54px - 63px);}
+  .main>.left, .main>.right{min-height:0; overflow:hidden; height:100%;}
+  .left{display:flex; flex-direction:column; gap:12px; min-width:0;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; display:flex; flex-direction:column;}
+  .card-h{padding:9px 14px; font-size:11px; letter-spacing:1.6px; color:var(--slate); text-transform:uppercase; font-weight:700; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px;}
+  #mapCard{flex:1.55; min-height:0;}
+  #mapWrap{flex:1; position:relative; min-height:0;}
+  svg{width:100%; height:100%; display:block;}
+  .legend{display:flex; gap:14px; padding:7px 14px; border-top:1px solid var(--line); font-size:11px; color:var(--slate); flex-wrap:wrap;}
+  .lg{display:flex; align-items:center; gap:5px;}
+  .sw{width:9px; height:9px; border-radius:50%;}
+
+  #feedCard{flex:1; min-height:0;}
+  #feed{flex:1; overflow-y:auto; padding:8px 12px; font-size:12.5px;}
+  .fe{display:flex; gap:8px; padding:4px 6px; border-left:3px solid var(--dim); margin-bottom:4px; background:rgba(255,255,255,.015); border-radius:0 6px 6px 0;}
+  .fe .t{color:var(--slate); font-variant-numeric:tabular-nums; min-width:44px; font-size:11px; padding-top:1px;}
+  .fe .who{font-weight:700; white-space:nowrap; font-size:12px;}
+  .fe.sentinel{border-color:var(--teal);} .fe.sentinel .who{color:var(--teal);}
+  .fe.intake{border-color:var(--green);} .fe.intake .who{color:var(--green);}
+  .fe.verify{border-color:var(--amber);} .fe.verify .who{color:var(--amber);}
+  .fe.human{border-color:var(--rose);} .fe.human .who{color:var(--rose);}
+  .fe.ledger{border-color:#A78BFA;} .fe.ledger .who{color:#A78BFA;}
+
+  /* ---------- right column ---------- */
+  .right{display:flex; flex-direction:column; gap:10px; min-height:0;}
+  #gateCard{display:none; background:rgba(245,158,11,.09); border:1.5px solid var(--amber); border-radius:12px; padding:12px 14px;}
+  #gateCard .role{font-size:10px; letter-spacing:2px; color:var(--amber); font-weight:800;}
+  #gateCard h3{color:var(--white); font-size:15px; margin:3px 0 4px;}
+  #gateCard p{font-size:12.5px; color:var(--ice); margin-bottom:10px;}
+  #gateBtns{display:flex; gap:8px;}
+  .gbtn{flex:1; padding:9px; border-radius:8px; font-weight:800; font-size:13px; background:var(--amber); color:#0B1626; animation:pulse 1.2s infinite;}
+  .gbtn.ghost{background:transparent; border:1px solid var(--line); color:var(--slate); animation:none;}
+
+  .tabs{display:flex; gap:6px;}
+  .tab{flex:1; padding:8px; border-radius:9px; background:var(--card); color:var(--slate); font-weight:700; font-size:12.5px; border:1px solid var(--line); text-align:center;}
+  .tab.on{background:var(--card2); color:var(--white); border-color:var(--amber);}
+  .panel{flex:1; min-height:0; display:none; overflow:hidden;}
+  .panel.on{display:flex; flex-direction:column;}
+
+  /* phone */
+  #phonePanel{align-items:center; justify-content:center;}
+  .phone{width:320px; height:min(100%, 640px); background:#111B21; border:6px solid #2A3942; border-radius:26px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 18px 50px rgba(0,0,0,.5);}
+  .ph-head{background:#1F2C34; padding:10px 12px; display:flex; align-items:center; gap:10px;}
+  .avatar{width:34px; height:34px; border-radius:50%; background:var(--amber); color:#0B1626; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:15px;}
+  .ph-name{font-weight:700; color:#E9EDEF; font-size:14px;}
+  .ph-sub{font-size:11px; color:#8696A0;}
+  #chat{flex:1; min-height:0; overflow-y:auto; padding:12px 10px; background:#0B141A; display:flex; flex-direction:column; gap:6px;}
+  .msg{max-width:82%; padding:7px 10px; border-radius:9px; font-size:12.8px; color:#E9EDEF; line-height:1.4; position:relative; word-wrap:break-word;}
+  .msg .mt{font-size:9.5px; color:#8696A0; text-align:right; margin-top:3px;}
+  .in{background:#1F2C34; align-self:flex-start; border-top-left-radius:2px;}
+  .out{background:#005C4B; align-self:flex-end; border-top-right-radius:2px;}
+  .sys{align-self:center; background:#182229; color:#FFD279; font-size:11px; padding:4px 12px; border-radius:14px;}
+  .voice{display:flex; align-items:center; gap:8px; min-width:170px;}
+  .vplay{width:26px; height:26px; border-radius:50%; background:#00A884; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; flex-shrink:0;}
+  .wave{display:flex; gap:2px; align-items:center; flex:1;}
+  .wave i{width:2.5px; background:#8696A0; border-radius:2px; display:block;}
+  .vdur{font-size:10.5px; color:#8696A0;}
+  .claimcard{border:1px solid var(--amber); background:rgba(245,158,11,.08); border-radius:8px; padding:7px 9px; font-size:11.5px; color:#FFE1A8;}
+  .claimcard b{color:#FFD279;}
+  .typing i{width:5px;height:5px;background:#8696A0;border-radius:50%;display:inline-block;margin-right:3px;animation:blink 1s infinite;}
+  .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+  .ph-foot{padding:8px 10px;}
+  #voiceBtn{width:100%; padding:9px; border-radius:20px; background:#00A884; color:#fff; font-weight:700; font-size:12.5px;}
+  #voiceBtn:disabled{background:#233138; color:#8696A0; cursor:not-allowed;}
+
+  /* ops */
+  .ops-scroll{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:2px;}
+  .mini{background:var(--panel); border:1px solid var(--line); border-radius:12px;}
+  .mini .card-h{border-bottom:1px solid var(--line);}
+  .row{display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:12px; border-bottom:1px solid rgba(36,52,78,.5);}
+  .row:last-child{border-bottom:none;}
+  .row .id{font-family:ui-monospace,Menlo,monospace; color:var(--slate); font-size:11px; min-width:62px;}
+  .sev{padding:1px 7px; border-radius:10px; font-size:10px; font-weight:800; letter-spacing:.5px;}
+  .sev.URGENT{background:rgba(251,113,133,.15); color:var(--rose);}
+  .sev.HIGH{background:rgba(245,158,11,.15); color:var(--amber);}
+  .sev.MED{background:rgba(56,189,248,.13); color:var(--teal);}
+  .st{margin-left:auto; font-size:10.5px; color:var(--slate); letter-spacing:.5px;}
+  .st.v{color:var(--teal);} .st.s{color:var(--green);}
+  .conf{margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums;}
+  .stock{display:flex; gap:8px; padding:10px 12px; flex-wrap:wrap;}
+  .sk{flex:1; min-width:88px; background:var(--card); border-radius:8px; padding:7px 9px; text-align:center;}
+  .sk .v{font-weight:800; color:var(--white); font-size:15px;}
+  .sk .l{font-size:9.5px; color:var(--slate); letter-spacing:.8px; text-transform:uppercase;}
+  .note{padding:8px 12px; font-size:11.5px; color:var(--slate); font-style:italic;}
+
+  /* ledger */
+  .totals{padding:10px 12px;}
+  .tline{display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px;}
+  .tline b{color:var(--white); font-variant-numeric:tabular-nums;}
+  .bar{height:8px; background:var(--card); border-radius:5px; overflow:hidden;}
+  .bar i{display:block; height:100%; background:linear-gradient(90deg,var(--amber),var(--green)); width:0%; transition:width .5s;}
+  #t2rBig{text-align:center; padding:8px 0 4px;}
+  #t2rBig .v{font-size:30px; font-weight:900; color:var(--green);}
+  #t2rBig .l{font-size:10px; letter-spacing:2px; color:var(--slate);}
+  #ledRows{flex:1; overflow-y:auto;}
+  .lrow{display:flex; gap:8px; padding:5px 12px; font-size:11.3px; border-bottom:1px solid rgba(36,52,78,.5); font-variant-numeric:tabular-nums;}
+  .lrow .ty{min-width:44px; font-weight:800; letter-spacing:.5px; font-size:10px; padding-top:1px;}
+  .ty.AL{color:var(--amber);} .ty.DI{color:var(--green);} .ty.AP{color:var(--rose);}
+  .lrow .hs{margin-left:auto; font-family:ui-monospace,Menlo,monospace; color:var(--dim); font-size:10px;}
+
+  /* map bits */
+  .plabel{fill:#41546F; font-size:10.5px; letter-spacing:1px; font-weight:600; text-anchor:middle; text-transform:uppercase;}
+  .hh{stroke:rgba(0,0,0,.35); stroke-width:.5; cursor:pointer;}
+  .hh.reg{fill:#4A607F;} .hh.risk{fill:var(--amber);} .hh.aff{fill:var(--rose);}
+  .hh.ver{fill:var(--teal);} .hh.set{fill:var(--green);} .hh.closed{fill:#33415A;}
+  #stormG text{fill:#FFB4C0; font-size:11px; font-weight:800; letter-spacing:1px;}
+  .shel{fill:var(--teal); font-size:13px;}
+  #popover{position:absolute; display:none; background:var(--card2); border:1px solid var(--amber); border-radius:10px; padding:10px 12px; font-size:12px; max-width:230px; z-index:30; box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  #popover h4{color:var(--white); font-size:13px; margin-bottom:2px;}
+  #popover .k{color:var(--slate);}
+
+  /* overlays */
+  .overlay{position:fixed; inset:0; background:rgba(6,12,22,.88); display:flex; align-items:center; justify-content:center; z-index:50; backdrop-filter:blur(3px);}
+  .ov-card{width:560px; max-width:92vw; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:28px 30px;}
+  .ov-card h1{color:var(--white); font-size:22px; letter-spacing:.5px; margin-bottom:4px;}
+  .ov-card .tag{color:var(--amber); font-size:12px; letter-spacing:2px; font-weight:800; margin-bottom:14px;}
+  .ov-card p{font-size:13.5px; color:var(--ice); margin-bottom:10px;}
+  .ov-card .dim{color:var(--slate); font-size:12px;}
+  .ovstats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:14px 0;}
+  .ovs{background:var(--card); border-radius:10px; padding:10px; text-align:center;}
+  .ovs .v{font-size:22px; font-weight:900; color:var(--green);}
+  .ovs .l{font-size:9.5px; letter-spacing:1.2px; color:var(--slate); text-transform:uppercase;}
+  .ov-actions{display:flex; gap:10px; margin-top:16px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="beacon"></span>LIGHTHOUSE</div>
+  <span class="chip">REPLAY · <b>Hurricane Melissa</b> · Oct 2025</span>
+  <span class="chip" id="actChip">PRESS PLAY</span>
+  <span class="chip" id="postureChip">QUIET</span>
+  <div id="gateBanner">⏸ WAITING ON YOU → <span id="gateBannerTxt"></span></div>
+  <div class="spacer"></div>
+  <div class="ctl">
+    <span id="clock">T−120h</span>
+    <button class="btn primary" id="playBtn">▶ Play</button>
+    <select id="speedSel"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select>
+    <button class="btn" id="restartBtn">↺</button>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="stat"><div class="v" id="mReg">0</div><div class="l">Registered</div></div>
+  <div class="stat"><div class="v" id="mRisk">0</div><div class="l">At-risk</div></div>
+  <div class="stat"><div class="v" id="mClaims">0</div><div class="l">Claims</div></div>
+  <div class="stat"><div class="v" id="mVer">0</div><div class="l">Verified</div></div>
+  <div class="stat"><div class="v" id="mSet">0</div><div class="l">Settled</div></div>
+  <div class="stat hl"><div class="v" id="mT2R">—</div><div class="l">Time to Relief</div></div>
+</div>
+
+<div class="main">
+  <div class="left">
+    <div class="card" id="mapCard">
+      <div class="card-h">Operational map · Jamaica <span style="margin-left:auto; letter-spacing:0; text-transform:none; font-weight:400;" id="mapHint">click any dot for its Storm File</span></div>
+      <div id="mapWrap">
+        <svg id="map" viewBox="0 0 1000 540" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="popover"></div>
+      </div>
+      <div class="legend">
+        <span class="lg"><span class="sw" style="background:#4A607F"></span>registered</span>
+        <span class="lg"><span class="sw" style="background:var(--amber)"></span>at-risk</span>
+        <span class="lg"><span class="sw" style="background:var(--rose)"></span>affected</span>
+        <span class="lg"><span class="sw" style="background:var(--teal)"></span>verified</span>
+        <span class="lg"><span class="sw" style="background:var(--green)"></span>settled</span>
+        <span class="lg" style="margin-left:auto">⌂ shelter open</span>
+      </div>
+    </div>
+    <div class="card" id="feedCard">
+      <div class="card-h">Agent activity</div>
+      <div id="feed"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div id="gateCard">
+      <div class="role" id="gateRole"></div>
+      <h3 id="gateTitle"></h3>
+      <p id="gateDesc"></p>
+      <div id="gateBtns"></div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-p="phonePanel">WhatsApp</button>
+      <button class="tab" data-p="opsPanel">EOC Ops</button>
+      <button class="tab" data-p="ledPanel">Ledger</button>
+    </div>
+
+    <div class="panel on" id="phonePanel">
+      <div class="phone">
+        <div class="ph-head">
+          <div class="avatar">L</div>
+          <div><div class="ph-name">Lighthouse</div><div class="ph-sub">official · always on</div></div>
+        </div>
+        <div id="chat"></div>
+        <div class="ph-foot"><button id="voiceBtn" disabled>🎤 Send a test voice note</button></div>
+      </div>
+    </div>
+
+    <div class="panel" id="opsPanel">
+      <div class="ops-scroll">
+        <div class="mini" id="anticipCard" style="display:none">
+          <div class="card-h" style="color:var(--amber)">Anticipatory action list</div>
+          <div class="note" id="anticipTxt"></div>
+        </div>
+        <div class="mini">
+          <div class="card-h">Triage queue <span class="st" id="triCount"></span></div>
+          <div id="triage"></div>
+        </div>
+        <div class="mini">
+          <div class="card-h">Verification review queue</div>
+          <div id="review"><div class="note">Empty. High-confidence claims verify automatically; only low-confidence claims come to a human.</div></div>
+        </div>
+        <div class="mini">
+          <div class="card-h">Parish warehouse · Santa Cruz</div>
+          <div class="stock" id="stock"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="ledPanel">
+      <div class="mini" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+        <div class="card-h">Public relief ledger · append-only</div>
+        <div class="totals">
+          <div class="tline"><span>Committed</span><b id="ledCom">J$0</b></div>
+          <div class="tline"><span>Disbursed to households</span><b id="ledDis">J$0</b></div>
+          <div class="bar"><i id="ledBar"></i></div>
+          <div id="t2rBig"><div class="v" id="t2rV">—</div><div class="l">MEDIAN TIME TO RELIEF</div></div>
+        </div>
+        <div id="ledRows"></div>
+        <div class="note">Aggregates are public. Named beneficiaries are never shown. Every row is hash-chained.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="intro">
+  <div class="ov-card">
+    <div class="tag">INTERACTIVE PROTOTYPE · PROJECT LIGHTHOUSE</div>
+    <h1>One storm, three acts</h1>
+    <p>This simulation replays <b style="color:var(--white)">Hurricane Melissa</b> through the platform we are proposing: forecast → registry → WhatsApp claims → agent verification → human-approved payments → public ledger.</p>
+    <p><b style="color:var(--amber)">You play the humans.</b> Agents do the cognition, but the sim pauses every time money or mass alerts need a signature: you are the EOC Director, the review clerk, and the Finance Officer.</p>
+    <p class="dim">Watch the map dots change state: registered → at-risk → affected → verified → settled. After landfall, try the 🎤 button to file your own claim, in Patois if yuh want.</p>
+    <div class="ov-actions">
+      <button class="btn primary" style="flex:1; padding:12px;" id="startBtn">▶ Run the storm</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="endOv" style="display:none">
+  <div class="ov-card">
+    <div class="tag">REPLAY COMPLETE</div>
+    <h1>The report became the claim became the payment</h1>
+    <div class="ovstats">
+      <div class="ovs"><div class="v" id="eClaims">0</div><div class="l">Claims filed</div></div>
+      <div class="ovs"><div class="v" id="eVer">0</div><div class="l">Verified</div></div>
+      <div class="ovs"><div class="v" id="eT2R">—</div><div class="l">Median T2R</div></div>
+    </div>
+    <p>Every dollar above has a signature and a hash. After the real Melissa, <b style="color:var(--rose)">1.8%</b> of donated cash had reached households in four months. In this replay the median household waited <b style="color:var(--green)" id="eT2R2"></b> after verification.</p>
+    <p class="dim">Everything here is synthetic. The storm track, advisories and timeline are Melissa's real shape.</p>
+    <div class="ov-actions">
+      <button class="btn primary" style="flex:1" id="replayBtn">↺ Replay</button>
+      <button class="btn" style="flex:1" id="exploreBtn">Keep exploring</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= utilities ================= */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+const rnd = mulberry32(20251028);
+const $=id=>document.getElementById(id);
+const NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function fmtT(h){const s=h<0?'−':'+';const a=Math.abs(Math.round(h));return 'T'+s+a+'h';}
+function money(j){return 'J$'+(j/1e6).toFixed(1)+'M';}
+let hashPrev=2166136261;
+function nextHash(s){for(let i=0;i<s.length;i++){hashPrev^=s.charCodeAt(i);hashPrev=Math.imul(hashPrev,16777619);}return ('0000000'+(hashPrev>>>0).toString(16)).slice(-8);}
+
+/* ================= geo ================= */
+const LON0=-78.55, LON1=-76.05, LAT0=16.7, LAT1=18.75;
+function X(lon){return (lon-LON0)/(LON1-LON0)*1000;}
+function Y(lat){return (LAT1-lat)/(LAT1-LAT0)*540;}
+const coast=[[-78.37,18.27],[-78.2,18.36],[-77.95,18.43],[-77.6,18.46],[-77.3,18.44],[-77.05,18.43],[-76.8,18.38],[-76.55,18.28],[-76.33,18.13],[-76.22,17.97],[-76.35,17.88],[-76.62,17.86],[-76.78,17.94],[-76.9,17.92],[-77.05,17.84],[-77.25,17.8],[-77.45,17.86],[-77.65,17.84],[-77.9,17.88],[-78.1,17.98],[-78.3,18.1]];
+function smoothPath(pts){const p=pts.map(c=>[X(c[0]),Y(c[1])]);let d='';const n=p.length;const mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];d='M'+mid(p[0],p[n-1]).join(' ');for(let i=0;i<n;i++){const m=mid(p[i],p[(i+1)%n]);d+=' Q'+p[i].join(' ')+' '+m.join(' ');}return d+' Z';}
+const parishes=[['HANOVER',-78.22,18.33],['ST JAMES',-77.92,18.33],['TRELAWNY',-77.6,18.31],['ST ANN',-77.22,18.31],['PORTLAND',-76.52,18.12],['WESTMORELAND',-78.1,18.19],['ST ELIZABETH',-77.79,18.05],['MANCHESTER',-77.49,18.07],['CLARENDON',-77.2,17.97],['KINGSTON',-76.79,18.0]];
+const track=[[-76.95,16.75,-120],[-77.15,17.0,-96],[-77.35,17.25,-72],[-77.55,17.5,-48],[-77.72,17.72,-24],[-77.85,17.92,0],[-77.92,18.1,8],[-77.95,18.3,16],[-77.9,18.55,26]];
+function stormPos(t){if(t<=track[0][2])return track[0];if(t>=track[track.length-1][2])return track[track.length-1];
+ for(let i=0;i<track.length-1;i++){const a=track[i],b=track[i+1];if(t>=a[2]&&t<=b[2]){const f=(t-a[2])/(b[2]-a[2]);return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, t];}}return track[0];}
+
+/* ================= data ================= */
+const FIRST=['Daphne','Devon','Marcia','O’Neil','Keisha','Winston','Patrice','Andre','Sophia','Delroy','Cherry','Rohan','Monica','Clive','Tanisha','Everton','Grace','Damion','Icilda','Neville'];
+const LAST=['Palmer','Campbell','Brown','Williams','Gordon','Reid','Salmon','Powell','Bennett','Clarke','Hutchinson','Barrett','Grant','Forbes','Sinclair','Wint'];
+const STRUCT=['zinc roof · timber','zinc roof · concrete','slab roof · concrete','zinc roof · board house'];
+const NEEDPOOL=['tarpaulin','water','food pack','roof repair kit','zinc sheets','generator access','baby supplies'];
+const clusters=[
+ {p:'St Elizabeth', comm:['Newmarket','Black River','Santa Cruz','Junction','Malvern','Balaclava'], c:[-77.8,18.05], sx:.13, sy:.075, n:45, risk:true, claims:30},
+ {p:'Westmoreland', comm:['Savanna-la-Mar','Little London','Darliston','Whithorn','Bethel Town'], c:[-78.07,18.21], sx:.1, sy:.06, n:35, risk:true, claims:22},
+ {p:'Manchester', comm:['Mandeville','Christiana','Porus'], c:[-77.5,18.06], sx:.08, sy:.05, n:15, risk:true, claims:5},
+ {p:'Clarendon', comm:['May Pen','Chapelton'], c:[-77.21,17.99], sx:.07, sy:.05, n:12, risk:.5, claims:4},
+ {p:'St James', comm:['Montego Bay','Cambridge'], c:[-77.9,18.34], sx:.07, sy:.04, n:12, risk:false, claims:0},
+ {p:'Kingston', comm:['Kingston','Half Way Tree'], c:[-76.8,18.0], sx:.06, sy:.04, n:12, risk:false, claims:0}
+];
+function gauss(){return (rnd()+rnd()+rnd()-1.5)/1.5;}
+const HH=[]; let hhId=0;
+clusters.forEach(cl=>{for(let i=0;i<cl.n;i++){
+  const lon=cl.c[0]+gauss()*cl.sx, lat=cl.c[1]+gauss()*cl.sy;
+  HH.push({id:++hhId, name:FIRST[(rnd()*FIRST.length)|0]+' '+LAST[(rnd()*LAST.length)|0],
+    comm:cl.comm[(rnd()*cl.comm.length)|0], parish:cl.p, lon, lat,
+    struct:STRUCT[(rnd()*STRUCT.length)|0], people:2+((rnd()*5)|0),
+    atRisk: cl.risk===true || (cl.risk===.5&&rnd()<.5),
+    state:'reg', el:null, claim:null});
+}});
+/* pick claimants */
+const CLAIMS=[]; let cSeq=2100;
+clusters.forEach(cl=>{const pool=HH.filter(h=>h.parish===cl.p&&h.atRisk);
+ for(let i=0;i<cl.claims&&i<pool.length;i++){const h=pool[i];
+  const t=2+38*Math.pow(rnd(),1.6);
+  const r=rnd(); const sev=r<.15?'URGENT':(r<.5?'HIGH':'MED');
+  const conf=(rnd()<.1)?(.5+rnd()*.2):(.75+rnd()*.22);
+  CLAIMS.push({id:'SE-'+(++cSeq), hh:h, t, sev, conf:Math.min(.97,conf),
+    need:NEEDPOOL[(rnd()*NEEDPOOL.length)|0], vDelay:2+rnd()*6,
+    verified:null, settled:null, injected:false});
+  h.claim='pending';
+ }});
+CLAIMS.sort((a,b)=>a.t-b.t);
+/* featured claim */
+const FEAT={id:'SE-4102', hh:{id:999,name:'Daphne Palmer',comm:'Newmarket',parish:'St Elizabeth',lon:-77.93,lat:18.12,struct:'zinc roof · timber',people:5,atRisk:true,state:'reg',el:null},
+ t:6, sev:'URGENT', conf:.91, need:'tarpaulin + insulin', vDelay:2.4, verified:null, settled:null, featured:true};
+HH.push(FEAT.hh); CLAIMS.push(FEAT); CLAIMS.sort((a,b)=>a.t-b.t);
+const REVIEW_ID='SE-2114';
+let reviewClaim=CLAIMS.find(c=>c.conf<.7)||CLAIMS[5]; reviewClaim.id=REVIEW_ID; reviewClaim.t=20; reviewClaim.conf=.62;
+
+/* ================= sim state ================= */
+const S={t:-120, playing:false, speed:2, started:false, over:false,
+ posture:'QUIET', act:'PRESS PLAY', gate:null, fired:new Set(),
+ batchSigned:false, committed:0, disbursed:0, injectCount:0, autoGates:false};
+
+/* ================= map build ================= */
+const map=$('map');
+el('rect',{x:0,y:0,width:1000,height:540,fill:'#0B1626'},map);
+el('path',{d:smoothPath(coast),fill:'#152238',stroke:'#2A3B55','stroke-width':1.5},map);
+parishes.forEach(p=>{const t=el('text',{x:X(p[1]),y:Y(p[2]),class:'plabel'},map);t.textContent=p[0];});
+const bandsG=el('g',{},map), trackG=el('g',{},map), stormG=el('g',{id:'stormG'},map), shelG=el('g',{},map), hhG=el('g',{},map);
+/* track lines */
+const pastLine=el('polyline',{fill:'none',stroke:'#F59E0B','stroke-width':2,points:''},trackG);
+const futLine=el('polyline',{fill:'none',stroke:'#F59E0B','stroke-width':1.5,'stroke-dasharray':'5 5',opacity:.5,points:''},trackG);
+/* storm marker */
+const b34=el('circle',{r:0,fill:'#F59E0B',opacity:.10},bandsG);
+const b50=el('circle',{r:0,fill:'#FB7185',opacity:.12},bandsG);
+const b64=el('circle',{r:0,fill:'#FB7185',opacity:.2},bandsG);
+const sDot=el('circle',{r:7,fill:'#FB7185',stroke:'#fff','stroke-width':1.5},stormG);
+const sLbl=el('text',{x:0,y:-14,'text-anchor':'middle'},stormG); sLbl.textContent='';
+/* households */
+HH.forEach(h=>{h.el=el('circle',{cx:X(h.lon),cy:Y(h.lat),r:3.6,class:'hh reg'},hhG);
+ h.el.addEventListener('click',ev=>showPop(h,ev));});
+function setHH(h,cls){h.state=cls;h.el.setAttribute('class','hh '+cls);}
+function showPop(h,ev){const p=$('popover');const states={reg:'REGISTERED',risk:'AT-RISK',aff:'AFFECTED',ver:'VERIFIED',set:'SETTLED',closed:'CLOSED'};
+ p.innerHTML='<h4>'+h.name+'</h4><div class="k">'+h.comm+' · '+h.parish+'</div>'
+ +'<div style="margin-top:5px"><span class="k">Storm File:</span> <b style="color:var(--amber)">'+states[h.state]+'</b></div>'
+ +'<div><span class="k">Structure:</span> '+h.struct+'</div><div><span class="k">Household:</span> '+h.people+' people</div>'
+ +(h===FEAT.hh?'<div style="color:var(--rose);margin-top:4px">⚕ chronic: insulin (flagged)</div>':'');
+ const r=$('mapWrap').getBoundingClientRect();
+ p.style.left=Math.min(ev.clientX-r.left+12, r.width-240)+'px'; p.style.top=Math.max(ev.clientY-r.top-20,6)+'px'; p.style.display='block';
+ clearTimeout(p._t); p._t=setTimeout(()=>p.style.display='none',4200);}
+document.addEventListener('click',e=>{if(!e.target.closest('.hh')&&!e.target.closest('#popover'))$('popover').style.display='none';});
+
+/* ================= feed / phone / panels ================= */
+function feed(cls,who,txt){const f=$('feed');const d=document.createElement('div');d.className='fe '+cls;
+ d.innerHTML='<span class="t">'+fmtT(S.t)+'</span><span class="who">'+who+'</span><span>'+txt+'</span>';
+ f.appendChild(d); while(f.children.length>90)f.removeChild(f.firstChild); f.scrollTop=f.scrollHeight;}
+function chatMsg(kind,html,noscroll){const c=$('chat');const d=document.createElement('div');d.className='msg '+kind;
+ d.innerHTML=html+(kind!=='sys'?'<div class="mt">'+fmtT(S.t)+'</div>':'');c.appendChild(d);if(!noscroll)c.scrollTop=c.scrollHeight;return d;}
+function typing(){return chatMsg('in','<span class="typing"><i></i><i></i><i></i></span>');}
+function voiceBubble(dur){let bars='';for(let i=0;i<22;i++){bars+='<i style="height:'+(4+rnd()*12).toFixed(0)+'px"></i>';}
+ return '<div class="voice"><div class="vplay">▶</div><div class="wave">'+bars+'</div><span class="vdur">'+dur+'</span></div>';}
+function switchTab(id){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.p===id));
+ document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id===id));}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.p)));
+
+/* stock */
+const stock={Tarpaulins:420,'Water (cases)':900,'Food packs':650,'Zinc bundles':180,'Med kits':120};
+function renderStock(){$('stock').innerHTML=Object.entries(stock).map(([k,v])=>'<div class="sk"><div class="v">'+v+'</div><div class="l">'+k+'</div></div>').join('');}
+renderStock();
+
+/* triage + review */
+function renderTriage(){const done=CLAIMS.filter(c=>c.verified!==null||S.t>=c.t).sort((a,b)=>({URGENT:0,HIGH:1,MED:2})[a.sev]-({URGENT:0,HIGH:1,MED:2})[b.sev]||a.t-b.t).slice(0,7);
+ $('triCount').textContent=CLAIMS.filter(c=>S.t>=c.t).length+' open';
+ $('triage').innerHTML=done.map(c=>{const st=c.settled!==null&&S.t>=c.settled?'<span class="st s">SETTLED</span>':(c.verified!==null&&S.t>=c.verified?'<span class="st v">VERIFIED</span>':'<span class="st">INTAKE</span>');
+  return '<div class="row"><span class="id">'+c.id+'</span><span>'+c.hh.comm+'</span><span class="sev '+c.sev+'">'+c.sev+'</span>'+st+'</div>';}).join('')||'<div class="note">No claims yet.</div>';}
+function renderReviewGateRow(){$('review').innerHTML='<div class="row"><span class="id">'+reviewClaim.id+'</span><span>'+reviewClaim.hh.comm+'</span><span class="conf" style="color:var(--amber)">'+reviewClaim.conf.toFixed(2)+'</span></div>'
+ +'<div class="note">Signals: hazard ✓ 0.9 · neighbours ✓ 3 nearby · satellite ~ cloud gap · registry ✓ match · media ✓ clean → below auto-verify threshold (0.85)</div>';}
+
+/* ledger */
+function ledRow(ty,label,claim,amt,actor){const code=ty==='ALLOC'?'AL':(ty==='DISB'?'DI':'AP');
+ const h=nextHash(ty+claim+amt+S.t.toFixed(1));
+ const r=document.createElement('div');r.className='lrow';
+ r.innerHTML='<span class="ty '+code+'">'+ty+'</span><span>'+label+'</span><span style="color:var(--slate)">'+claim+'</span><b>'+(amt?('J$'+(amt/1000)+'k'):'')+'</b><span class="hs">#'+h+'</span>';
+ const box=$('ledRows'); box.insertBefore(r,box.firstChild); while(box.children.length>60)box.removeChild(box.lastChild);
+ if(ty==='ALLOC'){S.committed+=amt;} if(ty==='DISB'){S.disbursed+=amt;}
+ $('ledCom').textContent=money(S.committed); $('ledDis').textContent=money(S.disbursed);
+ $('ledBar').style.width=(S.committed?Math.round(S.disbursed/S.committed*100):0)+'%';}
+
+/* metrics */
+function metrics(){const reg=HH.length;
+ $('mReg').textContent=reg;
+ $('mRisk').textContent=HH.filter(h=>h.state==='risk').length;
+ $('mClaims').textContent=CLAIMS.filter(c=>S.t>=c.t).length;
+ $('mVer').textContent=CLAIMS.filter(c=>c.verified!==null&&S.t>=c.verified).length;
+ const set=CLAIMS.filter(c=>c.settled!==null&&S.t>=c.settled);
+ $('mSet').textContent=set.length;
+ if(set.length>=3){const ds=set.map(c=>c.settled-c.verified).sort((a,b)=>a-b);const med=ds[(ds.length/2)|0];
+  $('mT2R').textContent=Math.round(med)+'h'; $('t2rV').textContent=Math.round(med)+'h';}}
+
+/* ================= gates ================= */
+function openGate(g){S.gate=g; S.playing=false; $('playBtn').textContent='▶ Play';
+ $('gateCard').style.display='block'; $('gateRole').textContent=g.role; $('gateTitle').textContent=g.title; $('gateDesc').innerHTML=g.desc;
+ $('gateBanner').style.display='flex'; $('gateBannerTxt').textContent=g.banner;
+ const btns=$('gateBtns'); btns.innerHTML='';
+ g.actions.forEach((a,i)=>{const b=document.createElement('button'); b.className='gbtn'+(i>0?' ghost':''); b.textContent=a.label;
+  b.onclick=()=>{closeGate(); a.fn(); resume();}; btns.appendChild(b);});
+ if(g.tab)switchTab(g.tab);
+ if(S.autoGates)setTimeout(()=>{if(S.gate===g){closeGate();g.actions[0].fn();resume();}},400);}
+function closeGate(){S.gate=null; $('gateCard').style.display='none'; $('gateBanner').style.display='none';}
+function resume(){if(!S.over){S.playing=true; $('playBtn').textContent='⏸ Pause';}}
+
+/* ================= script ================= */
+function once(key,fn){if(!S.fired.has(key)&&!S.gate){S.fired.add(key);fn();}}
+const EVENTS=[
+ [-119,'e0',()=>{feed('sentinel','Forecast Sentinel','Invest 97L organizing south of Hispaniola. Monitoring NHC + ECMWF ensembles.');}],
+ [-118,'e1',()=>{setPosture('WATCH');feed('sentinel','Forecast Sentinel','Posture raised to WATCH. TS Melissa named. 5-day cone touches western Jamaica.');setAct('ACT 1 · FORESIGHT');}],
+ [-96,'e2',()=>{feed('sentinel','Risk Mapper','Impact preview v1: 64kt probability 22% for St Elizabeth, 18% Westmoreland.');}],
+ [-72,'e3',()=>{setPosture('READY');feed('sentinel','Forecast Sentinel','Posture READY. Melissa now Cat 3, slowing. Wind-speed probabilities rising sharply.');
+   HH.forEach(h=>{if(h.atRisk)setHH(h,'risk');});metrics();
+   $('anticipCard').style.display='block';$('anticipTxt').textContent='Risk Mapper flagged 96 pre-verified vulnerable households (elderly, medical needs, weak roofs) inside the 40%+ 64kt band for support BEFORE landfall.';
+   feed('verify','Risk Mapper','96 Storm Files flipped to AT-RISK. Anticipatory list generated.');}],
+ [-60,'g1',()=>openGate({role:'HUMAN GATE · EOC DIRECTOR', title:'Approve alert cascade', banner:'Approve alert cascade',
+   desc:'Alert Agent drafted targeted warnings for 96 at-risk households in St Elizabeth, Westmoreland & Manchester. English + Patois, voice + text, shelter locations attached. Nothing sends without you.', tab:null,
+   actions:[{label:'✓ Approve & send', fn:()=>{feed('human','EOC Director','Alert cascade APPROVED. 96 households messaged in 2 languages.');
+     chatMsg('sys','⚠ OFFICIAL ALERT · Lighthouse');
+     chatMsg('in','⚠ <b>Hurricane Melissa</b> a come. Yuh area (Newmarket) inna di danger zone. Nearest shelter: <b>Newmarket Primary</b>. Charge yuh phone, store water, secure yuh roof if yuh can. Reply HELP any time.');
+     switchTab('phonePanel');}}]})],
+ [-24,'e5',()=>{setPosture('ACT');feed('sentinel','Forecast Sentinel','Posture ACT. Melissa Cat 5, 175mph. Landfall ~24h, near New Hope / Black River.');
+   [[-77.72,18.08],[-78.05,18.24],[-77.48,18.08]].forEach(s=>{const t=el('text',{x:X(s[0]),y:Y(s[1]),class:'shel','text-anchor':'middle'},shelG);t.textContent='⌂';});
+   feed('human','EOC Director','3 shelters opened. Pre-positioning approved from Santa Cruz warehouse.');
+   stock['Tarpaulins']-=60;stock['Water (cases)']-=200;renderStock();}],
+ [0,'e6',()=>{setAct('ACT 2 · RESPOND');feed('sentinel','Forecast Sentinel','LANDFALL. Cat 5 near New Hope. Observed wind field being ingested (this becomes verification ground truth).');
+   const p=stormPos(0);const ring=el('circle',{cx:X(p[0]),cy:Y(p[1]),r:10,fill:'none',stroke:'#fff','stroke-width':2,opacity:.9},map);
+   let r=10;const iv=setInterval(()=>{r+=6;ring.setAttribute('r',r);ring.setAttribute('opacity',Math.max(0,.9-r/150));if(r>150){clearInterval(iv);ring.remove();}},40);
+   $('voiceBtn').disabled=false;}],
+ [2,'e7',()=>{feed('intake','Intake Agent','First damage reports arriving on WhatsApp. Voice notes queued for transcription (Patois model).');}],
+ [6,'feat',()=>{playFeatured();}],
+ [20,'g2',()=>{renderReviewGateRow();openGate({role:'HUMAN GATE · REVIEW CLERK', title:'Adjudicate claim '+reviewClaim.id, banner:'Review low-confidence claim',
+   desc:'Verification confidence <b>0.62</b> — below the 0.85 auto-verify line. Satellite tile has cloud cover; other 4 signals check out. The agent brings evidence, a human decides.', tab:'opsPanel',
+   actions:[{label:'✓ Approve → VERIFIED', fn:()=>{reviewClaim.verified=S.t; if(reviewClaim.hh.el)setHH(reviewClaim.hh,'ver');
+      feed('human','Review Clerk',reviewClaim.id+' approved on evidence review → VERIFIED.');
+      $('review').innerHTML='<div class="note">Queue clear. 1 claim adjudicated by human review this event.</div>';}},
+    {label:'✗ Reject', fn:()=>{reviewClaim.rejected=true; if(reviewClaim.hh.el)setHH(reviewClaim.hh,'closed');
+      feed('human','Review Clerk',reviewClaim.id+' rejected — insufficient evidence. File closed, appeal path open.');
+      $('review').innerHTML='<div class="note">Queue clear. 1 claim rejected on review.</div>';}}]})}],
+ [30,'g3',()=>{const n=CLAIMS.filter(c=>c.verified!==null&&S.t>=c.verified).length;
+   openGate({role:'HUMAN GATE · EOC DIRECTOR', title:'Approve allocation plan #1', banner:'Approve allocation plan',
+   desc:'Logistics Agent matched <b>'+n+' verified claims</b> against Santa Cruz stock: 140 tarpaulins, 300 water cases, 90 food packs, 22 med kits + cash grants for URGENT roof loss. 4 distribution runs drafted.', tab:'opsPanel',
+   actions:[{label:'✓ Approve plan', fn:()=>{feed('human','EOC Director','Allocation plan #1 APPROVED. Run sheets issued to parish teams.');
+     stock['Tarpaulins']-=140;stock['Water (cases)']-=300;stock['Food packs']-=90;stock['Med kits']-=22;renderStock();
+     CLAIMS.forEach(c=>{if(c.verified!==null&&!c.rejected&&!c._alloc){c._alloc=true;ledRow('ALLOC',c.need,c.id,45000,'Director');}});}}]})}],
+ [40,'g4',()=>{openGate({role:'HUMAN GATE · FINANCE OFFICER', title:'Sign disbursement batch #1', banner:'Sign disbursement batch',
+   desc:'<b>J$2.1M</b> to 46 verified households: bank transfer, mobile money & vouchers. Duplicate check across payers: <b>0 collisions</b>. No Storm File reaches SETTLED without this signature.', tab:'ledPanel',
+   actions:[{label:'✍ Sign batch', fn:()=>{S.batchSigned=true;feed('human','Finance Officer','Batch #1 SIGNED. Disbursements executing. Every payment lands on the public ledger.');
+     ledRow('APPR','Batch #1 signature','46 claims',0,'Finance');
+     CLAIMS.forEach(c=>{if(c.verified!==null&&!c.rejected&&c.settled===null){c.settled=Math.max(S.t,c.verified)+2+rnd()*22;}});}}]})}],
+ [56,'e8',()=>{setAct('ACT 3 · LEDGER');feed('ledger','Ledger Agent','Reconciling confirmations. 2 anomalies flagged: duplicate phone across claims → merged. Chain verified ✓');}],
+ [64,'e9',()=>{feed('human','Finance Officer','Batch #2 signed (late-verified claims). Median T2R holding under 30h.');
+   CLAIMS.forEach(c=>{if(c.verified!==null&&!c.rejected&&c.settled===null)c.settled=Math.max(S.t,c.verified)+2+rnd()*10;});}],
+ [82,'end',()=>{endReplay();}]
+];
+
+function setPosture(p){S.posture=p;const c=$('postureChip');c.textContent=p;c.className='chip '+p;c.id='postureChip';}
+function setAct(a){$('actChip').textContent=a;}
+
+/* featured WhatsApp conversation, scheduled on sim clock */
+let featSteps=null;
+function playFeatured(){switchTab('phonePanel');
+ const say=[];const T=S.t;
+ say.push([0,()=>{chatMsg('out',voiceBubble('0:11'));feed('intake','Intake Agent','Voice note from +1876…402 (Newmarket). Transcribing — Patois detected.');}]);
+ say.push([0.5,()=>{chatMsg('sys','transcript · Patois · conf 0.94');
+   chatMsg('out','<i>"Mi deh a Newmarket. Di whole roof gone offa di house and mi madda diabetic, har insulin spoil."</i>');}]);
+ say.push([1.0,()=>{const t=typing();setTimeout(()=>t.remove(),600);}]);
+ say.push([1.4,()=>chatMsg('in','Mi sorry fi hear dat. Mi have yuh location as <b>Newmarket, St Elizabeth</b>. Quick ting: anybody hurt right now?')]);
+ say.push([2.2,()=>chatMsg('out','No, everybody safe')]);
+ say.push([2.8,()=>chatMsg('in','Ok good. Send mi one photo of di roof if yuh can, and how much people live a di house?')]);
+ say.push([3.6,()=>{chatMsg('out','📷 <i>photo · roof_damage.jpg</i>');chatMsg('out','Five a wi');}]);
+ say.push([4.4,()=>{chatMsg('in','Thanks. Mi log di claim now:');
+   chatMsg('in','<div class="claimcard"><b>CLAIM SE-4102</b> · roof loss · 5 people<br>⚕ insulin — <b>URGENT</b> · Newmarket, St E<br>status: <b>VERIFYING…</b></div>');
+   feed('intake','Intake Agent','Claim SE-4102 created: roof loss, 5 ppl, insulin URGENT.');
+   FEAT.hh.el&&setHH(FEAT.hh,'aff');}]);
+ say.push([6.0,()=>{feed('verify','Verification Agent','SE-4102: wind ✓ 152mph at point · satellite ✓ roof change · 4 neighbours ✓ · registry ✓ zinc/timber · media ✓ → conf 0.91 AUTO-VERIFIED');
+   FEAT.verified=S.t;FEAT.hh.el&&setHH(FEAT.hh,'ver');
+   chatMsg('in','<div class="claimcard"><b>SE-4102 VERIFIED</b> ✓ (0.91)<br>Insulin dispatch + tarpaulin assigned.<br>Yuh wi get update when it deh pon di way.</div>');
+   feed('verify','Triage Agent','SE-4102 ranked #1 — medical urgency.');}]);
+ featSteps={T,steps:say,i:0};}
+
+/* injected user claim */
+function injectClaim(){if(S.injectCount>=5||S.t<0)return;S.injectCount++;
+ const id='LV-'+(9000+S.injectCount);
+ const h={id:900+S.injectCount,name:'You (demo)',comm:'Black River',parish:'St Elizabeth',lon:-77.86+rnd()*.06,lat:17.94+rnd()*.05,struct:'zinc roof · timber',people:3,atRisk:true,state:'aff',el:null};
+ h.el=el('circle',{cx:X(h.lon),cy:Y(h.lat),r:4.5,class:'hh aff'},hhG);
+ h.el.addEventListener('click',ev=>showPop(h,ev));
+ const c={id,hh:h,t:S.t,sev:'HIGH',conf:.87,need:'tarpaulin',vDelay:3,verified:null,settled:null};
+ CLAIMS.push(c);
+ switchTab('phonePanel');
+ chatMsg('out',voiceBubble('0:06'));
+ const seq=[[0.4,()=>chatMsg('sys','transcript · Patois · conf 0.9')],
+  [0.5,()=>chatMsg('out','<i>"Roof lif up offa mi house, everything soak. Mi deh a Black River wid mi two pickney."</i>')],
+  [1.2,()=>chatMsg('in','Sorry fi hear dat. Mi log it: <b>roof damage · 3 people · Black River</b>. Claim <b>'+id+'</b>. Yuh wi hear back soon — stay safe.')],
+  [1.4,()=>feed('intake','Intake Agent','Claim '+id+' created from live voice note (that was you).')],
+  [3.4,()=>{c.verified=S.t;setHH(h,'ver');feed('verify','Verification Agent',id+': hazard ✓ · 6 neighbours ✓ → conf 0.87 AUTO-VERIFIED');
+    if(S.batchSigned){c.settled=S.t+3+rnd()*6;feed('ledger','Ledger Agent',id+' joins next disbursement run.');c._alloc=true;ledRow('ALLOC','tarpaulin',id,45000,'Director');}
+    chatMsg('in','<div class="claimcard"><b>'+id+' VERIFIED</b> ✓ (0.87)<br>Tarpaulin assigned from Santa Cruz.</div>');}]
+ ];
+ c._steps={T:S.t,steps:seq,i:0};}
+$('voiceBtn').addEventListener('click',injectClaim);
+
+/* ================= per-tick processing ================= */
+function processClaims(){
+ CLAIMS.forEach(c=>{
+  if(c===reviewClaim){ if(S.t>=c.t&&!c._open){c._open=true;if(c.hh.el)setHH(c.hh,'aff');feed('intake','Intake Agent','Claim '+c.id+' created ('+c.hh.comm+').');}return;}
+  if(c.featured)return;
+  if(c._steps){const st=c._steps;while(st.i<st.steps.length&&S.t-st.T>=st.steps[st.i][0]){st.steps[st.i][1]();st.i++;}}
+  if(S.t>=c.t&&!c._open&&!c.injected){c._open=true;if(c.hh.el&&c.hh.state!=='ver'&&c.hh.state!=='set')setHH(c.hh,'aff');
+   if(rnd()<.35)feed('intake','Intake Agent','Claim '+c.id+' created ('+c.hh.comm+' · '+c.sev.toLowerCase()+').');}
+  if(c._open&&c.verified===null&&!c.rejected&&S.t>=c.t+c.vDelay){c.verified=S.t;
+   if(c.hh.el)setHH(c.hh,'ver');
+   if(rnd()<.3)feed('verify','Verification Agent',c.id+': conf '+c.conf.toFixed(2)+' → AUTO-VERIFIED.');}
+  if(c.settled!==null&&S.t>=c.settled&&!c._paid){c._paid=true;if(c.hh.el)setHH(c.hh,'set');
+   if(!c._alloc){c._alloc=true;ledRow('ALLOC',c.need,c.id,45000,'Director');}
+   ledRow('DISB',c.need+' delivered',c.id,45000,'system');
+   if(rnd()<.25)feed('ledger','Ledger Agent',c.id+' settled — confirmation on chain.');}
+ });
+ if(featSteps){const st=featSteps;while(st.i<st.steps.length&&S.t-st.T>=st.steps[st.i][0]){st.steps[st.i][1]();st.i++;}}
+ if(FEAT.verified!==null&&FEAT.settled===null&&S.batchSigned){FEAT.settled=S.t+2;}
+ if(FEAT.settled!==null&&S.t>=FEAT.settled&&!FEAT._paid){FEAT._paid=true;FEAT.hh.el&&setHH(FEAT.hh,'set');
+  if(!FEAT._alloc){FEAT._alloc=true;ledRow('ALLOC','insulin + tarpaulin',FEAT.id,45000,'Director');}
+  ledRow('DISB','insulin + tarpaulin',FEAT.id,45000,'system');
+  chatMsg('in','<div class="claimcard"><b>SE-4102 SETTLED</b> ✓<br>Insulin + tarpaulin delivered. If anything wrong, reply and a human will call.</div>');
+  feed('ledger','Ledger Agent','SE-4102 settled. Verify→relief: '+Math.round(FEAT.settled-FEAT.verified)+'h.');}
+}
+
+/* storm render */
+function renderStorm(){const p=stormPos(S.t);const x=X(p[0]),y=Y(p[1]);
+ stormG.setAttribute('transform','translate('+x+','+y+')');
+ bandsG.setAttribute('transform','translate('+x+','+y+')');
+ const inten=S.t<-96?.4:(S.t<-48?.7:(S.t<16?1:.5));
+ b64.setAttribute('r',34*inten);b50.setAttribute('r',62*inten);b34.setAttribute('r',105*inten);
+ sLbl.textContent=S.t<-96?'TS MELISSA':(S.t<-48?'MELISSA · CAT 3':(S.t<16?'MELISSA · CAT 5':'MELISSA'));
+ const past=[],fut=[];track.forEach(pt=>{(pt[2]<=S.t?past:fut).push(X(pt[0])+','+Y(pt[1]));});
+ if(past.length)past.push(x+','+y);
+ pastLine.setAttribute('points',past.join(' '));
+ futLine.setAttribute('points',(past.length?x+','+y+' ':'')+fut.map(s=>s).join(' '));
+ if(S.t>26){stormG.setAttribute('opacity',0);bandsG.setAttribute('opacity',0);}else{stormG.setAttribute('opacity',1);bandsG.setAttribute('opacity',1);}}
+
+/* end overlay */
+function endReplay(){S.playing=false;S.over=true;$('playBtn').textContent='▶ Play';
+ const claims=CLAIMS.filter(c=>c._open||c.featured).length;
+ const ver=CLAIMS.filter(c=>c.verified!==null).length;
+ $('eClaims').textContent=claims;$('eVer').textContent=ver;
+ $('eT2R').textContent=$('mT2R').textContent;$('eT2R2').textContent=$('mT2R').textContent;
+ $('endOv').style.display='flex';}
+$('replayBtn').addEventListener('click',()=>location.reload());
+$('exploreBtn').addEventListener('click',()=>{$('endOv').style.display='none';S.over=false;});
+
+/* ================= main loop ================= */
+let last=performance.now();
+function tick(now){const dt=now-last;last=now;
+ if(S.playing&&!S.gate){S.t+=dt/600*S.speed; if(S.t>84)S.t=84;
+  EVENTS.forEach(ev=>{if(S.t>=ev[0])once(ev[1],ev[2]);});
+  processClaims();renderStorm();metrics();renderTriage();
+  $('clock').textContent=fmtT(S.t);}
+ requestAnimationFrame(tick);}
+requestAnimationFrame(tick);
+
+$('playBtn').addEventListener('click',()=>{if(S.gate)return;S.playing=!S.playing;$('playBtn').textContent=S.playing?'⏸ Pause':'▶ Play';});
+$('speedSel').addEventListener('change',e=>S.speed=+e.target.value);
+$('restartBtn').addEventListener('click',()=>location.reload());
+$('startBtn').addEventListener('click',()=>{$('intro').style.display='none';S.playing=true;S.started=true;$('playBtn').textContent='⏸ Pause';
+ feed('sentinel','Forecast Sentinel','Watching NHC, NDBC buoys, ECMWF/GFS. All quiet.');});
+
+/* debug hook for automated QA */
+window.LH={S,CLAIMS,jump:(t)=>{S.autoGates=true;S.playing=true;const step=()=>{if(S.t<t){S.t=Math.min(t,S.t+2);EVENTS.forEach(ev=>{if(S.t>=ev[0])once(ev[1],ev[2]);});processClaims();renderStorm();metrics();renderTriage();$('clock').textContent=fmtT(S.t);setTimeout(step,S.gate?600:20);}};step();},auto:()=>{S.autoGates=true;}};
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1830" height="1170" viewBox="0 0 1830 1170" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#334155"/>
+    </marker>
+    <marker id="arrAmber" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#B45309"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1830" height="1170" fill="#FFFFFF"/>
+
+  <!-- Title -->
+  <text x="40" y="42" font-size="30" font-weight="bold" fill="#0F172A">LIGHTHOUSE: Agentic Workflow</text>
+  <text x="40" y="70" font-size="15.5" fill="#334155">The Household Storm File state machine. Agents do the cognition, the state machine constrains their authority, humans hold every gate that moves money.</text>
+  <text x="40" y="90" font-size="13.5" fill="#64748B">Team Project Lighthouse  |  Track 04: Climate Risk &amp; Disaster Coordination  |  FutureCaribbean Buildathon 2026</text>
+
+  <!-- DATA BAND -->
+  <text x="40" y="130" font-size="14" font-weight="bold" fill="#64748B" letter-spacing="1.5">DATA SOURCES &amp; APIs</text>
+
+  <g stroke="#64748B" stroke-width="1.5" fill="#F1F5F9">
+    <rect x="40" y="140" width="330" height="104" rx="8"/>
+    <rect x="395" y="140" width="330" height="104" rx="8"/>
+    <rect x="750" y="140" width="330" height="104" rx="8"/>
+    <rect x="1105" y="140" width="330" height="104" rx="8"/>
+    <rect x="1460" y="140" width="330" height="104" rx="8"/>
+  </g>
+  <g fill="#0F172A" text-anchor="middle">
+    <text x="205" y="166" font-size="17" font-weight="bold">Forecast feeds</text>
+    <text x="205" y="188" font-size="14">NOAA NHC advisories, NDBC buoys,</text>
+    <text x="205" y="206" font-size="14">ECMWF + GFS (Open-Meteo),</text>
+    <text x="205" y="224" font-size="14">CHIRPS rainfall</text>
+
+    <text x="560" y="166" font-size="17" font-weight="bold">Geo &amp; population</text>
+    <text x="560" y="188" font-size="14">OpenStreetMap footprints,</text>
+    <text x="560" y="206" font-size="14">WorldPop grids, SRTM elevation</text>
+
+    <text x="915" y="166" font-size="17" font-weight="bold">Households on WhatsApp</text>
+    <text x="915" y="188" font-size="14">voice notes (Patois / English),</text>
+    <text x="915" y="206" font-size="14">photos, text, shared location</text>
+
+    <text x="1270" y="166" font-size="17" font-weight="bold">Satellite imagery</text>
+    <text x="1270" y="188" font-size="14">Copernicus Sentinel-1/2</text>
+    <text x="1270" y="206" font-size="14">post-storm damage proxies</text>
+
+    <text x="1625" y="166" font-size="17" font-weight="bold">Government systems</text>
+    <text x="1625" y="188" font-size="14">PATH registry, shelter lists,</text>
+    <text x="1625" y="206" font-size="14">warehouse stock, payment rails</text>
+  </g>
+
+  <!-- data to agent arrows -->
+  <g stroke="#334155" stroke-width="1.6" fill="none">
+    <line x1="205" y1="244" x2="370" y2="312" marker-end="url(#arr)"/>
+    <line x1="560" y1="244" x2="540" y2="416" marker-end="url(#arr)"/>
+    <line x1="915" y1="244" x2="770" y2="312" marker-end="url(#arr)"/>
+    <line x1="1270" y1="244" x2="1120" y2="312" marker-end="url(#arr)"/>
+    <line x1="1625" y1="244" x2="1450" y2="312" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- Phase labels -->
+  <g font-size="15" font-weight="bold" text-anchor="middle" letter-spacing="1.5">
+    <text x="405" y="298" fill="#15803D">FORESIGHT: BEFORE</text>
+    <text x="915" y="298" fill="#1D4ED8">RESPOND: DURING + AFTER</text>
+    <text x="1425" y="298" fill="#6D28D9">LEDGER: RECOVERY</text>
+  </g>
+
+  <!-- AGENT BAND -->
+  <text x="40" y="330" font-size="14" font-weight="bold" fill="#64748B" letter-spacing="1.5" transform="rotate(-90 52 330)" text-anchor="end"> </text>
+
+  <g stroke="#1D4ED8" stroke-width="1.8" fill="#DBEAFE">
+    <rect x="275" y="316" width="260" height="64" rx="8"/>
+    <rect x="275" y="396" width="260" height="64" rx="8"/>
+    <rect x="275" y="476" width="260" height="64" rx="8"/>
+    <rect x="615" y="316" width="260" height="64" rx="8"/>
+    <rect x="955" y="316" width="260" height="64" rx="8"/>
+    <rect x="955" y="396" width="260" height="64" rx="8"/>
+    <rect x="1295" y="316" width="260" height="64" rx="8"/>
+    <rect x="1295" y="396" width="260" height="64" rx="8"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="405" y="338" font-size="16" font-weight="bold" fill="#0F172A">Forecast Sentinel</text>
+    <text x="405" y="356" font-size="12.5" fill="#1E3A8A">watches feeds 24/7, raises posture</text>
+    <text x="405" y="372" font-size="12.5" font-style="italic" fill="#1E3A8A">fully autonomous</text>
+
+    <text x="405" y="418" font-size="16" font-weight="bold" fill="#0F172A">Risk Mapper</text>
+    <text x="405" y="436" font-size="12.5" fill="#1E3A8A">parish-level impact previews</text>
+    <text x="405" y="452" font-size="12.5" font-style="italic" fill="#1E3A8A">fully autonomous</text>
+
+    <text x="405" y="498" font-size="16" font-weight="bold" fill="#0F172A">Alert Agent</text>
+    <text x="405" y="516" font-size="12.5" fill="#1E3A8A">drafts targeted alert cascades</text>
+    <text x="405" y="532" font-size="12.5" font-style="italic" fill="#1E3A8A">propose only</text>
+
+    <text x="745" y="338" font-size="16" font-weight="bold" fill="#0F172A">Intake Agent</text>
+    <text x="745" y="356" font-size="12.5" fill="#1E3A8A">adaptive WhatsApp conversation</text>
+    <text x="745" y="372" font-size="12.5" font-style="italic" fill="#1E3A8A">autonomous, tool-using</text>
+
+    <text x="1085" y="338" font-size="16" font-weight="bold" fill="#0F172A">Verification Agent</text>
+    <text x="1085" y="356" font-size="12.5" fill="#1E3A8A">wind field + satellite + neighbours</text>
+    <text x="1085" y="372" font-size="12.5" font-style="italic" fill="#1E3A8A">confidence gated</text>
+
+    <text x="1085" y="418" font-size="16" font-weight="bold" fill="#0F172A">Triage Agent</text>
+    <text x="1085" y="436" font-size="12.5" fill="#1E3A8A">severity scoring</text>
+    <text x="1085" y="452" font-size="12.5" font-style="italic" fill="#1E3A8A">autonomous</text>
+
+    <text x="1425" y="338" font-size="16" font-weight="bold" fill="#0F172A">Logistics Agent</text>
+    <text x="1425" y="356" font-size="12.5" fill="#1E3A8A">matches needs to stock, run sheets</text>
+    <text x="1425" y="372" font-size="12.5" font-style="italic" fill="#1E3A8A">propose only</text>
+
+    <text x="1425" y="418" font-size="16" font-weight="bold" fill="#0F172A">Ledger Agent</text>
+    <text x="1425" y="436" font-size="12.5" fill="#1E3A8A">reconciles, flags anomalies</text>
+    <text x="1425" y="452" font-size="12.5" font-style="italic" fill="#1E3A8A">autonomous audit</text>
+  </g>
+
+  <!-- agent to spine arrows -->
+  <g stroke="#334155" stroke-width="1.6" fill="none">
+    <line x1="405" y1="540" x2="405" y2="586" marker-end="url(#arr)"/>
+    <line x1="745" y1="380" x2="745" y2="586" marker-end="url(#arr)"/>
+    <line x1="1085" y1="460" x2="1085" y2="572" marker-end="url(#arr)"/>
+    <line x1="1425" y1="460" x2="1425" y2="572" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- STATE SPINE -->
+  <g stroke="#15803D" stroke-width="2.2" fill="#DCFCE7">
+    <rect x="125" y="568" width="220" height="58" rx="29"/>
+    <rect x="465" y="568" width="220" height="58" rx="29"/>
+    <rect x="805" y="568" width="220" height="58" rx="29"/>
+    <rect x="1145" y="568" width="220" height="58" rx="29"/>
+    <rect x="1485" y="568" width="220" height="58" rx="29"/>
+  </g>
+  <g font-size="19" font-weight="bold" fill="#14532D" text-anchor="middle">
+    <text x="235" y="604">REGISTERED</text>
+    <text x="575" y="604">AT-RISK</text>
+    <text x="915" y="604">AFFECTED</text>
+    <text x="1255" y="604">VERIFIED</text>
+    <text x="1595" y="604">SETTLED</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" fill="none">
+    <line x1="345" y1="597" x2="461" y2="597" marker-end="url(#arr)"/>
+    <line x1="685" y1="597" x2="801" y2="597" marker-end="url(#arr)"/>
+    <line x1="1025" y1="597" x2="1059" y2="597" marker-end="url(#arr)"/>
+    <line x1="1111" y1="597" x2="1141" y2="597" marker-end="url(#arr)"/>
+    <line x1="1365" y1="597" x2="1399" y2="597" marker-end="url(#arr)"/>
+    <line x1="1451" y1="597" x2="1481" y2="597" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- decision diamonds -->
+  <g stroke="#B45309" stroke-width="2" fill="#FEF3C7">
+    <path d="M1085,575 L1109,597 L1085,619 L1061,597 z"/>
+    <path d="M1425,575 L1449,597 L1425,619 L1401,597 z"/>
+  </g>
+  <text x="1048" y="560" font-size="12.5" font-weight="bold" fill="#B45309" text-anchor="end">confidence?</text>
+  <text x="1394" y="560" font-size="12.5" font-weight="bold" fill="#B45309" text-anchor="end">signed?</text>
+
+  <!-- registered caption -->
+  <text x="235" y="648" font-size="12.5" fill="#64748B" text-anchor="middle">created pre-season via WhatsApp</text>
+  <text x="235" y="664" font-size="12.5" fill="#64748B" text-anchor="middle">registration (consent-first)</text>
+
+  <!-- HUMAN BAND -->
+  <text x="40" y="694" font-size="14" font-weight="bold" fill="#B45309" letter-spacing="1.5">HUMAN-IN-THE-LOOP</text>
+
+  <!-- dashed connectors -->
+  <g stroke="#B45309" stroke-width="1.8" stroke-dasharray="6 5" fill="none">
+    <polyline points="535,508 575,508 575,702" marker-end="url(#arrAmber)"/>
+    <line x1="1085" y1="619" x2="1085" y2="702" marker-end="url(#arrAmber)"/>
+    <line x1="1425" y1="619" x2="1425" y2="702" marker-end="url(#arrAmber)"/>
+  </g>
+  <text x="1097" y="668" font-size="12" fill="#B45309">low confidence</text>
+  <text x="1437" y="668" font-size="12" fill="#B45309">approval path</text>
+
+  <g stroke="#B45309" stroke-width="2" fill="#FEF3C7">
+    <rect x="425" y="706" width="300" height="76" rx="8"/>
+    <rect x="935" y="706" width="300" height="76" rx="8"/>
+    <rect x="1275" y="706" width="300" height="76" rx="8"/>
+    <rect x="1275" y="796" width="300" height="76" rx="8"/>
+  </g>
+  <g text-anchor="middle" fill="#7C2D12">
+    <text x="575" y="730" font-size="13.5" font-weight="bold" letter-spacing="1">HUMAN GATE</text>
+    <text x="575" y="750" font-size="14.5">EOC Director approves</text>
+    <text x="575" y="768" font-size="14.5">alert cascade</text>
+
+    <text x="1085" y="730" font-size="13.5" font-weight="bold" letter-spacing="1">HUMAN REVIEW QUEUE</text>
+    <text x="1085" y="750" font-size="14.5">low-confidence claims adjudicated:</text>
+    <text x="1085" y="768" font-size="14.5">approve to verified, reject to closed</text>
+
+    <text x="1425" y="730" font-size="13.5" font-weight="bold" letter-spacing="1">HUMAN GATE</text>
+    <text x="1425" y="750" font-size="14.5">EOC Director approves</text>
+    <text x="1425" y="768" font-size="14.5">allocation plan</text>
+
+    <text x="1425" y="820" font-size="13.5" font-weight="bold" letter-spacing="1">HUMAN GATE</text>
+    <text x="1425" y="840" font-size="14.5">Finance Officer signs every</text>
+    <text x="1425" y="858" font-size="14.5">disbursement before settled</text>
+  </g>
+  <line x1="1425" y1="782" x2="1425" y2="792" stroke="#B45309" stroke-width="1.8" marker-end="url(#arrAmber)"/>
+
+  <!-- OUTPUT BAND -->
+  <text x="40" y="908" font-size="14" font-weight="bold" fill="#6D28D9" letter-spacing="1.5">OUTPUTS</text>
+
+  <g stroke="#334155" stroke-width="1.6" fill="none">
+    <line x1="575" y1="782" x2="562" y2="914" marker-end="url(#arr)"/>
+    <line x1="1000" y1="782" x2="932" y2="914" marker-end="url(#arr)"/>
+    <line x1="1425" y1="872" x2="1295" y2="914" marker-end="url(#arr)"/>
+    <line x1="1595" y1="626" x2="1625" y2="914" marker-end="url(#arr)"/>
+  </g>
+
+  <g stroke="#6D28D9" stroke-width="1.8" fill="#EDE9FE">
+    <rect x="40" y="918" width="330" height="100" rx="8"/>
+    <rect x="395" y="918" width="330" height="100" rx="8"/>
+    <rect x="750" y="918" width="330" height="100" rx="8"/>
+    <rect x="1105" y="918" width="330" height="100" rx="8"/>
+    <rect x="1460" y="918" width="330" height="100" rx="8"/>
+  </g>
+  <g text-anchor="middle" fill="#312E81">
+    <text x="205" y="944" font-size="16" font-weight="bold">Anticipatory action list</text>
+    <text x="205" y="964" font-size="13.5">pre-verified vulnerable households</text>
+    <text x="205" y="982" font-size="13.5">flagged before landfall</text>
+    <text x="205" y="1000" font-size="13.5">(from Risk Mapper + registry)</text>
+
+    <text x="560" y="944" font-size="16" font-weight="bold">Targeted alerts</text>
+    <text x="560" y="964" font-size="13.5">WhatsApp + SMS fallback</text>
+    <text x="560" y="982" font-size="13.5">English + Jamaican Patois</text>
+
+    <text x="915" y="944" font-size="16" font-weight="bold">Live EOC console</text>
+    <text x="915" y="964" font-size="13.5">needs map, triage queue</text>
+    <text x="915" y="982" font-size="13.5">offline-first</text>
+
+    <text x="1270" y="944" font-size="16" font-weight="bold">Distribution run sheets</text>
+    <text x="1270" y="964" font-size="13.5">verified needs matched to</text>
+    <text x="1270" y="982" font-size="13.5">warehouse stock</text>
+
+    <text x="1625" y="944" font-size="16" font-weight="bold">Payments + public ledger</text>
+    <text x="1625" y="964" font-size="13.5">bank / mobile money / voucher,</text>
+    <text x="1625" y="982" font-size="13.5">append-only audit trail,</text>
+    <text x="1625" y="1000" font-size="13.5">Time-to-Relief metric</text>
+  </g>
+
+  <!-- LEGEND -->
+  <g font-size="13.5" fill="#0F172A">
+    <rect x="40" y="1046" width="24" height="24" rx="5" fill="#DCFCE7" stroke="#15803D" stroke-width="1.6"/>
+    <text x="72" y="1063">Storm File state</text>
+    <rect x="240" y="1046" width="24" height="24" rx="5" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.6"/>
+    <text x="272" y="1063">AI agent (autonomy level noted)</text>
+    <rect x="530" y="1046" width="24" height="24" rx="5" fill="#FEF3C7" stroke="#B45309" stroke-width="1.6"/>
+    <text x="562" y="1063">Human gate / decision point</text>
+    <rect x="790" y="1046" width="24" height="24" rx="5" fill="#F1F5F9" stroke="#64748B" stroke-width="1.6"/>
+    <text x="822" y="1063">Data source / API</text>
+    <rect x="990" y="1046" width="24" height="24" rx="5" fill="#EDE9FE" stroke="#6D28D9" stroke-width="1.6"/>
+    <text x="1022" y="1063">Output</text>
+  </g>
+  <text x="40" y="1100" font-size="13.5" fill="#475569">Every agent action is logged to the append-only ledger. Solid arrows: data and state flow. Dashed amber: human approval paths.</text>
+  <text x="40" y="1120" font-size="13.5" fill="#475569">Compute right-sized: fine-tuned Jamaican Patois speech + intent model (H200) on the high-volume intake path; frontier reasoning reserved for verification and allocation planning. Intake runs on OpenClaw.</text>
+  <text x="1790" y="1152" font-size="12.5" fill="#94A3B8" text-anchor="end">Project Lighthouse | FutureCaribbean Buildathon 2026</text>
+</svg>
