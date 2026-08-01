@@ -17,9 +17,9 @@ Every phase has an exit criterion that is testable, not a feeling. If the exit c
 
 These have external latency and cannot be compressed later.
 
-1. **Twilio WhatsApp sandbox.** Account, sandbox number, join code working from a team phone. This is the demo path.
+1. ~~**Twilio WhatsApp sandbox.**~~ **Done (July 31).** Trial account live, sandbox number `+1 415 523 8886`, join code `join bill-flies`, one Jamaican participant joined. Inbound webhook still points at Twilio's stock demo responder and must be repointed at Render. Three sandbox constraints change how the demo is sequenced — read [environment setup §2.3](lighthouse-environment-setup.md) before writing the run sheet.
 2. **Meta WhatsApp Cloud API.** Register the app, get the test number, add team phones as test recipients. Start business verification in parallel as a bonus track. Assume it does not land.
-3. **Cloud VM + domain.** One VM, DNS pointed, Caddy issuing TLS. WhatsApp webhooks require HTTPS, so this is on the critical path.
+3. **Hosting + domain.** Render for the API (`web` service + `worker` background service), Neon for Postgres, Vercel for the Next.js console and public portal; DNS pointed at both. Neon is already provisioned (Postgres 18, us-east-2, empty schema) — connection string is in `.env`; keep Render in a US East region to sit next to it. Both platforms terminate TLS for us, so there is no Caddy and no VM to babysit — WhatsApp webhooks need HTTPS and this gets it on day one. Still on the critical path because the webhook URL has to be stable before Meta and Twilio are configured against it.
 4. **Anthropic API keys, R2 bucket, H200 access confirmed.**
 5. **Patois eval recording kickoff.** Send the utterance list to family and friends. Audio takes days to collect because it depends on other people. Start before you need it.
 
@@ -34,13 +34,16 @@ The single highest-leverage work in the project. Output is four artifacts, commi
 
 ### Repo and skeleton
 
-Monorepo. Two Python deployables (`web`, `worker`) plus the Next.js console. Postgres 16 with PostGIS. Job queue is Postgres `SKIP LOCKED`, no Redis. Docker Compose for local, GitHub Actions to the VM.
+Monorepo. Two Python deployables (`web`, `worker`) on Render, plus the Next.js console on Vercel. Neon Postgres 18 with PostGIS and pgvector — the initial migration must `CREATE EXTENSION` for both, since neither is installed on a fresh Neon database. Docker Compose for local development only; GitHub Actions runs CI, and both platforms deploy from the repo on push to `main`.
+
+Job queue is Postgres `SKIP LOCKED`, no Redis (decided July 31 — PRD §11.6). Jobs enqueue in the same transaction as the state transition they follow from, so no Storm File can change state with its next agent job silently lost. Workers wake on `LISTEN/NOTIFY`.
 
 ### Exit criteria
 
 - `docker compose up` gives a working stack from a clean clone
 - An integration test drives one synthetic StormFile through all five states and the ledger hash chain validates
-- A WhatsApp message from a team phone lands in a logged webhook handler on the VM over HTTPS
+- A WhatsApp message from a team phone lands in a logged webhook handler on the deployed Render service over HTTPS
+- The console is deployed on Vercel against the Render API, from `main`
 - All three developers have pushed code and CI is green
 
 **Outcome:** A skeleton that does nothing useful, wired end to end, with contracts frozen. Three people can now work in parallel for two weeks without a merge conflict that matters.
@@ -54,7 +57,7 @@ Monorepo. Two Python deployables (`web`, `worker`) plus the Next.js console. Pos
 
 ### Workstreams
 
-**Sammarieo, data spine.** NHC ingestion workers: advisories, forecast cone, **wind speed probabilities** (the 34/50/64 knot product, not the cone, since the cone describes the storm center and not the impact area), wind field radii, watches and warnings. Parse the shapefile and KML feeds into PostGIS. Build the exposure layer: population grid, building footprints, elevation, joined to registered households. Cache Melissa's full advisory history locally for replay. Ledger implementation with hash chaining and a `verify_chain()` routine.
+**Sammarieo, data spine.** NHC ingestion workers: advisories, forecast cone, **wind speed probabilities** (the 34/50/64 knot product, not the cone, since the cone describes the storm center and not the impact area), wind field radii, watches and warnings. Parse the shapefile and KML feeds into PostGIS. Build the exposure layer: population grid, building footprints, elevation, joined to registered households. **Commit Melissa's full advisory history to `data/replay/cache/`** with a `fetch_advisories.py` that regenerates it and a checksum manifest — the cache is versioned, not gitignored, because three laptops and a demo machine each fetching their own copy is how a "deterministic" replay stops being deterministic. Ledger implementation with hash chaining and a `verify_chain()` routine.
 
 **Matthew, agents.** Forecast Sentinel: poll feeds, compute national posture (Quiet, Watch, Ready, Act), emit `hazard.posture_changed`. Risk Mapper: hazard times exposure produces a RiskAssessment per StormFile. Version 1 of the impact function is a transparent vulnerability lookup table keyed on wind probability band by roof type, not a trained model. Document it as such. In parallel, build the Patois eval set: roughly 100 utterances, hand-labeled with both correct transcript and correct structured extraction, held out and never trained on.
 
@@ -111,11 +114,13 @@ Then the measurement that decides where GPU time goes: run the eval set, and spl
 
 ### Workstreams
 
-**Raheem.** Approval gates wired for real: Director approves alert cascades and allocation plans, Finance Officer signs disbursement batches. No StormFile reaches SETTLED without a signature row. Public ledger portal showing aggregate flows by parish and need category, with no named beneficiaries. T2R counter reading live from the data.
+**Raheem.** Approval gates wired for real: Director approves alert cascades and allocation plans, Finance Officer signs disbursement batches. No StormFile reaches SETTLED without a signature row. Public ledger portal showing aggregate flows by parish and need category, with no named beneficiaries. T2R counter reading live from the data (claim filed → first confirmation). **Donation portal page** (DON-01, simulated processor) and **public pool balances** (DON-02), plus the **donor journey view** (DON-04): received → pooled → allocated → disbursed → confirmed. The donor journey is the closing beat of Act 3, so it is a demo dependency, not a nice-to-have.
 
-**Sammarieo.** Disbursement execution (simulated channels for the demo: bank, mobile money, voucher, goods), confirmation handling, and Ledger Agent reconciliation with duplicate detection across payers. Demo hardening: everything cached locally, zero external API calls during the replay, fixed seeds, and a documented recovery path if a step fails mid-demo.
+**Sammarieo.** Disbursement execution (simulated channels for the demo: bank, mobile money, voucher, goods), confirmation handling, and Ledger Agent reconciliation with duplicate detection across payers. **Donation ledger plumbing** (DON-02/03): donations as ledger entries, pools as a selectable payer source in allocation plans, visible draw-down. **FNOL packet generation** (INS-01): JSON + one PDF template assembled from the Storm File, observed hazard at the point, and the verification bundle — all of it data that already exists by week 3, so this is a serializer, not a subsystem. Demo hardening: everything cached locally, zero external API calls during the replay, fixed seeds, and a documented recovery path if a step fails mid-demo.
 
-**Matthew.** Thin anticipatory action flow: pre-season registration on WhatsApp, and an auto-generated pre-landfall list of vulnerable households when posture crosses Ready. Finalize the Patois eval chart as a slide-ready artifact. Tune verification thresholds against the replay and record every threshold change as a ledger entry.
+**Matthew.** Thin anticipatory action flow: pre-season registration on WhatsApp, and an auto-generated pre-landfall list of vulnerable households when posture crosses Ready (Director-only view). **Payer routing** (RTE-01/02): the post-verification insurance question in the intake agent, the routing decision as an explicit ledger event with the consent snapshot, and the four routing outcomes (GOV_RELIEF / INSURER / BOTH / DONOR_POOL). Finalize the Patois eval chart as a slide-ready artifact. Tune verification thresholds against the replay and record every threshold change as a ledger entry.
+
+**Why this section grew.** PRD §6.8 (routing), §6.9 (FNOL) and §6.12 (donations) are P0 and appear in the buildathon acceptance test at steps 4, 6 and 8 — but until July 31 they appeared nowhere in this phase plan and had no owner. They are named here so nobody discovers them during rehearsal week. The insurer portal and portfolio heatmap (INS-02/03) stay P1 and are explicitly **not** in the demo.
 
 ### Rehearsal, from day 4 of this week
 
@@ -134,7 +139,9 @@ If you are behind, cut in exactly this sequence and do not improvise a new order
 
 - The full replay runs unattended start to finish without a manual intervention
 - Allocation approved, disbursement signed, StormFile reaches SETTLED, and the public ledger shows the flow
-- The T2R counter reads a real computed number from the replay data
+- The T2R counter reads a real computed number from the replay data, measured **claim filed → first confirmation**
+- A routed insured claim produces an FNOL packet (JSON + PDF) that opens cleanly on stage
+- A simulated donation lands on the public ledger, funds an allocation, and the donor journey view traces it to a delivered household
 - A phone that has never touched the system can join the sandbox and send a voice note that completes the loop
 - `verify_chain()` passes over the entire replay ledger
 

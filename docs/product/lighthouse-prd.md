@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Version | 1.0 |
-| Date | July 24, 2026 |
+| Version | 1.1 |
+| Date | July 31, 2026 |
 | Authors | Team Project Lighthouse (Raheem Wilson, Sammarieo Brown, Matthew Stone) |
-| Status | Draft for team review |
+| Status | Agreed — team decisions of July 31, 2026 folded in (see §11) |
 | Related docs | Build Spec · Project Phases · Solution Spec · Concept Brief · Interactive Prototype |
 
 **Priorities used throughout:** **P0** = buildathon MVP (3 weeks, must demo). **P1** = pilot season (first real deployment, one parish). **P2** = full product (national / regional). Every requirement carries one.
@@ -25,7 +25,7 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 ## 3. Goals, non-goals, success metrics
 
 ### Goals
-1. Reduce median Time to Relief (T2R: verified claim → first relief in hand) from months to **72 hours**.
+1. Reduce median Time to Relief (T2R: **claim filed → first relief in hand**) from months to **72 hours**. The clock starts when the household files, not when we finish verifying, so our own verification latency counts against us.
 2. 100% of relief value on the platform carries a complete, public, tamper-evident audit trail.
 3. One intake serves every payer: government, insurers, donors.
 4. Every household interaction works on the phone people already have, in the language they already speak.
@@ -41,7 +41,8 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 ### Success metrics
 | Metric | Target | Priority |
 |---|---|---|
-| Median T2R | ≤ 72h in pilot event | P1 |
+| Median T2R (claim filed → first relief confirmed) | ≤ 72h in pilot event | P1 |
+| Median settlement latency (verified → first relief confirmed) | ≤ 24h — operational sub-metric, not the headline | P1 |
 | Audit trail coverage of platform-disbursed value | 100% | P0 |
 | Registration coverage in pilot parish | ≥ 30% of households season 1 | P1 |
 | Verification precision (approved claims that are genuine) | ≥ 95% on replay/synthetic | P0 |
@@ -55,7 +56,7 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 2. **Marcus, EOC Director, ODPEM.** Owns the national operational picture during activation. Needs triage he can defend and a picture he can brief the PM from. Accountable for alert decisions.
 3. **Alia, Review Clerk (surge staff).** Adjudicates low-confidence claims with evidence in front of her. Not technical.
 4. **Mr. Chen, Finance Officer, Ministry of Finance.** Signs disbursements. Answers to the Auditor General. Wants to never again reconstruct payments from paper.
-5. **Keisha, Claims Manager, Guardian Group.** Wants early, evidenced FNOL (First Notice of Loss) packets and a portfolio damage heatmap while roads are still blocked.
+5. **Keisha, Claims Manager, Island Mutual** (fictional carrier; real Jamaican carriers are named only in market sizing, never in demo UI — see §11.2). Wants early, evidenced FNOL (First Notice of Loss) packets and a portfolio damage heatmap while roads are still blocked.
 6. **Andre, diaspora donor, Toronto.** Sent money after Melissa; read the 1.8% headlines. Will give again only if he can see it land.
 7. **Auditor General's office.** Read-only, real-time, everything.
 
@@ -106,7 +107,7 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 - **ALT-01 (P0).** Alert Agent drafts targeted cascades scoped by geography and risk band, in English and Patois, text and voice-note variants, including nearest shelter and preparation steps. **Nothing sends without Director approval** (gate G1).
 - **ALT-02 (P0).** Channel tiering: alerts go WhatsApp first with SMS fallback to numbers without WhatsApp delivery confirmation within 10 min. AC: per-recipient delivery status recorded.
 - **ALT-03 (P1).** Community relay: designated relay contacts (pastors, councillors, shopkeepers) receive a printable/forwardable digest for their district.
-- **ALT-04 (P0).** Anticipatory list: when posture reaches READY, generate the ranked list of pre-verified vulnerable households in the projected impact zone (top N by vulnerability × probability). Exportable; drives pre-positioning and (P2) pre-landfall cash.
+- **ALT-04 (P0).** Anticipatory list: when posture reaches READY, generate the ranked list of pre-verified vulnerable households in the projected impact zone (top N by vulnerability × probability). Exportable; drives pre-positioning and (P2) pre-landfall cash. **Director-role only in P0** — the list identifies vulnerable individuals by location and is never surfaced on the public portal (§11.4).
 - **ALT-05 (P2).** Anticipatory cash: on defined parametric trigger, draft pre-landfall disbursements to the anticipatory list for Finance signature.
 
 ### 6.5 Intake (INT)
@@ -163,12 +164,13 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 - **PAY-01 (P0).** Disbursement batching: allocations group into batches by channel (bank transfer, mobile money, voucher, goods). A batch presents: total, count, payer source, dedupe check result. **Execution requires Finance signature** (gate G3); the signature is a ledger entry naming the signer.
 - **PAY-02 (P0, demo).** Simulated rails for buildathon: execution mocks channel latencies and confirmations end to end.
 - **PAY-03 (P1).** Real rails: at least one cash channel (bank file or mobile money API; Powertranz gateway candidate) with per-payment confirmation webhooks; failed payments retry with alerting and never silently drop.
-- **PAY-04 (P0).** SETTLED transition: a Storm File reaches SETTLED only when at least one confirmed disbursement or confirmed delivery exists; T2R clock stops at first confirmation.
+- **PAY-04 (P0).** SETTLED transition: a Storm File reaches SETTLED only when at least one confirmed disbursement or confirmed delivery exists. **T2R clock starts at claim creation and stops at first confirmation**; the verified → confirmed interval is recorded separately as the settlement-latency sub-metric.
+- **PAY-06 (P0).** Standard relief amounts for P0: a flat **J$45,000 cash grant** per verified household, plus goods tiered by triage severity (URGENT / HIGH / MED baskets). Flat cash keeps the demo explainable and removes per-claim valuation judgement from the agent path; tiering lives in goods where stock constraints already force it. Amounts are admin-config (ADM-03), not hardcoded (§11.1).
 - **PAY-05 (P1).** Household notification at every money state change, with amounts and what to do if something is wrong (human callback path).
 
 ### 6.12 Donations (DON)
 
-- **DON-01 (P0, demo simulated).** Donation intake: a donor can give an amount to a scope (event-wide, parish, or need category) via web portal. Production funds flow: card/bank → **fiscal sponsor** account (registered charity partner); the platform records and directs, it does not hold funds. Buildathon simulates the processor.
+- **DON-01 (P0, demo simulated).** Donation intake: a donor can give an amount to a scope via web portal. **P0 scopes are event-wide and parish only**; need-category scoping is P1 (§11.3) — narrower scoping fragments pools and constrains the allocation agent before we have the volume to justify it. Production funds flow: card/bank → **fiscal sponsor** account (registered charity partner); the platform records and directs, it does not hold funds. Buildathon simulates the processor.
 - **DON-02 (P0).** Every donation is a ledger entry: donor reference (pseudonymous public handle), amount, scope, timestamp. Pool balances are public in real time.
 - **DON-03 (P0).** Pool → allocation: donation pools are a payer source selectable in allocation plans; allocations draw down pool balances visibly.
 - **DON-04 (P0).** Donor journey view: a donor can follow their donation: received → pooled → allocated (n households, anonymized) → disbursed → confirmed, with dates. AC: demo shows "your J$10,000 became a tarpaulin + water in Black River, delivered T+52h."
@@ -213,7 +215,7 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 - **NFR-P-04 (P1).** Console map interactive at 50k Storm Files (clustering).
 
 ### Availability & resilience
-- **NFR-A-01 (P1).** Core intake and ledger: 99.5% availability during an activation; single-VM acceptable for buildathon, documented path to HA.
+- **NFR-A-01 (P1).** Core intake and ledger: 99.5% availability during an activation; single managed instance per service (Render) acceptable for buildathon, documented path to HA and to in-country hosting for data residency.
 - **NFR-A-02 (P1).** All inbound messages durable-queued at the edge before processing (webhook receiver survives downstream failure).
 - **NFR-A-03 (P1).** Nightly encrypted backups; restore drill before pilot; RPO ≤ 24h (P2: ≤ 1h).
 
@@ -260,7 +262,7 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 1. Start replay. Posture rises QUIET→WATCH→READY→ACT as Melissa's real advisories play; parish risk and at-risk counts climb. (HAZ, IMP)
 2. Gate: Director approves alert cascade; alert lands in the WhatsApp mock in Patois with shelter info; anticipatory list generates. (ALT)
 3. Landfall. Claims stream in; live phone joins the Twilio sandbox and sends a Patois voice note; ≤ 30s later it is a structured, verified, triaged claim on the map. (INT, VER, TRI)
-4. Routing asks about insurance; the insured demo claim produces an FNOL packet (JSON + PDF) and appears on the insurer heatmap; the uninsured claim routes to relief. (RTE, INS)
+4. Routing asks about insurance; the insured demo claim produces an FNOL packet (JSON + PDF) opened on stage; the uninsured claim routes to relief. (RTE, INS-01) *No insurer portal or heatmap in P0 — INS-02/03 are P1.*
 5. Gate: clerk adjudicates a low-confidence claim from the evidence bundle. (VER-03)
 6. A simulated donation is made to "St Elizabeth pool" and appears on the public ledger. (DON)
 7. Gate: Director approves the allocation plan (mixed payer sources incl. the donor pool); stock decrements; run sheets emit. (LGX)
@@ -278,14 +280,20 @@ After Hurricane Melissa (Oct 2025), capital arrived at record speed (US$150M cat
 | Patois ASR quality | Eval-first (NFR-G-03); confidence gating; errors reduce coverage, never move money |
 | Gov adoption speed | Parish + NGO entry; insurer and donor surfaces create independent pull |
 
-## 11. Open questions (for team decision)
+## 11. Resolved decisions (team, July 31, 2026)
 
-1. Allocation amounts per need category for the demo (flat J$45k cash grant vs tiered by severity?)
-2. Insurer demo partner naming: use real names (Guardian Group, GK General) in the demo UI or fictional ("Island Mutual") to avoid implying endorsement? (Recommend fictional on stage, real names in the market sizing.)
-3. Donor scoping granularity: parish-level only, or need-category too, in P0?
-4. Does the anticipatory list surface in the public portal (transparency) or Director-only (privacy)? (Recommend Director-only in P0.)
-5. Claim ID scheme final form (parish prefix + sequential vs opaque).
+These were open questions in v1.0. All five are now closed; the requirements above reflect them.
+
+1. **Allocation amounts.** Flat J$45,000 cash grant per verified household, plus goods tiered by triage severity. Cash stays flat so no agent makes a per-claim valuation judgement and the stage story is one number; tiering lives in goods, where stock constraints already force it. → PAY-06, ADM-03.
+2. **Insurer naming.** Fictional carrier ("Island Mutual") everywhere a judge can see it. Real Jamaican carriers appear only in market sizing and pipeline conversations, never in demo UI, so nothing on screen implies an endorsement we don't have. → §4 persona 5, INS-01.
+3. **Donor scoping.** Event-wide and parish only in P0; need-category scoping is P1. → DON-01.
+4. **Anticipatory list visibility.** Director-role only in P0. The list is a ranked register of vulnerable people and where they live; publishing it would invert the privacy posture the rest of the platform argues for. Transparency obligations are met by the aggregate portal (LGR-02). → ALT-04.
+5. **Claim ID scheme.** Parish prefix + sequential, e.g. `SE-4102`. Already used in the solution spec and prototype, and a household has to be able to read it back over a bad phone line. → INT-05.
+
+6. **Job queue mechanism.** Postgres `SKIP LOCKED`, no Redis. The decisive reason is transactional: enqueueing an agent job and writing the state transition happen in one transaction, so a Storm File cannot land in a new state with no worker coming and nothing in the ledger recording that anything went wrong. On Redis those are two systems and that failure is possible — an orphaned claim is the worst bug this platform could ship. Secondary: one less service to run, jobs are queryable in SQL when something stalls mid-demo, and at replay volume throughput is not a constraint. Workers wake on `LISTEN/NOTIFY` rather than tight-polling, which also keeps Neon from burning compute hours. Revisit only if throughput or pub/sub fan-out becomes real.
+
+*No open questions remain at v1.1.*
 
 ## 12. Glossary
 
-**Storm File** household record and lifecycle. **T2R** median hours, verified → first relief confirmed. **FNOL** First Notice of Loss packet to an insurer. **Posture** national readiness level (QUIET/WATCH/READY/ACT). **SOL** safety-of-life claim. **Gate** human signature required to proceed. **Anticipatory list** ranked vulnerable households in the projected impact zone, generated pre-landfall. **Fiscal sponsor** registered charity partner that legally receives and holds donated funds.
+**Storm File** household record and lifecycle. **T2R** median hours, claim filed → first relief confirmed (the clock includes our own verification time). **Settlement latency** the verified → confirmed sub-interval, tracked separately. **FNOL** First Notice of Loss packet to an insurer. **Posture** national readiness level (QUIET/WATCH/READY/ACT). **SOL** safety-of-life claim. **Gate** human signature required to proceed. **Anticipatory list** ranked vulnerable households in the projected impact zone, generated pre-landfall. **Fiscal sponsor** registered charity partner that legally receives and holds donated funds.

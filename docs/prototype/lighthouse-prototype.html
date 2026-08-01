@@ -303,7 +303,7 @@
       <div class="ovs"><div class="v" id="eVer">0</div><div class="l">Verified</div></div>
       <div class="ovs"><div class="v" id="eT2R">—</div><div class="l">Median T2R</div></div>
     </div>
-    <p>Every dollar above has a signature and a hash. After the real Melissa, <b style="color:var(--rose)">1.8%</b> of donated cash had reached households in four months. In this replay the median household waited <b style="color:var(--green)" id="eT2R2"></b> after verification.</p>
+    <p>Every dollar above has a signature and a hash. After the real Melissa, <b style="color:var(--rose)">1.8%</b> of donated cash had reached households in four months. In this replay the median household waited <b style="color:var(--green)" id="eT2R2"></b> from the moment they sent their voice note to relief in hand.</p>
     <p class="dim">Everything here is synthetic. The storm track, advisories and timeline are Melissa's real shape.</p>
     <div class="ov-actions">
       <button class="btn primary" style="flex:1" id="replayBtn">↺ Replay</button>
@@ -456,7 +456,8 @@ function metrics(){const reg=HH.length;
  $('mVer').textContent=CLAIMS.filter(c=>c.verified!==null&&S.t>=c.verified).length;
  const set=CLAIMS.filter(c=>c.settled!==null&&S.t>=c.settled);
  $('mSet').textContent=set.length;
- if(set.length>=3){const ds=set.map(c=>c.settled-c.verified).sort((a,b)=>a-b);const med=ds[(ds.length/2)|0];
+ /* T2R clock starts when the household files, not when we finish verifying */
+ if(set.length>=3){const ds=set.map(c=>c.settled-c.t).sort((a,b)=>a-b);const med=ds[(ds.length/2)|0];
   $('mT2R').textContent=Math.round(med)+'h'; $('t2rV').textContent=Math.round(med)+'h';}}
 
 /* ================= gates ================= */
@@ -517,7 +518,7 @@ const EVENTS=[
      ledRow('APPR','Batch #1 signature','46 claims',0,'Finance');
      CLAIMS.forEach(c=>{if(c.verified!==null&&!c.rejected&&c.settled===null){c.settled=Math.max(S.t,c.verified)+2+rnd()*22;}});}}]})}],
  [56,'e8',()=>{setAct('ACT 3 · LEDGER');feed('ledger','Ledger Agent','Reconciling confirmations. 2 anomalies flagged: duplicate phone across claims → merged. Chain verified ✓');}],
- [64,'e9',()=>{feed('human','Finance Officer','Batch #2 signed (late-verified claims). Median T2R holding under 30h.');
+ [64,'e9',()=>{feed('human','Finance Officer','Batch #2 signed (late-verified claims). Median T2R '+($('mT2R').textContent||'—')+', well inside the 72h target.');
    CLAIMS.forEach(c=>{if(c.verified!==null&&!c.rejected&&c.settled===null)c.settled=Math.max(S.t,c.verified)+2+rnd()*10;});}],
  [82,'end',()=>{endReplay();}]
 ];
