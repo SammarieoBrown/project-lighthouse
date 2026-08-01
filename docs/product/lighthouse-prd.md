@@ -290,9 +290,9 @@ These were open questions in v1.0. All five are now closed; the requirements abo
 4. **Anticipatory list visibility.** Director-role only in P0. The list is a ranked register of vulnerable people and where they live; publishing it would invert the privacy posture the rest of the platform argues for. Transparency obligations are met by the aggregate portal (LGR-02). → ALT-04.
 5. **Claim ID scheme.** Parish prefix + sequential, e.g. `SE-4102`. Already used in the solution spec and prototype, and a household has to be able to read it back over a bad phone line. → INT-05.
 
-### Still open
+6. **Job queue mechanism.** Postgres `SKIP LOCKED`, no Redis. The decisive reason is transactional: enqueueing an agent job and writing the state transition happen in one transaction, so a Storm File cannot land in a new state with no worker coming and nothing in the ledger recording that anything went wrong. On Redis those are two systems and that failure is possible — an orphaned claim is the worst bug this platform could ship. Secondary: one less service to run, jobs are queryable in SQL when something stalls mid-demo, and at replay volume throughput is not a constraint. Workers wake on `LISTEN/NOTIFY` rather than tight-polling, which also keeps Neon from burning compute hours. Revisit only if throughput or pub/sub fan-out becomes real.
 
-- **Job queue mechanism.** Postgres `SKIP LOCKED` vs Redis. The build spec and solution spec currently say Redis; the phase plan says Postgres. Blocks the `docker compose` file and the Render service list. Needs a call before Phase 0 closes.
+*No open questions remain at v1.1.*
 
 ## 12. Glossary
 

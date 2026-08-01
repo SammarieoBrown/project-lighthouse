@@ -36,7 +36,7 @@ The single highest-leverage work in the project. Output is four artifacts, commi
 
 Monorepo. Two Python deployables (`web`, `worker`) on Render, plus the Next.js console on Vercel. Neon Postgres 18 with PostGIS and pgvector — the initial migration must `CREATE EXTENSION` for both, since neither is installed on a fresh Neon database. Docker Compose for local development only; GitHub Actions runs CI, and both platforms deploy from the repo on push to `main`.
 
-Job queue mechanism is the one decision still open (Postgres `SKIP LOCKED` vs Redis — see PRD §11). Default assumption is `SKIP LOCKED`, which needs no extra Render service; confirm before the compose file is written, because it is the last thing blocking it.
+Job queue is Postgres `SKIP LOCKED`, no Redis (decided July 31 — PRD §11.6). Jobs enqueue in the same transaction as the state transition they follow from, so no Storm File can change state with its next agent job silently lost. Workers wake on `LISTEN/NOTIFY`.
 
 ### Exit criteria
 

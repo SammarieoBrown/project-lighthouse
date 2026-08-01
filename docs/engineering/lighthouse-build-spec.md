@@ -48,7 +48,7 @@ Every state transition writes a LedgerEntry. The ledger is append only and hash 
 
 Same codebase, same models, two entrypoints — `uvicorn app.web:app` and `python -m app.worker`. **Neon serverless Postgres 18 + PostGIS** is the single source of truth. No Kafka, no microservice mesh, we have three weeks.
 
-**Open:** job queue mechanism — Postgres `SKIP LOCKED` (no extra Render service) vs Redis (Render Key Value). See PRD §11. This is the last thing blocking the compose file.
+**Job queue: Postgres `SKIP LOCKED`. No Redis.** Enqueue the job and write the state transition in the same transaction — that is the whole argument. Two systems means a Storm File can change state while the follow-on agent job is silently lost, and an orphaned claim is precisely the failure this platform exists to make impossible. Workers wake on `LISTEN/NOTIFY`, not a poll loop. Decided July 31; see PRD §11.6.
 
 ## Agent contracts
 

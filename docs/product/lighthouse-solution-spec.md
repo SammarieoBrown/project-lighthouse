@@ -129,7 +129,7 @@ Every verified claim becomes a settlement obligation. Allocations (cash via bank
 - **Speech**: Whisper-class model fine-tuned on Jamaican Patois voice notes (H200 compute); this model is a durable asset nobody else has
 - **Agents**: Claude / GPT class APIs for reasoning stages (verification, allocation planning); small fine-tuned models on the high-volume intake path; every agent runs as a worker consuming state-change events
 - **Orchestration**: a typed state machine over Postgres; every transition is an event; agents subscribe to events; human gates are just transitions that require a signature
-- **Data**: PostgreSQL 18 + PostGIS (geo) and pgvector (retrieval) on Neon serverless, Redis (queues, burst buffering), append-only ledger tables with hash chaining
+- **Data**: PostgreSQL 18 + PostGIS (geo) and pgvector (retrieval) on Neon serverless; the job queue is Postgres `SKIP LOCKED` so agent jobs enqueue transactionally with the state transitions that trigger them; append-only ledger tables with hash chaining
 - **Geo and hazard ingestion**: workers pulling NHC, NDBC, Open-Meteo (ECMWF/GFS), CHIRPS, Sentinel-1/2 tiles, SRTM, OpenStreetMap, WorldPop
 - **Consoles**: Next.js EOC console (offline-first PWA, Mapbox/Leaflet), public transparency portal, admin
 - **Burst design**: intake is queue-buffered; claims are processed asynchronously; the system degrades gracefully by queueing, never by dropping; surge capacity is agent workers, which scale horizontally
