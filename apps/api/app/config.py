@@ -1,0 +1,50 @@
+"""Typed settings from the environment.
+
+Reads the repo-root ``.env``. Nothing in here has a default that would let the
+app start pointed at the wrong database — an unset ``DATABASE_URL`` is a startup
+failure, not a fallback to localhost.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CONTRACTS_DIR = REPO_ROOT / "packages" / "contracts"
+SCHEMA_SQL = CONTRACTS_DIR / "schema.sql"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=REPO_ROOT / ".env", extra="ignore", case_sensitive=False
+    )
+
+    database_url: str
+    environment: str = "local"
+    log_level: str = "INFO"
+    public_base_url: str = "http://localhost:8000"
+    replay_seed: int = 20251028
+
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_whatsapp_from: str | None = None
+
+    @property
+    def sqlalchemy_url(self) -> str:
+        """SQLAlchemy needs the driver named explicitly.
+
+        Neon hands out a libpq-style URL. We drive it with psycopg 3, which
+        SQLAlchemy only selects if the scheme says so.
+        """
+        url = self.database_url
+        if url.startswith("postgresql+"):
+            return url
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]

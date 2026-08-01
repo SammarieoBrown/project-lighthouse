@@ -22,3 +22,7 @@ dist/
 # cache is committed so the replay is byte-identical on every machine and on
 # the demo laptop. Regenerate with data/replay/fetch_advisories.py and check it
 # against the manifest. Never commit real household data here.
+
+# python build artefacts
+*.egg-info/
+.pytest_cache/

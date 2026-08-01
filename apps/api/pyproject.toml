@@ -1,0 +1,35 @@
+[project]
+name = "lighthouse-api"
+version = "0.1.0"
+description = "Project Lighthouse API — web and worker entrypoints"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "sqlalchemy>=2.0.30",
+  "psycopg[binary]>=3.2",
+  "alembic>=1.13",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  # Twilio posts application/x-www-form-urlencoded, not JSON. Without this,
+  # every inbound WhatsApp message 500s on form parsing.
+  "python-multipart>=0.0.9",
+  "geoalchemy2>=0.15",
+  "lighthouse-contracts",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "httpx>=0.27"]
+
+[tool.uv.sources]
+lighthouse-contracts = { path = "../../packages/contracts", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
