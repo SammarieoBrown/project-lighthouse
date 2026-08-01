@@ -38,17 +38,17 @@ Every state transition writes a LedgerEntry. The ledger is append only and hash 
 
 ## Services
 
-Five deployables. Keep them boring.
+**Two deployables plus a console.** Not five services — five services means five deploys, five sets of env vars and five ways to be half-broken at 2am in week three. These are modules inside `apps/api`, not separate repos or separate deploys.
 
-| Service | Does |
-|---|---|
-| `ingest` | Cron workers pulling NHC, NDBC, Open-Meteo, CHIRPS, Sentinel tiles. Writes HazardEvent. |
-| `orchestrator` | The state machine. Consumes events, dispatches agent jobs, enforces transition rules and human gates. |
-| `agents` | Agent workers. Each subscribes to job types off Redis. Stateless, horizontally scalable. |
-| `whatsapp` | Webhook receiver and sender. OpenClaw intake loop lives here. |
-| `console` | Next.js. EOC map + queues + approvals, and the public ledger portal. |
+| Deployable | Platform | Contains |
+|---|---|---|
+| `api` (`web`) | Render web service | FastAPI. WhatsApp webhook receiver and sender (OpenClaw intake loop), console API, public portal API, approval endpoints. Anything that answers an HTTP request. |
+| `api` (`worker`) | Render background worker | The state machine and every agent. Ingestion cron (NHC, NDBC, Open-Meteo, CHIRPS, Sentinel tiles → HazardEvent). Dispatches agent jobs, enforces transition rules and human gates. Stateless, scales horizontally. |
+| `console` | Vercel | Next.js. EOC map + queues + approvals, and the public ledger portal. |
 
-Postgres + PostGIS is the single source of truth. Redis for queues and burst buffering. No Kafka, no microservice mesh, we have three weeks.
+Same codebase, same models, two entrypoints — `uvicorn app.web:app` and `python -m app.worker`. **Neon serverless Postgres 18 + PostGIS** is the single source of truth. No Kafka, no microservice mesh, we have three weeks.
+
+**Open:** job queue mechanism — Postgres `SKIP LOCKED` (no extra Render service) vs Redis (Render Key Value). See PRD §11. This is the last thing blocking the compose file.
 
 ## Agent contracts
 
@@ -97,7 +97,9 @@ Thresholds: `>= 0.85` auto verify, `0.5 to 0.85` human review queue, `< 0.5` fla
 
 ## Stack
 
-Python (FastAPI) for `ingest`, `agents`, `orchestrator`. TypeScript (Next.js) for `console`. Postgres 16 + PostGIS + pgvector. Redis. Docker Compose local, GitHub Actions to a single cloud VM. Whisper fine tune on the H200 for Patois. Claude API for verification reasoning and allocation planning, small local models on the intake path.
+Python (FastAPI) for `api`, both entrypoints. TypeScript (Next.js) for `console`. **Neon Postgres 18 + PostGIS 3.6 + pgvector 0.8** (us-east-2; both extensions available, neither installed yet — the initial migration creates them). Docker Compose for local dev; GitHub Actions for CI; Render and Vercel both deploy from `main` on push, so there is no VM, no Caddy and no TLS to renew. Setup details and the asyncpg `sslmode` gotcha are in `lighthouse-environment-setup.md`. Whisper fine tune on the H200 for Patois. Claude API for verification reasoning and allocation planning, small local models on the intake path.
+
+Render free and starter tiers spin down when idle. Before demo day the API and worker move to a paid instance that does not sleep — a cold start in front of judges is a self-inflicted wound. Put this on the week 3 hardening checklist.
 
 Offline first console: service worker, IndexedDB write queue, sync on reconnect. The EOC loses power and internet in exactly the conditions we exist for.
 
@@ -109,13 +111,18 @@ Raheem: console shell + map. Sammarieo: DB, ingest, infra, CI. Matthew: Sentinel
 **Week 2, loop.** WhatsApp webhook live, IntakeAgent end to end with audio, VerificationAgent with all five signals, TriageAgent, live needs map, LogisticsAgent matching against seeded stock.
 Matthew: agents + Patois fine tune. Sammarieo: WhatsApp infra + queues. Raheem: EOC console, queues, approvals UI.
 
-**Week 3, proof.** Approval gates wired, disbursement + public ledger view, thin pre season registration flow, Melissa replay mode, T2R counter, demo rehearsal.
+**Week 3, proof.** Approval gates wired, disbursement + public ledger view, payer routing, FNOL packet, donation pool + donor journey view, thin pre season registration flow, Melissa replay mode, T2R counter, demo rehearsal.
+Raheem: gates, portal, donation page + donor journey. Sammarieo: disbursement, reconciliation, FNOL packet, hardening. Matthew: payer routing, anticipatory flow, threshold tuning.
 
 Cut list if we are behind, in this order: public portal styling, anticipatory registration, satellite signal (drop to four verification signals), logistics routing (keep matching, drop routes).
+
+Not cuttable: payer routing, the FNOL packet, and the donation → donor journey path. They are steps 4, 6 and 8 of the acceptance test in PRD §9, which means they are the demo. If you are cutting into these you are cutting the pitch, so escalate to the whole team rather than dropping them quietly.
 
 ## Replay mode
 
 The demo depends on this, so build it in week 1, not week 3. A seeder that walks Melissa's real NHC advisory history through the system at configurable speed, with ~500 synthetic StormFiles distributed across St Elizabeth and Westmoreland by real population density. A judge sends a live voice note mid replay and it lands in the same pipeline as the synthetic ones.
+
+The advisory cache is **committed to the repo** at `data/replay/cache/`, with `fetch_advisories.py` to regenerate it and a checksum manifest to prove it has not drifted. It is a few MB and it is the difference between a replay that is reproducible on four machines and one that is reproducible on whichever laptop last fetched it. Fixed seed on the synthetic registry, same reason.
 
 ## Rules
 
@@ -126,4 +133,6 @@ The demo depends on this, so build it in week 1, not week 3. A seeder that walks
 
 ## Metric
 
-Time to Relief: median hours from `VERIFIED` to `SETTLED`. Put it on the console in a big number from week 1. It is the number we demo and the number we are judged on.
+Time to Relief: median hours from **claim created to first confirmed disbursement or delivery**. The clock starts when the household files, not when we finish verifying — measuring from `VERIFIED` would exclude our own verification latency, which is the hard part and exactly what a finance or audit audience will ask about. Track `VERIFIED → SETTLED` separately as settlement latency for tuning.
+
+Put T2R on the console in a big number from week 1. It is the number we demo and the number we are judged on.

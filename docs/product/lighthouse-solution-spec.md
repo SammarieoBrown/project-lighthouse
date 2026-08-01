@@ -16,7 +16,7 @@ When Hurricane Melissa hit Jamaica in October 2025, the world's money arrived at
 
 Lighthouse is that missing rail. It is a national platform built around one atomic object, the Household Storm File, a single record per household that moves through five states: **registered → at-risk → affected → verified → settled**. AI agents move files between states (forecast monitoring, WhatsApp intake, evidence-based verification, triage, logistics matching, ledger auditing) while humans hold every gate that moves money. Households interact entirely through WhatsApp, in Jamaican Patois or English, with no app to download. Every allocation and payment lands on an append-only public ledger.
 
-North star metric: **Time to Relief (T2R)**, the median hours from verified claim to first relief in hand. Melissa's T2R was months to never. Lighthouse targets 72 hours.
+North star metric: **Time to Relief (T2R)**, the median hours from a household filing a claim to first relief in hand. The clock starts when they file, so our own verification time counts against us. Melissa's T2R was months to never. Lighthouse targets 72 hours.
 
 ## 2. The problem in one sentence
 
@@ -129,11 +129,11 @@ Every verified claim becomes a settlement obligation. Allocations (cash via bank
 - **Speech**: Whisper-class model fine-tuned on Jamaican Patois voice notes (H200 compute); this model is a durable asset nobody else has
 - **Agents**: Claude / GPT class APIs for reasoning stages (verification, allocation planning); small fine-tuned models on the high-volume intake path; every agent runs as a worker consuming state-change events
 - **Orchestration**: a typed state machine over Postgres; every transition is an event; agents subscribe to events; human gates are just transitions that require a signature
-- **Data**: PostgreSQL + PostGIS (geo), pgvector (retrieval), Redis (queues, burst buffering), append-only ledger tables with hash chaining
+- **Data**: PostgreSQL 18 + PostGIS (geo) and pgvector (retrieval) on Neon serverless, Redis (queues, burst buffering), append-only ledger tables with hash chaining
 - **Geo and hazard ingestion**: workers pulling NHC, NDBC, Open-Meteo (ECMWF/GFS), CHIRPS, Sentinel-1/2 tiles, SRTM, OpenStreetMap, WorldPop
 - **Consoles**: Next.js EOC console (offline-first PWA, Mapbox/Leaflet), public transparency portal, admin
 - **Burst design**: intake is queue-buffered; claims are processed asynchronously; the system degrades gracefully by queueing, never by dropping; surge capacity is agent workers, which scale horizontally
-- **Deployment**: Docker, GitHub Actions CI/CD, cloud initially, with a path to in-country or sovereign hosting for data residency
+- **Deployment**: Docker for local parity, GitHub Actions CI, Vercel for the consoles and Render for the API and workers initially, with a deliberate path to in-country or sovereign hosting for data residency — the container boundary is kept clean precisely so a government buyer can move the whole thing onshore without a rewrite
 
 ## 9. Verification and anti-fraud (the trust core)
 
@@ -145,7 +145,7 @@ Consent-first registration with revocation. Data minimisation. Encryption in tra
 
 ## 11. Metrics
 
-- **North star: Time to Relief (T2R)**, median hours from verified claim to first relief in hand. Target 72.
+- **North star: Time to Relief (T2R)**, median hours from claim filed to first relief in hand. Target 72. Settlement latency (verified → relief confirmed) is tracked separately as the operational sub-metric.
 - Percentage of relief value with a complete end-to-end audit trail (target 100%)
 - Registration coverage per parish (pre-season)
 - Verification precision and recall (measured on replay and synthetic sets); human review queue rate

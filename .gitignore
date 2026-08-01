@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .env
 .env.*
+!.env.example
 # node
 node_modules/
 .next/
@@ -16,4 +17,8 @@ dist/
 # data & secrets
 *.pem
 *.key
-data/replay/cache/
+
+# NOTE: data/replay/cache/ is deliberately NOT ignored. The Melissa advisory
+# cache is committed so the replay is byte-identical on every machine and on
+# the demo laptop. Regenerate with data/replay/fetch_advisories.py and check it
+# against the manifest. Never commit real household data here.

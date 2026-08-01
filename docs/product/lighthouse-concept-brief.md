@@ -25,7 +25,7 @@ One atomic object. Every household has a Storm File — identity, location, stru
 
 Everything else in the platform is machinery around that file. WhatsApp is a household's interface to its own file — voice note, photo, or text, in Patois or English, no app download. The EOC console is queries over files. The ledger is the append-only log of state transitions. The agents are workers that move files between states. And no transition that moves money happens without a human signature. **The report becomes the claim becomes the payment.**
 
-North-star metric: **Time-to-Relief (T2R)** — median hours from verified claim to first relief in hand. Melissa's T2R was months-to-never; Lighthouse targets 72 hours. Supporting metrics: % of aid with a complete audit trail (target 100%), % of households pre-registered per parish, and forecast-to-actual damage calibration error.
+North-star metric: **Time-to-Relief (T2R)** — median hours from claim filed to first relief in hand. We start the clock when the household speaks, not when we finish verifying, so our own latency counts against us. Melissa's T2R was months-to-never; Lighthouse targets 72 hours. Supporting metrics: % of aid with a complete audit trail (target 100%), % of households pre-registered per parish, and forecast-to-actual damage calibration error.
 
 ## One storm, three acts
 

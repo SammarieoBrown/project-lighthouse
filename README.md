@@ -6,7 +6,7 @@ Lighthouse is a system that gets help to people fast after a hurricane. Before t
 
 **One claim, many payers, one ledger. The report becomes the claim becomes the payment.**
 
-North-star metric: **Time to Relief (T2R)**, median hours from verified claim to first relief in hand. After Hurricane Melissa (2025) it was months to never; Lighthouse targets 72 hours.
+North-star metric: **Time to Relief (T2R)**, median hours from a household filing a claim to first relief in hand. The clock starts when they speak, not when we finish verifying. After Hurricane Melissa (2025) it was months to never; Lighthouse targets 72 hours.
 
 ## Why
 
@@ -26,6 +26,7 @@ Team: Raheem Wilson · Sammarieo Brown · Matthew Stone (Team Project Lighthouse
 | [Concept brief](docs/product/lighthouse-concept-brief.md) | The pitch narrative and defensibility |
 | [Build spec](docs/engineering/lighthouse-build-spec.md) | Engineering reference: model, services, agent contracts, stack |
 | [Project phases](docs/engineering/lighthouse-project-phases.md) | Phase plan with testable exit criteria |
+| [Environment setup](docs/engineering/lighthouse-environment-setup.md) | Runbook: Neon, Twilio sandbox, webhooks, and the constraints that shape the demo |
 | [Interactive prototype](docs/prototype/lighthouse-prototype.html) | Open in a browser: the Hurricane Melissa replay simulation |
 | [Workflow diagram](docs/assets/lighthouse-agentic-workflow.pdf) | Agents, human gates, data sources, outputs, decision points |
 
@@ -33,12 +34,14 @@ Team: Raheem Wilson · Sammarieo Brown · Matthew Stone (Team Project Lighthouse
 
 ```
 docs/        product, engineering and buildathon documentation + assets
-apps/api     Python modular monolith (FastAPI): web + worker entrypoints
-apps/console Next.js EOC console + public transparency portal
+apps/api     Python modular monolith (FastAPI): web + worker entrypoints → Render
+apps/console Next.js EOC console + public transparency portal → Vercel
 packages/contracts  the Phase 0 freeze: schema, state machine, agent I/O models
-infra/       compose, Caddy, deploy
+infra/       compose (local dev), render.yaml, deploy config
 data/replay  Melissa advisory cache + synthetic registry seeds (synthetic only, always)
 ```
+
+Hosting: Vercel for the consoles, Render for the API and workers, Neon for Postgres+PostGIS. Render and Vercel deploy from `main`; Docker Compose is for local development parity, not production. Setup runbook: [environment & integrations](docs/engineering/lighthouse-environment-setup.md).
 
 ## Principles
 
