@@ -1,0 +1,207 @@
+/* Lighthouse design substrate.
+ *
+ * The single source of every colour, size, and duration in the console and the
+ * public portal. Components reference these names; no component writes a
+ * literal hex, px, or ms value. That rule is what makes the three registers
+ * (see docs/design/lighthouse-design-rules.md, Part 2) read as one system
+ * rather than three.
+ *
+ * Every value below has a reason written next to it. If you cannot write the
+ * reason, the value does not belong here.
+ */
+
+:root {
+  /* ---------------------------------------------------------------------
+   * TYPE — three families, three roles, everywhere.
+   *
+   * The registers differ in how they *set* type, never in what type they use.
+   * Families are loaded in app/layout.tsx and bound to these names.
+   * ------------------------------------------------------------------ */
+
+  /* Archivo. A grotesque with a real width axis and signage/newsprint
+   * lineage. Register II (civil defence signage) has almost no colour to work
+   * with by design, so hierarchy has to be carried by weight and width — which
+   * is exactly what a two-axis variable face is for. */
+  --lh-font-display: var(--lh-font-display-loaded), "Helvetica Neue", sans-serif;
+
+  /* Public Sans. The US Web Design System face: built for government
+   * information, read by the public, at small sizes, on bad screens. A civic
+   * text face rather than a brand face, which is the point — this is a public
+   * service, not a product launch. */
+  --lh-font-body: var(--lh-font-body-loaded), "Helvetica Neue", sans-serif;
+
+  /* IBM Plex Mono. Every number that matters here is positional: wind
+   * probabilities, chain sequence numbers, hashes, storm file IDs, timestamps,
+   * currency. Industrial pedigree, and tabular figures without a fight. */
+  --lh-font-data: var(--lh-font-data-loaded), ui-monospace, monospace;
+
+  /* Separation guard. Archivo and Public Sans are both grotesques and will
+   * muddy each other if used at overlapping weights. Archivo appears only at
+   * 600+ and only at display sizes or expanded width; Public Sans never goes
+   * above 600. Enforced by convention, checked in review. */
+  --lh-display-weight: 700;
+  --lh-display-width: 112; /* Archivo wdth axis, expanded — signage proportion */
+  --lh-body-weight: 400;
+  --lh-body-weight-strong: 600;
+
+  /* ---------------------------------------------------------------------
+   * SCALE — identical in both grounds. Only colour changes with theme.
+   * ------------------------------------------------------------------ */
+
+  /* 4px base with two tighter steps, because rule C6 puts console density
+   * ahead of comfort: these screens are read at distance, under stress, by
+   * someone tracking many things at once. */
+  --lh-space-1: 2px;
+  --lh-space-2: 4px;
+  --lh-space-3: 8px;
+  --lh-space-4: 12px;
+  --lh-space-5: 16px;
+  --lh-space-6: 24px;
+  --lh-space-7: 32px;
+  --lh-space-8: 48px;
+
+  /* Type. Small at the bottom because a triage queue is a table, not an
+   * article. The gaps widen as they climb so hierarchy is unmistakable. */
+  --lh-text-micro: 11px;    /* labels and eyebrows — sparingly, see rule 22 */
+  --lh-text-fine: 12px;     /* dense data rows */
+  --lh-text-base: 13px;     /* console body */
+  --lh-text-read: 15px;     /* portal prose */
+  --lh-text-lead: 18px;
+  --lh-text-title: 24px;
+  --lh-text-display: 34px;
+  --lh-text-hero: 48px;
+
+  --lh-leading-tight: 1.15;
+  --lh-leading-base: 1.45;
+  --lh-leading-read: 1.6;
+
+  /* Two radii, both nearly square. Rounded cards are the most reproduced AI
+   * shape there is; zero radius everywhere is the broadsheet default, which is
+   * the same mistake wearing a different coat. 2 and 4 is a decision. */
+  --lh-radius: 2px;
+  --lh-radius-lg: 4px;
+
+  /* ---------------------------------------------------------------------
+   * MOTION — the whole budget.
+   *
+   * Rule M1: movement is a summons. Only three things may move — posture
+   * escalation, an open and unactioned human gate, and a live write landing.
+   * Anything else that animates is a bug, not a flourish. Switching theme is
+   * not on that list, so the ground changes instantly and without a fade.
+   * ------------------------------------------------------------------ */
+  --lh-motion-fast: 120ms;
+  --lh-motion-base: 200ms;
+  --lh-ease: cubic-bezier(0.2, 0, 0, 1); /* ease-out, no overshoot, no bounce */
+}
+
+/* =======================================================================
+ * GROUND — two of them, and which one you get is a product decision rather
+ * than a preference.
+ *
+ * The console is dark because an EOC is read in a dim room during a storm,
+ * often with the lights down and a projector running. The public portal is
+ * light because it is read in daylight, on a phone, by a donor or an auditor
+ * who is not in a crisis. Those are different rooms, so they get different
+ * grounds, and the surface says which it is rather than asking the viewer.
+ *
+ * The viewer preference still resolves the case where we have not said —
+ * and an explicit data-theme always beats the system setting.
+ *
+ * Neither ground is a tint of the other. The dark is a faint green-grey
+ * (instrument enamel, deliberately not midnight blue, which is where every
+ * generated dashboard lands). The light is warm bone, not white, so a screen
+ * full of ruled data does not glare.
+ * ==================================================================== */
+
+/* Dark — the default, and what the console always uses.
+ *
+ * Scoped by plain attribute rather than pinned to :root, so a region can carry
+ * a ground of its own. That is not a decorative capability: the portal embeds
+ * console-style panels, and a specimen needs to show both grounds at once. */
+:root,
+[data-theme="dark"] {
+  --lh-ground: #101413;   /* deepest ground; the page */
+  --lh-panel: #191e1c;    /* raised surface; a panel, never a "card" */
+  --lh-rule: #2e3532;     /* the hairline. Load-bearing for Registers I and III */
+  --lh-quiet: #7f8b85;    /* secondary text, and the QUIET / LOW states */
+  --lh-figure: #e9eae4;   /* primary text and marks */
+
+  /* MEANING — four hues for the entire product, named for what they mean
+   * rather than what they look like or where they sit. A hue owns its meaning
+   * across every surface and may never be borrowed for decoration, a button, a
+   * link, a hover state, or a chart series (rule C1).
+   *
+   * Because they are meaning-named, posture and triage severity share them
+   * honestly: an ACT posture and an URGENT claim are the same category of
+   * thing — drop everything — so they are the same colour. That is why there
+   * are four hues here and not eight.
+   *
+   * The consequence, and it is the point: red appears on exactly one kind of
+   * thing in this product, so it still means something when it appears. */
+  /* Each meaning carries two values, because a filled mark and a line of text
+   * are held to different contrast floors — 3:1 for a non-text mark, 4.5:1 for
+   * text. On this ground the two coincide; on the light ground they do not,
+   * and collapsing them there would either fail the floor or turn amber into
+   * brown. Same meaning, two jobs. */
+  --lh-critical: #e4574a;        /* act now — ACT posture, URGENT triage, blocking gate */
+  --lh-critical-text: #e4574a;
+  --lh-elevated: #e8a33d;        /* attend soon — READY posture, HIGH triage, open approval */
+  --lh-elevated-text: #e8a33d;
+  --lh-watch: #4c8dd6;           /* monitor — WATCH posture, MED triage, agent work in flight */
+  --lh-watch-text: #4c8dd6;
+  --lh-confirmed: #4e9a6b;       /* terminal good — verified, delivered, chain valid. Never a button */
+  --lh-confirmed-text: #4e9a6b;
+  /* QUIET / LOW / nothing-happening has no hue at all. Absence is the state. */
+}
+
+/* Light — the portal, and the viewer's choice.
+ *
+ * Not an inversion. The same four meanings at a contrast that survives a pale
+ * ground; every value here clears 4.5:1 against it. Duplicated below for the
+ * system-preference case because CSS cannot assign a custom property
+ * conditionally without repeating the block. */
+[data-theme="light"] {
+  --lh-ground: #f1f2ec;
+  --lh-panel: #fafaf6;
+  --lh-rule: #c9ccc3;
+  --lh-quiet: #5c645f;
+  --lh-figure: #141a18;
+
+  /* Marks first, at 3:1 or better — these stay recognisably red, amber, blue
+   * and green, because a swatch that has to be explained is not carrying its
+   * meaning. Text second, at 4.5:1 or better, which is darker by necessity. */
+  --lh-critical: #cf3b2b;
+  --lh-critical-text: #a8251a;
+  --lh-elevated: #b0700a;
+  --lh-elevated-text: #7a4f04;
+  --lh-watch: #2870bd;
+  --lh-watch-text: #1f5fa8;
+  --lh-confirmed: #2a7f50;
+  --lh-confirmed-text: #1f6b41;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --lh-ground: #f1f2ec;
+    --lh-panel: #fafaf6;
+    --lh-rule: #c9ccc3;
+    --lh-quiet: #5c645f;
+    --lh-figure: #141a18;
+
+    --lh-critical: #cf3b2b;
+    --lh-critical-text: #a8251a;
+    --lh-elevated: #b0700a;
+    --lh-elevated-text: #7a4f04;
+    --lh-watch: #2870bd;
+    --lh-watch-text: #1f5fa8;
+    --lh-confirmed: #2a7f50;
+    --lh-confirmed-text: #1f6b41;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lh-motion-fast: 1ms;
+    --lh-motion-base: 1ms;
+  }
+}

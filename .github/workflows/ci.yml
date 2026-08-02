@@ -1,0 +1,124 @@
+name: CI
+
+# The API test suite runs against real Postgres, not a substitute. The things
+# most worth testing — the SETTLED trigger, the append-only ledger rules,
+# FOR UPDATE SKIP LOCKED, PostGIS columns, native enums — do not exist in
+# SQLite, and a green suite against a database that cannot enforce our
+# invariants would be worse than no suite at all (see tests/conftest.py).
+#
+# So CI gets a real Neon branch: copy-on-write, identical extension versions to
+# production, created per run and deleted afterwards. No container image to
+# maintain, no shared state between runs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      NEON_API: https://console.neon.tech/api/v2
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Create ephemeral Neon branch
+        id: neon
+        run: |
+          set -euo pipefail
+
+          name="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          resp=$(curl -sS --fail-with-body -X POST \
+            "${NEON_API}/projects/${NEON_PROJECT_ID}/branches" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"branch\":{\"name\":\"${name}\"},\"endpoints\":[{\"type\":\"read_write\"}]}")
+
+          branch_id=$(jq -re '.branch.id' <<<"$resp")
+          # Recorded before the readiness wait, so cleanup still fires if the
+          # endpoint never comes up. An orphaned CI branch costs money quietly.
+          echo "branch_id=${branch_id}" >> "$GITHUB_OUTPUT"
+
+          uri=$(jq -re '.connection_uris[0].connection_uri' <<<"$resp")
+          echo "::add-mask::${uri}"
+          echo "uri=${uri}" >> "$GITHUB_OUTPUT"
+
+          # Branch creation returns immediately; the compute endpoint is still
+          # provisioning. Connecting before its operations finish fails in a way
+          # that looks like a test failure, so wait for them explicitly.
+          # `st`, not `status` — the latter is read-only in zsh, and a snippet
+          # that only runs in CI is a snippet nobody can reproduce locally.
+          for op in $(jq -r '.operations[].id' <<<"$resp"); do
+            for _ in $(seq 1 60); do
+              st=$(curl -sS --fail-with-body \
+                "${NEON_API}/projects/${NEON_PROJECT_ID}/operations/${op}" \
+                -H "Authorization: Bearer ${NEON_API_KEY}" | jq -re '.operation.status')
+              case "$st" in
+                finished) break ;;
+                failed|error|cancelled)
+                  echo "Neon operation ${op} ended as ${st}" >&2; exit 1 ;;
+                *) sleep 2 ;;
+              esac
+            done
+            if [ "$st" != "finished" ]; then
+              echo "Neon operation ${op} still ${st} after 120s" >&2; exit 1
+            fi
+          done
+
+      - name: Run tests
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.uri }}
+          ENVIRONMENT: ci
+        run: uv run --extra dev --frozen pytest -q
+
+      - name: Delete ephemeral Neon branch
+        # Runs even when the tests fail or the job is cancelled. A branch left
+        # behind by a red build is the one nobody goes back for.
+        if: always() && steps.neon.outputs.branch_id != ''
+        env:
+          BRANCH_ID: ${{ steps.neon.outputs.branch_id }}
+        run: |
+          curl -sS --fail-with-body -X DELETE \
+            "${NEON_API}/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" > /dev/null
+
+  console:
+    name: Console build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/console/package-lock.json
+
+      - name: Install
+        working-directory: apps/console
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: apps/console
+        run: npm run typecheck
+
+      # next/font fetches and self-hosts the three families at build time, so a
+      # green build here is also proof the type system still resolves.
+      - name: Build
+        working-directory: apps/console
+        run: npm run build

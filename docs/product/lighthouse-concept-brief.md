@@ -82,8 +82,8 @@ One closing connection: the moat depends on the agents. The single-ledger networ
 
 ## Three-week build
 
-- **Week 1 — the spine.** Storm File data model + ledger core; live storm-feed dashboard with parish risk scores for Jamaica. (Raheem: platform/console · Sammarieo: data pipeline/infra · Matthew: forecast + risk agents)
-- **Week 2 — the loop.** WhatsApp intake → verification → triage → live EOC map → logistics matching, end to end. (Matthew: agents + Patois model · Raheem/Sammarieo: WhatsApp infra, console)
+- **Week 1 — the spine.** Storm File data model + ledger core; live storm-feed dashboard with parish risk scores for Jamaica. (Lanes: data pipeline/infra → forecast + risk agents → platform/console)
+- **Week 2 — the loop.** WhatsApp intake → verification → triage → live EOC map → logistics matching, end to end. (Lanes: WhatsApp infra → agents + Patois model → console)
 - **Week 3 — the proof.** Ledger views + anticipatory registration (thin) + Melissa replay mode + live T2R counter + demo polish.
 
 ## The demo: one storm, three acts

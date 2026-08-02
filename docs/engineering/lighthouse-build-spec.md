@@ -1,6 +1,6 @@
 # Lighthouse: Build Spec
 
-For Raheem, Sammarieo, Matthew. Three week buildathon scope. Track 04.
+Three week buildathon scope. Track 04. Built solo — the lane names below describe kinds of work, not people.
 
 ## What we are building
 
@@ -97,7 +97,7 @@ Thresholds: `>= 0.85` auto verify, `0.5 to 0.85` human review queue, `< 0.5` fla
 
 ## Stack
 
-Python (FastAPI) for `api`, both entrypoints. TypeScript (Next.js) for `console`. **Neon Postgres 18 + PostGIS 3.6 + pgvector 0.8** (us-east-2; both extensions available, neither installed yet — the initial migration creates them). Docker Compose for local dev; GitHub Actions for CI; Render and Vercel both deploy from `main` on push, so there is no VM, no Caddy and no TLS to renew. Setup details and the asyncpg `sslmode` gotcha are in `lighthouse-environment-setup.md`. Whisper fine tune on the H200 for Patois. Claude API for verification reasoning and allocation planning, small local models on the intake path.
+Python (FastAPI) for `api`, both entrypoints. TypeScript (Next.js) for `console`. **Neon Postgres 18 + PostGIS 3.6 + pgvector 0.8** (us-east-2; both extensions available, neither installed yet — the initial migration creates them). Local dev and CI run against Neon branches, not a local container — no stock image carries PostGIS and pgvector together, and a local database that quietly differs from prod is worse than none. GitHub Actions for CI; Render and Vercel both deploy from `main` on push, so there is no VM, no Caddy and no TLS to renew. Setup details and the asyncpg `sslmode` gotcha are in `lighthouse-environment-setup.md`. Whisper fine tune on the H200 for Patois. Claude API for verification reasoning and allocation planning, small local models on the intake path.
 
 Render free and starter tiers spin down when idle. Before demo day the API and worker move to a paid instance that does not sleep — a cold start in front of judges is a self-inflicted wound. Put this on the week 3 hardening checklist.
 
@@ -106,17 +106,17 @@ Offline first console: service worker, IndexedDB write queue, sync on reconnect.
 ## Three weeks
 
 **Week 1, spine.** Schema and migrations, state machine with transition tests, ledger with hash chaining, NHC/NDBC ingestion, parish risk dashboard rendering real storms.
-Raheem: console shell + map. Sammarieo: DB, ingest, infra, CI. Matthew: Sentinel + RiskMapper.
+Lanes: DB, ingest, infra, CI · Sentinel + RiskMapper · console shell + map. In that order — the console has nothing to render until the seeder and the ingest exist.
 
 **Week 2, loop.** WhatsApp webhook live, IntakeAgent end to end with audio, VerificationAgent with all five signals, TriageAgent, live needs map, LogisticsAgent matching against seeded stock.
-Matthew: agents + Patois fine tune. Sammarieo: WhatsApp infra + queues. Raheem: EOC console, queues, approvals UI.
+Lanes: WhatsApp infra + queues · agents + Patois eval, fine tune only if transcription is the bottleneck · EOC console, queues, approvals UI.
 
 **Week 3, proof.** Approval gates wired, disbursement + public ledger view, payer routing, FNOL packet, donation pool + donor journey view, thin pre season registration flow, Melissa replay mode, T2R counter, demo rehearsal.
-Raheem: gates, portal, donation page + donor journey. Sammarieo: disbursement, reconciliation, FNOL packet, hardening. Matthew: payer routing, anticipatory flow, threshold tuning.
+Lanes: disbursement, reconciliation, FNOL packet, hardening · payer routing, anticipatory flow, threshold tuning · gates, portal, donation page + donor journey.
 
 Cut list if we are behind, in this order: public portal styling, anticipatory registration, satellite signal (drop to four verification signals), logistics routing (keep matching, drop routes).
 
-Not cuttable: payer routing, the FNOL packet, and the donation → donor journey path. They are steps 4, 6 and 8 of the acceptance test in PRD §9, which means they are the demo. If you are cutting into these you are cutting the pitch, so escalate to the whole team rather than dropping them quietly.
+Not cuttable: payer routing, the FNOL packet, and the donation → donor journey path. They are steps 4, 6 and 8 of the acceptance test in PRD §9, which means they are the demo. If you are cutting into these you are cutting the pitch. Cutting one is a decision to make deliberately and write down, not something to let slip because the week ran out.
 
 ## Replay mode
 

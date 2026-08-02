@@ -10,6 +10,11 @@ venv/
 node_modules/
 .next/
 dist/
+next-env.d.ts
+*.tsbuildinfo
+
+# browser-automation scratch output
+.playwright-mcp/
 # os / editor
 .DS_Store
 .idea/
