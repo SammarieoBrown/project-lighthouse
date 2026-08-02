@@ -1,0 +1,61 @@
+/* Base layer. Everything here resolves to a token in tokens.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--lh-ground);
+  color: var(--lh-figure);
+  font-family: var(--lh-font-body);
+  font-size: var(--lh-text-base);
+  font-weight: var(--lh-body-weight);
+  line-height: var(--lh-leading-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every figure that can change is tabular. Values that jitter sideways as they
+ * update are unreadable in a live feed (rule C7). */
+[data-numeric],
+.lh-data {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--lh-font-display);
+  font-weight: var(--lh-display-weight);
+  font-variation-settings: "wdth" var(--lh-display-width);
+  line-height: var(--lh-leading-tight);
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: inherit;
+}
+
+/* Focus must be visible and must not depend on colour alone — an operator may
+ * be keyboard-only, colour-blind, or looking at a projector. */
+:focus-visible {
+  outline: 2px solid var(--lh-figure);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--lh-figure);
+  color: var(--lh-ground);
+}

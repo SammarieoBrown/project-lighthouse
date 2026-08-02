@@ -1,0 +1,443 @@
+/* Specimen sheet. Not product UI — a place to look at the substrate and catch
+ * it drifting. Set as a document: ruled, dense, no cards, no numbered markers
+ * (these sections are not a sequence, so numbering them would encode nothing).
+ */
+
+.sheet {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--lh-space-7) var(--lh-space-5) var(--lh-space-8);
+}
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  border-bottom: 2px solid var(--lh-figure);
+  padding-bottom: var(--lh-space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--lh-space-4);
+}
+
+.wordmark {
+  font-size: var(--lh-text-display);
+  font-variation-settings: "wdth" 125;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mastheadMeta {
+  margin-left: auto;
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.standfirst {
+  margin-top: var(--lh-space-4);
+  max-width: 62ch;
+  font-size: var(--lh-text-read);
+  line-height: var(--lh-leading-read);
+  color: var(--lh-quiet);
+}
+
+/* ---------- sections ---------- */
+
+.section {
+  margin-top: var(--lh-space-8);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lh-space-4);
+  border-bottom: 1px solid var(--lh-rule);
+  padding-bottom: var(--lh-space-2);
+  margin-bottom: var(--lh-space-5);
+}
+
+.sectionTitle {
+  font-size: var(--lh-text-lead);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sectionNote {
+  margin-left: auto;
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  text-align: right;
+  max-width: 46ch;
+}
+
+/* ---------- registers ---------- */
+
+.registers {
+  display: grid;
+  gap: var(--lh-space-5);
+}
+
+.register {
+  border-top: 1px solid var(--lh-rule);
+  padding-top: var(--lh-space-4);
+  display: grid;
+  grid-template-columns: 13ch 1fr;
+  gap: var(--lh-space-5);
+}
+
+.registerLabel {
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.registerOwns {
+  display: block;
+  margin-top: var(--lh-space-2);
+  color: var(--lh-figure);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+}
+
+.registerBody p {
+  margin-top: var(--lh-space-3);
+  max-width: 58ch;
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+}
+
+/* Register I — synoptic. Values, set as values. */
+.synoptic {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lh-space-5);
+  align-items: flex-end;
+}
+
+.reading {
+  border-left: 1px solid var(--lh-rule);
+  padding-left: var(--lh-space-3);
+}
+
+/* The rule divides readings; a rule before the first one divides it from
+ * nothing. */
+.reading:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.readingValue {
+  display: block;
+  font-size: var(--lh-text-title);
+  font-weight: 500;
+}
+
+.readingLabel {
+  display: block;
+  margin-top: var(--lh-space-1);
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Register II — signage. Weight and width carry the hierarchy. */
+.signage {
+  font-family: var(--lh-font-display);
+  font-weight: 800;
+  font-variation-settings: "wdth" 100;
+  font-size: var(--lh-text-title);
+  line-height: var(--lh-leading-tight);
+  text-transform: uppercase;
+}
+
+.signageSub {
+  display: block;
+  margin-top: var(--lh-space-2);
+  font-size: var(--lh-text-fine);
+  font-weight: 500;
+  font-variation-settings: "wdth" 100;
+  letter-spacing: 0.06em;
+  color: var(--lh-quiet);
+}
+
+/* Register III — the register. Ruled, sequenced, typographic. */
+.ledgerSample {
+  border-top: 1px solid var(--lh-rule);
+}
+
+.ledgerRow {
+  display: grid;
+  grid-template-columns: 7ch 9ch 1fr;
+  gap: var(--lh-space-4);
+  padding: var(--lh-space-2) 0;
+  border-bottom: 1px solid var(--lh-rule);
+  font-size: var(--lh-text-fine);
+}
+
+.seq {
+  color: var(--lh-quiet);
+}
+
+/* ---------- meaning ---------- */
+
+.meaning {
+  border-top: 1px solid var(--lh-rule);
+}
+
+.meaningRow {
+  display: grid;
+  grid-template-columns: var(--lh-space-6) 16ch 1fr;
+  gap: var(--lh-space-4);
+  align-items: start;
+  padding: var(--lh-space-3) 0;
+  border-bottom: 1px solid var(--lh-rule);
+}
+
+.swatch {
+  width: var(--lh-space-6);
+  height: var(--lh-space-6);
+  border-radius: var(--lh-radius);
+}
+
+.swatchNone {
+  border: 1px dashed var(--lh-rule);
+}
+
+.token {
+  font-size: var(--lh-text-fine);
+  color: var(--lh-figure);
+}
+
+.meaningText {
+  font-size: var(--lh-text-fine);
+  color: var(--lh-quiet);
+  max-width: 64ch;
+}
+
+.meaningText b {
+  color: var(--lh-figure);
+  font-weight: var(--lh-body-weight-strong);
+}
+
+/* ---------- scales ---------- */
+
+.scales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--lh-space-7);
+}
+
+.ladder {
+  border-top: 1px solid var(--lh-rule);
+}
+
+.ladderRow {
+  display: grid;
+  grid-template-columns: 12ch 1fr;
+  gap: var(--lh-space-4);
+  align-items: baseline;
+  padding: var(--lh-space-2) 0;
+  border-bottom: 1px solid var(--lh-rule);
+}
+
+.ladderKey {
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+}
+
+/* Drawn at its true width. A spacing scale shown at 4× is a chart that lies
+ * about its own subject (rule C3), and 2px genuinely is nearly nothing —
+ * which is the useful thing to see. */
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: var(--lh-space-3);
+}
+
+.bar {
+  height: var(--lh-space-3);
+  background: var(--lh-figure);
+  border-radius: var(--lh-radius);
+  flex: none;
+}
+
+.barValue {
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+}
+
+/* ---------- the mark ---------- */
+
+.marks {
+  border-top: 1px solid var(--lh-rule);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--lh-space-7);
+  padding-top: var(--lh-space-5);
+}
+
+.markCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--lh-space-3);
+}
+
+.markCaption {
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Both grounds, side by side, so the mark can be checked in the room it will
+ * actually be read in rather than only the one the page happens to be in. */
+.groundSwatch {
+  padding: var(--lh-space-5);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  background: var(--lh-ground);
+  color: var(--lh-figure);
+}
+
+/* ---------- signature ---------- */
+
+.levels {
+  display: grid;
+  gap: var(--lh-space-6);
+}
+
+.level {
+  border-top: 1px solid var(--lh-rule);
+  padding-top: var(--lh-space-4);
+}
+
+.levelLabel {
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--lh-space-3);
+}
+
+/* The transition line. One object, three levels of detail. */
+.tline {
+  display: grid;
+  gap: var(--lh-space-2);
+  font-size: var(--lh-text-fine);
+}
+
+/* Columns are sized to the longest value they actually hold — VerificationAgent
+ * is 17 characters and Finance Officer is 15, and a column that clips or wraps
+ * its own vocabulary is a column that was measured against nothing. */
+.tlineFeed {
+  display: grid;
+  grid-template-columns: 9ch 19ch 11ch 1fr;
+  gap: var(--lh-space-4);
+  padding: var(--lh-space-2) 0;
+  border-bottom: 1px solid var(--lh-rule);
+}
+
+.tlineAudit {
+  display: grid;
+  grid-template-columns: 7ch 9ch 9ch 1fr 17ch 10ch;
+  gap: var(--lh-space-4);
+  padding: var(--lh-space-3) 0;
+  border-bottom: 1px solid var(--lh-rule);
+}
+
+.tlineHead {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--lh-rule);
+  padding-bottom: var(--lh-space-2);
+}
+
+.proposer {
+  color: var(--lh-quiet);
+}
+
+.disposer {
+  color: var(--lh-figure);
+}
+
+.disposerNone {
+  color: var(--lh-quiet);
+}
+
+.state {
+  color: var(--lh-figure);
+}
+
+.hash {
+  color: var(--lh-quiet);
+}
+
+.narrated {
+  max-width: 60ch;
+  font-size: var(--lh-text-read);
+  line-height: var(--lh-leading-read);
+}
+
+.narrated time {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  margin-top: var(--lh-space-8);
+  border-top: 1px solid var(--lh-rule);
+  padding-top: var(--lh-space-4);
+  font-size: var(--lh-text-fine);
+  color: var(--lh-quiet);
+  max-width: 62ch;
+}
+
+.footer a {
+  color: var(--lh-figure);
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  /* Side by side, the title wraps to two lines and the note crowds it. They
+     are a heading and its gloss, so they stack in that order. */
+  .sectionHead {
+    flex-wrap: wrap;
+  }
+
+  .sectionNote {
+    margin-left: 0;
+    text-align: left;
+    max-width: none;
+  }
+
+  .register {
+    grid-template-columns: 1fr;
+    gap: var(--lh-space-3);
+  }
+
+  .tlineFeed,
+  .tlineAudit {
+    grid-template-columns: 1fr;
+    gap: var(--lh-space-1);
+  }
+
+  .tlineHead {
+    display: none;
+  }
+
+  .meaningRow {
+    grid-template-columns: var(--lh-space-6) 1fr;
+  }
+}
