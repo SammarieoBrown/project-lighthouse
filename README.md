@@ -37,11 +37,13 @@ docs/        product, engineering and buildathon documentation + assets
 apps/api     Python modular monolith (FastAPI): web + worker entrypoints → Render
 apps/console Next.js EOC console + public transparency portal → Vercel
 packages/contracts  the Phase 0 freeze: schema, state machine, agent I/O models
-infra/       compose (local dev), render.yaml, deploy config
+infra/       render.yaml, deploy config
 data/replay  Melissa advisory cache + synthetic registry seeds (synthetic only, always)
 ```
 
-Hosting: Vercel for the consoles, Render for the API and workers, Neon for Postgres+PostGIS. Render and Vercel deploy from `main`; Docker Compose is for local development parity, not production. Setup runbook: [environment & integrations](docs/engineering/lighthouse-environment-setup.md).
+Hosting: Vercel for the consoles, Render for the API and workers, Neon for Postgres+PostGIS. Render and Vercel deploy from `main`. There is no Docker Compose and no local Postgres — local development and CI run against Neon branches, because no stock image ships PostGIS and pgvector together and a local database that quietly differs from production is worse than none. Setup runbook: [environment & integrations](docs/engineering/lighthouse-environment-setup.md).
+
+Before touching the console or the portal, read the [design rules](docs/design/lighthouse-design-rules.md). They are binding.
 
 ## Principles
 

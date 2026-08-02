@@ -34,6 +34,19 @@ CREATE EXTENSION IF NOT EXISTS vector;    -- 0.8.1 available (pgvector)
 
 `pg_trgm` (1.6) and `uuid-ossp` (1.1) are also available if we want them.
 
+### Branches — local development and CI (added Aug 2)
+
+**There is no local Postgres and no Docker Compose.** Local development and CI both run against Neon branches.
+
+The reason is the extension pair. No stock image ships PostGIS *and* pgvector together — `postgis/postgis` has no pgvector, `pgvector/pgvector` has no PostGIS — so a Compose setup means maintaining a custom image whose extension versions drift away from the ones Neon actually runs. A local database that is subtly not the production database is worse than no local database, because the difference surfaces as a failure in the one place you cannot debug: a deployed service. Neon branches are copy-on-write, so they cost close to nothing, start from the real schema, and run the exact PostGIS 3.6 / pgvector 0.8 that production runs.
+
+- **Development:** one long-lived branch off `main`, its connection string in `.env` as `DATABASE_URL` / `DATABASE_URL_ASYNC`. Never point local development at the `main` branch's database.
+- **CI:** an ephemeral branch created at the start of each run and deleted at the end, so tests get a real PostGIS + pgvector database with no shared state between runs and no cleanup fixture to get wrong.
+
+**The cost, stated plainly:** development now needs a network connection. That is an uncomfortable trade for a product whose argument is functioning when the network is gone, and it is accepted only because the offline requirement lives in the console — service worker, IndexedDB write queue, sync on reconnect — and not in the API's development loop. The API is never the thing running in a blacked-out EOC. If this costs real time, the fallback is a custom Compose image and the decision reverses; it is not load-bearing on anything else.
+
+**Fourth thing that will bite:** each branch has its own endpoint hostname, so a branch's connection string is not the parent's with a name swapped. Read it from the Neon console or the API; do not hand-edit one.
+
 ### Three things that will bite
 
 **1. `asyncpg` rejects `sslmode`.** The connection string Neon hands you is libpq-flavoured. If you drive it with SQLAlchemy async or asyncpg directly, `?sslmode=require` raises `TypeError: connect() got an unexpected keyword argument 'sslmode'`. Use `?ssl=require` instead — `DATABASE_URL_ASYNC` in `.env` is already in that form. Keep both: Alembic runs sync, the app runs async.
