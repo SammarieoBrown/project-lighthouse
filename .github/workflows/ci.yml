@@ -60,20 +60,22 @@ jobs:
           # Branch creation returns immediately; the compute endpoint is still
           # provisioning. Connecting before its operations finish fails in a way
           # that looks like a test failure, so wait for them explicitly.
+          # `st`, not `status` — the latter is read-only in zsh, and a snippet
+          # that only runs in CI is a snippet nobody can reproduce locally.
           for op in $(jq -r '.operations[].id' <<<"$resp"); do
             for _ in $(seq 1 60); do
-              status=$(curl -sS --fail-with-body \
+              st=$(curl -sS --fail-with-body \
                 "${NEON_API}/projects/${NEON_PROJECT_ID}/operations/${op}" \
                 -H "Authorization: Bearer ${NEON_API_KEY}" | jq -re '.operation.status')
-              case "$status" in
+              case "$st" in
                 finished) break ;;
                 failed|error|cancelled)
-                  echo "Neon operation ${op} ended as ${status}" >&2; exit 1 ;;
+                  echo "Neon operation ${op} ended as ${st}" >&2; exit 1 ;;
                 *) sleep 2 ;;
               esac
             done
-            if [ "$status" != "finished" ]; then
-              echo "Neon operation ${op} still ${status} after 120s" >&2; exit 1
+            if [ "$st" != "finished" ]; then
+              echo "Neon operation ${op} still ${st} after 120s" >&2; exit 1
             fi
           done
 
