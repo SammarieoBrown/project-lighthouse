@@ -42,13 +42,35 @@ cache/manifest.sha256
 
 **Best track is cached because verification needs it.** Phase 2 compares a claim against the wind field that was actually observed at that point, not the one that was forecast. Without the post-storm truth there is nothing to verify against.
 
+### Jamaica — boundaries and population
+
+```
+cache/jamaica/
+  jam_admin_boundaries.shp.zip   OCHA COD-AB: admin0-3 polygons + admin points
+  jam_adm1_pop.csv               OCHA COD-PS: parish population by age and sex
+```
+
+Both from OCHA's Common Operational Datasets on HDX, CC BY-IGO. These are the boundaries a humanitarian response is expected to use, keyed by p-codes any partner agency would recognise — a relief platform that invents its own geography cannot hand a parish list to anybody.
+
+Kept as the publisher's own artefacts, unmodified. Trimming the 4.5 MB zip to the three layers the seeder reads would save space and would also mean the checksum no longer matches anything OCHA published, which is the provenance claim worth more than the megabytes.
+
+**The two datasets disagree about p-codes, and the join is by name because of it.** 11 of 14 parishes carry a different code in COD-AB than in COD-PS. Saint Elizabeth is `JM09` in the boundaries and `JM11` in the population table — and `JM09` in the population table is Saint Ann, on the other side of the island. A p-code join runs clean and silently gives St Elizabeth the wrong population. All 14 names match exactly once whitespace is stripped, so name is the key, and `test_the_two_cod_datasets_still_disagree_about_pcodes` guards it in both directions: if OCHA fixes the conflict, that test fails and the workaround can go.
+
 ## Regenerating
 
 ```bash
-python3 data/replay/fetch_advisories.py            # fetch what is missing
-python3 data/replay/fetch_advisories.py --force    # refetch everything
 python3 data/replay/fetch_advisories.py --verify   # check manifest, no network
 ```
+
+```bash
+python3 data/replay/fetch_advisories.py            # storm data
+```
+
+```bash
+python3 data/replay/fetch_geography.py             # boundaries and population
+```
+
+Both take `--force` to refetch and `--verify` to check the manifest without touching the network. They share `manifest.py`, so either one can verify the whole cache — two scripts writing to one directory with two opinions about the manifest is how a "verified" cache quietly stops being verified.
 
 Standard library only, so it runs from a clean clone without installing the API environment first. On a python.org macOS build it will use `certifi` if importable, because that Python does not read the system keychain and will otherwise fail TLS verification against NOAA.
 

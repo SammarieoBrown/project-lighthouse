@@ -21,7 +21,6 @@ installing the API's environment first.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import re
 import ssl
 import sys
@@ -37,8 +36,10 @@ TEXT_BASE = f"https://www.nhc.noaa.gov/archive/{YEAR}/al13"
 GIS_BASE = "https://www.nhc.noaa.gov/gis/forecast/archive"
 BEST_TRACK_URL = f"https://www.nhc.noaa.gov/gis/best_track/{STORM}_best_track.zip"
 
-CACHE = Path(__file__).parent / "cache"
-MANIFEST = CACHE / "manifest.sha256"
+sys.path.insert(0, str(Path(__file__).parent))
+import manifest  # noqa: E402  — sibling module, not an installed package
+
+CACHE = manifest.CACHE
 
 # The five products the replay actually consumes, plus the two that make the
 # demo legible. Each maps to a directory under cache/<storm>/text/.
@@ -157,59 +158,6 @@ def write(path: Path, payload: bytes) -> None:
     path.write_bytes(payload)
 
 
-def build_manifest() -> str:
-    """sha256 of every cached file, sorted by path, one per line."""
-    lines = []
-    for path in sorted(CACHE.rglob("*")):
-        if not path.is_file() or path == MANIFEST:
-            continue
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        lines.append(f"{digest}  {path.relative_to(CACHE).as_posix()}")
-    return "\n".join(lines) + "\n"
-
-
-def verify() -> int:
-    if not MANIFEST.exists():
-        print("manifest.sha256 is missing — the cache has never been built", file=sys.stderr)
-        return 1
-
-    expected = {
-        name: digest
-        for digest, name in (
-            line.split("  ", 1) for line in MANIFEST.read_text().splitlines() if line
-        )
-    }
-    actual = {
-        name: digest
-        for digest, name in (
-            line.split("  ", 1) for line in build_manifest().splitlines() if line
-        )
-    }
-
-    missing = sorted(set(expected) - set(actual))
-    extra = sorted(set(actual) - set(expected))
-    changed = sorted(n for n in set(expected) & set(actual) if expected[n] != actual[n])
-
-    for name in missing:
-        print(f"MISSING  {name}", file=sys.stderr)
-    for name in extra:
-        print(f"UNTRACKED {name}", file=sys.stderr)
-    for name in changed:
-        print(f"CHANGED  {name}", file=sys.stderr)
-
-    if missing or extra or changed:
-        print(
-            f"\n{len(missing)} missing, {len(extra)} untracked, {len(changed)} changed.\n"
-            "Do not regenerate to make this pass. Find out what moved first — a "
-            "replay that quietly changed is not a replay.",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(f"cache verified — {len(expected)} files match manifest.sha256")
-    return 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="refetch files already cached")
@@ -218,7 +166,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.verify:
-        return verify()
+        return manifest.verify()
 
     root = CACHE / STORM
     fetched = skipped = 0
@@ -271,8 +219,8 @@ def main() -> int:
     else:
         skipped += 1
 
-    MANIFEST.write_text(build_manifest())
-    total = sum(1 for p in CACHE.rglob("*") if p.is_file() and p != MANIFEST)
+    manifest.write()
+    total = sum(1 for p in CACHE.rglob("*") if p.is_file() and p != manifest.MANIFEST)
     size = sum(p.stat().st_size for p in CACHE.rglob("*") if p.is_file())
     print(
         f"\n{fetched} fetched, {skipped} already cached. "
