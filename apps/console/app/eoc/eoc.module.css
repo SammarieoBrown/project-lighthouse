@@ -1,0 +1,442 @@
+/* EOC console — Act 1.
+ *
+ * Three registers, one per panel, with the panel as the boundary. Chrome and
+ * the controller are signage; the map is synoptic; the feed is the register.
+ * Nothing here is a card and nothing here scrolls the page — an operations
+ * screen is a fixed frame you read across, not a document you move through.
+ */
+
+.screen {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--lh-ground);
+  /* Re-stated, and not redundant. `color` inherits as a computed value, so a
+   * ground scoped with data-theme on this element redefines the tokens for
+   * everything inside it while the text colour that body already resolved
+   * under the other ground keeps inheriting down. Every reading, the gate
+   * heading and the whole counts table came out near-black on near-black. */
+  color: var(--lh-figure);
+  overflow: hidden;
+}
+
+/* ---------- chrome — Register II ---------- */
+
+.chrome {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 2px solid var(--lh-figure);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--lh-space-3);
+  padding: var(--lh-space-3) var(--lh-space-5);
+  border-right: 1px solid var(--lh-rule);
+}
+
+.brandName {
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-variation-settings: "wdth" 125;
+  font-size: var(--lh-text-lead);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* The posture block is the largest thing on the screen on purpose. It is the
+ * one value that changes what everybody in the room does next. */
+.posture {
+  padding: var(--lh-space-3) var(--lh-space-6);
+  border-right: 1px solid var(--lh-rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 22ch;
+}
+
+.postureLabel {
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lh-quiet);
+}
+
+.postureValue {
+  font-family: var(--lh-font-display);
+  font-weight: 800;
+  font-variation-settings: "wdth" 112;
+  font-size: var(--lh-text-display);
+  line-height: 1;
+  text-transform: uppercase;
+  margin-top: var(--lh-space-1);
+}
+
+.postureValue[data-level="ACT"] { color: var(--lh-critical); }
+.postureValue[data-level="READY"] { color: var(--lh-elevated); }
+.postureValue[data-level="WATCH"] { color: var(--lh-watch); }
+.postureValue[data-level="QUIET"] { color: var(--lh-quiet); }
+
+.readings {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+}
+
+.reading {
+  padding: var(--lh-space-3) var(--lh-space-5);
+  border-right: 1px solid var(--lh-rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 11ch;
+}
+
+.readingValue {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--lh-text-title);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.readingLabel {
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lh-quiet);
+  margin-top: var(--lh-space-2);
+  white-space: nowrap;
+}
+
+/* Time to Relief reads as a dash, not a zero. Nothing has been delivered yet,
+ * and a zero would be a measurement of something that has not happened. */
+.readingValue[data-empty="true"] {
+  color: var(--lh-quiet);
+}
+
+.stale {
+  margin-left: auto;
+  padding: var(--lh-space-3) var(--lh-space-5);
+  text-align: right;
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.06em;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--lh-space-1);
+}
+
+/* ---------- body ---------- */
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52ch;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mapPanel {
+  position: relative;
+  min-width: 0;
+  border-right: 1px solid var(--lh-rule);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lh-space-4);
+  padding: var(--lh-space-2) var(--lh-space-5);
+  border-bottom: 1px solid var(--lh-rule);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lh-quiet);
+}
+
+.panelHead b {
+  color: var(--lh-figure);
+  font-weight: var(--lh-body-weight-strong);
+}
+
+.mapCanvas {
+  min-height: 0;
+  min-width: 0;
+  padding: var(--lh-space-4);
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+}
+
+.mapCanvas > svg {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lh-space-5);
+  padding: var(--lh-space-3) var(--lh-space-5);
+  border-top: 1px solid var(--lh-rule);
+  font-size: var(--lh-text-fine);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--lh-space-2);
+  color: var(--lh-quiet);
+}
+
+.legendDot {
+  width: var(--lh-space-3);
+  height: var(--lh-space-3);
+  border-radius: 50%;
+}
+
+.legendCount {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--lh-figure);
+}
+
+/* ---------- right column — Register III ---------- */
+
+.side {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The one open human gate. The only thing on this screen permitted to move.
+ *
+ * It had an amber left-border until it was read back against rule 14 — a thick
+ * coloured edge on one side is the most reproduced AI tell there is, and here
+ * it was redundant three ways over: the label is already amber, the label is
+ * already the only moving thing on the screen, and the gate is already at the
+ * top of the column. Removed rather than defended. */
+.gate {
+  border-bottom: 1px solid var(--lh-rule);
+  padding: var(--lh-space-4) var(--lh-space-5);
+}
+
+.gateRole {
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lh-elevated);
+  font-weight: var(--lh-body-weight-strong);
+}
+
+.gateAsk {
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-variation-settings: "wdth" 100;
+  font-size: var(--lh-text-lead);
+  line-height: var(--lh-leading-tight);
+  margin: var(--lh-space-2) 0 var(--lh-space-2);
+}
+
+.gateDetail {
+  font-size: var(--lh-text-fine);
+  color: var(--lh-quiet);
+  margin-bottom: var(--lh-space-4);
+}
+
+.gateActions {
+  display: flex;
+  gap: var(--lh-space-3);
+}
+
+.gateButton {
+  font: inherit;
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-size: var(--lh-text-base);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--lh-space-3) var(--lh-space-5);
+  border: 1px solid var(--lh-figure);
+  border-radius: var(--lh-radius);
+  background: var(--lh-figure);
+  color: var(--lh-ground);
+  cursor: pointer;
+}
+
+.gateButton.secondary {
+  background: transparent;
+  color: var(--lh-figure);
+  border-color: var(--lh-rule);
+}
+
+/* Trigger 2 of the motion budget: a gate that is open and unactioned. It is
+ * the only animation in the product, which is what makes it mean anything. */
+.gatePending {
+  animation: gate-waiting 2s var(--lh-ease) infinite;
+}
+
+@keyframes gate-waiting {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gatePending {
+    animation: none;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+.counts {
+  border-bottom: 1px solid var(--lh-rule);
+}
+
+.countRow {
+  display: grid;
+  grid-template-columns: 1fr 7ch 7ch;
+  gap: var(--lh-space-3);
+  padding: var(--lh-space-2) var(--lh-space-5);
+  border-bottom: 1px solid var(--lh-rule);
+  font-size: var(--lh-text-fine);
+  align-items: baseline;
+}
+
+.countRow:last-child { border-bottom: 0; }
+
+.countRow.head {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.countValue {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.feed {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The transition line, compressed. Same object as the audit trail and the
+ * donor journey, at the operator's level of detail. */
+.tline {
+  display: grid;
+  grid-template-columns: 6ch minmax(0, 1fr) 11ch;
+  gap: var(--lh-space-3);
+  padding: var(--lh-space-2) var(--lh-space-5);
+  border-bottom: 1px solid var(--lh-rule);
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--lh-text-fine);
+  align-items: baseline;
+}
+
+.tlineTime { color: var(--lh-quiet); }
+.tlineWho { color: var(--lh-quiet); }
+.tlineSubject { color: var(--lh-figure); }
+.tlineDisposer { color: var(--lh-figure); text-align: right; }
+.tlineAuto { color: var(--lh-quiet); text-align: right; }
+
+/* ---------- controller — Register II ---------- */
+
+.controller {
+  border-top: 2px solid var(--lh-figure);
+  background: var(--lh-ground);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--lh-space-5);
+  padding: var(--lh-space-3) var(--lh-space-5);
+}
+
+.transport {
+  display: flex;
+  gap: var(--lh-space-2);
+}
+
+.transportButton {
+  font: inherit;
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-size: var(--lh-text-fine);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: var(--lh-space-2) var(--lh-space-4);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  background: transparent;
+  color: var(--lh-figure);
+  cursor: pointer;
+}
+
+.transportButton[aria-pressed="true"] {
+  background: var(--lh-figure);
+  color: var(--lh-ground);
+  border-color: var(--lh-figure);
+}
+
+/* The scrub bar is also the story: a stacked bar per advisory showing how many
+ * households sat in each band. Time runs left to right, so the shape of the
+ * escalation is the control. */
+.timeline {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: var(--lh-space-8);
+  min-width: 0;
+}
+
+.tick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  height: 100%;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+  outline-offset: 2px;
+}
+
+.tick[data-current="true"] {
+  outline: 2px solid var(--lh-figure);
+}
+
+.tickNone { background: var(--lh-rule); }
+.tickMinor { background: var(--lh-watch); }
+.tickMajor { background: var(--lh-elevated); }
+.tickDestroyed { background: var(--lh-critical); }
+
+.clock {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--lh-text-base);
+  white-space: nowrap;
+}
+
+.clockLabel {
+  display: block;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lh-quiet);
+}
