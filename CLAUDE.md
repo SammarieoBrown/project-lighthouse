@@ -10,6 +10,16 @@ Start here: [docs/engineering/lighthouse-build-spec.md](docs/engineering/lightho
 
 The pre-merge checklist in its Part 5 applies to every PR that touches frontend code.
 
+## Before any storm or simulation work
+
+Read [docs/engineering/storm-simulation-engine.md](docs/engineering/storm-simulation-engine.md).
+It records where the storm archives come from and why it takes two of them, the
+one correction the wind model needed and the sign error that mirrored every
+field before a test caught it, and the research verdict on realistic rendering —
+which is the reason the plan uses satellite photography rather than procedural
+clouds. It also names the design-rules problem an animated layer has to solve
+before it ships.
+
 ## Before any map work
 
 Read [docs/engineering/lighthouse-map-stack.md](docs/engineering/lighthouse-map-stack.md). It documents four traps that each cost hours, and every one of them fails silently — the map builds, the canvas sizes, the controls draw, and the result is wrong in a way that survives to a demo. It also has a debugging order for the blank map, which is this stack's default failure.
