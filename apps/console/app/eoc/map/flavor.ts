@@ -141,3 +141,31 @@ const DROPPED = /^(pois|place_label_other|address_label|landuse_(pedestrian|aero
 export function pruneLayers<T extends { id: string }>(layers: T[]): T[] {
   return layers.filter((l) => !DROPPED.test(l.id));
 }
+
+/* Retarget a generated layer set at another source, gated by zoom.
+ *
+ * Two archives back this map: the whole Caribbean at z11 for context, and
+ * Jamaica at z15 for the zooms an operator actually works in. One archive
+ * cannot be both — a box tight on Jamaica ends in a hard edge the moment
+ * anybody pans out to see where the storm came from, and the same box widened
+ * to the basin at working zoom is 442 MB of street geometry for countries we
+ * hold no registry in.
+ *
+ * Protomaps generates one layer set per source with fixed ids, so the second
+ * set needs new ids or it collides with the first. The zoom gates overlap by
+ * nothing: below the switch you are looking at the region, above it at the
+ * island, and the handover happens at a zoom where Jamaica fills the frame
+ * anyway.
+ */
+export function retarget<T extends { id: string; source?: string }>(
+  layers: T[],
+  source: string,
+  gate: { minzoom?: number; maxzoom?: number },
+): T[] {
+  return layers.map((layer) => ({
+    ...layer,
+    id: `${source}-${layer.id}`,
+    ...(layer.source ? { source } : {}),
+    ...gate,
+  }));
+}

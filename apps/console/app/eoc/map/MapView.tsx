@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { Snapshot } from "../map";
-import { lighthouseFlavor, pruneLayers, readTokens } from "./flavor";
+import { lighthouseFlavor, pruneLayers, readTokens, retarget } from "./flavor";
 import { dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from "./layers";
 
 /* MapLibre, wired by hand.
@@ -34,7 +34,23 @@ import { dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from "./layers";
  * just looks offline until the day it matters.
  */
 
-const TILES = "/tiles/caribbean-z13.pmtiles";
+/* Served by app/map/[file]/route.ts rather than from public/ — see that
+ * file for why the framework's static handler cannot be trusted with Range. */
+const REGION_TILES = "/map/caribbean-z11.pmtiles";
+const ISLAND_TILES = "/map/jamaica-z15.pmtiles";
+
+/* Where the region hands over to the island. Jamaica fills the frame by here,
+ * so nobody sees the seam. */
+const BASEMAP_SWITCH = 10.5;
+
+/* The region we hold tiles for. The map is fenced to it rather than allowed to
+ * wander past the data: a basemap that ends mid-pan reads as a broken map, and
+ * an operator who can scroll into blank ocean has been given a control that
+ * only does something wrong. Constrain the viewport, do not chase the bbox. */
+const COVERED: [[number, number], [number, number]] = [
+  [-92.0, 7.0],
+  [-57.0, 28.0],
+];
 const GLYPHS = "/tiles/assets/fonts/{fontstack}/{range}.pbf";
 
 // MapLibre 6 rejects a relative sprite URL outright. Resolved against the
@@ -111,33 +127,47 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
         center: [-77.3, 17.9],
         zoom: 7.4,
         maxZoom: 17,
-        minZoom: 5,
+        // Far enough out to see the whole basin and no further.
+        minZoom: 5.2,
+        maxBounds: COVERED,
         attributionControl: false,
         style: {
           version: 8,
           glyphs: GLYPHS,
           sprite: `${window.location.origin}${SPRITE_PATH}`,
           sources: {
-            basemap: {
+            // Explicit tile templates rather than `url:`, so MapLibre never
+            // waits on a TileJSON round trip through the protocol. The bounds
+            // and zoom ranges are things we already know.
+            region: {
               type: "vector",
-              // Explicit tile template rather than `url:`, so MapLibre never
-              // waits on a TileJSON round trip through the protocol. One less
-              // asynchronous step between a cold start and a drawn map, and the
-              // bounds and zoom range are things we already know.
-              tiles: [`pmtiles://${window.location.origin}${TILES}/{z}/{x}/{y}`],
+              tiles: [`pmtiles://${window.location.origin}${REGION_TILES}/{z}/{x}/{y}`],
               minzoom: 0,
-              // Must match the archive. MapLibre overzooms past this rather
-              // than showing nothing, so the map keeps working when somebody
-              // zooms to a street — it just stops adding vector detail, which
-              // is where the satellite layer takes over.
-              maxzoom: 13,
-              bounds: [-85.5, 15.5, -67.5, 24.0],
+              maxzoom: 11,
+              bounds: [-92.0, 7.0, -57.0, 28.0],
+              attribution: "© OpenStreetMap",
+            },
+            island: {
+              type: "vector",
+              tiles: [`pmtiles://${window.location.origin}${ISLAND_TILES}/{z}/{x}/{y}`],
+              minzoom: 0,
+              maxzoom: 15,
+              bounds: [-78.6, 17.6, -75.9, 18.7],
               attribution: "© OpenStreetMap",
             },
             ...dataSources(snapshot),
           },
           layers: [
-            ...pruneLayers(basemapLayers("basemap", lighthouseFlavor(tokens), { lang: "en" })),
+            ...retarget(
+              pruneLayers(basemapLayers("region", lighthouseFlavor(tokens), { lang: "en" })),
+              "region",
+              { maxzoom: BASEMAP_SWITCH },
+            ),
+            ...retarget(
+              pruneLayers(basemapLayers("island", lighthouseFlavor(tokens), { lang: "en" })),
+              "island",
+              { minzoom: BASEMAP_SWITCH },
+            ),
             ...dataLayers(colours, maxDistrict),
           ],
         },
@@ -170,7 +200,7 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
       // demo. A blank map must never be silent.
       const message = String(e?.error?.message ?? e?.error ?? "unknown");
       console.error("[map]", message, e?.error);
-      if (message.includes(TILES) || message.includes("pmtiles")) {
+      if (message.includes(".pmtiles") || message.includes("pmtiles")) {
         const reason = "basemap tiles not staged — run data/tiles/fetch_basemap.py";
         setFailed(reason);
         onFail?.(reason);

@@ -42,21 +42,24 @@ HERE = Path(__file__).parent
 CACHE = HERE / "cache"
 ASSETS = CACHE / "assets"
 
-#: The northern Caribbean, not Jamaica.
+#: Two archives, because one cannot be both seamless and detailed at a sane size.
 #:
-#: A box drawn tight around one island looks fine until somebody pans, and then
-#: the basemap ends in a hard black edge halfway across the screen. It is also
-#: the wrong shape for the product: Melissa crossed Jamaica, Cuba, Haiti and the
-#: Dominican Republic, and a platform that claims the region cannot show a storm
-#: leaving the frame.
-BBOX = "-85.5,15.5,-67.5,24.0"
-
-#: z13 covers the whole region for 69 MB. z15 over the same box runs past 300 MB
-#: — most of it street geometry for islands we hold no registry in — and the
-#: closer zooms are the satellite layer's job anyway. MapLibre overzooms z13
-#: tiles happily, so the map keeps working past this, it just stops adding
-#: detail where we would have no data to put on it.
-MAX_ZOOM = 13
+#: A single box tight around Jamaica ends in a hard black edge the moment
+#: anybody pans. A single box around the whole basin at operational zoom is
+#: 442 MB, almost all of it street geometry for Florida and Central America
+#: nobody will ever look at. So: the region for context, the island for work.
+#:
+#: CONTEXT covers every island the Caribbean has — Trinidad and Barbados at the
+#: south-east corner through the Bahamas and Yucatán — because a platform that
+#: claims the region cannot end at the edge of one storm's track.
+#:
+#: DETAIL is Jamaica, where the registry actually is. z15 puts a household on a
+#: named street; the region has no registry, so paying for its streets buys
+#: nothing.
+ARCHIVES = {
+    "caribbean-z11.pmtiles": {"bbox": "-92.0,7.0,-57.0,28.0", "maxzoom": 11},
+    "jamaica-z15.pmtiles": {"bbox": "-78.6,17.6,-75.9,18.7", "maxzoom": 15},
+}
 
 BUILD_INDEX = "https://build-metadata.protomaps.dev/builds.json"
 BUILD_BASE = "https://build.protomaps.com"
@@ -113,26 +116,31 @@ def latest_build() -> str:
     return builds[-1]["key"]
 
 
-def extract_tiles(*, force: bool) -> Path:
-    target = CACHE / "caribbean-z13.pmtiles"
-    if target.exists() and not force:
-        print(f"  tiles already cached ({target.stat().st_size / 1e6:.0f} MB)")
-        return target
+def extract_tiles(*, force: bool) -> list[Path]:
+    build = None
+    out = []
 
-    if shutil.which("pmtiles") is None:
-        raise RuntimeError("pmtiles CLI not found — `brew install pmtiles`")
+    for name, spec in ARCHIVES.items():
+        target = CACHE / name
+        out.append(target)
+        if target.exists() and not force:
+            print(f"  {name} already cached ({target.stat().st_size / 1e6:.0f} MB)")
+            continue
 
-    build = latest_build()
-    print(f"  extracting {BBOX} from {build} (planet build, read over range requests)")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "pmtiles", "extract", f"{BUILD_BASE}/{build}", str(target),
-            f"--bbox={BBOX}", f"--maxzoom={MAX_ZOOM}",
-        ],
-        check=True,
-    )
-    return target
+        if shutil.which("pmtiles") is None:
+            raise RuntimeError("pmtiles CLI not found — `brew install pmtiles`")
+
+        build = build or latest_build()
+        print(f"  extracting {name} — {spec['bbox']} to z{spec['maxzoom']} from {build}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                "pmtiles", "extract", f"{BUILD_BASE}/{build}", str(target),
+                f"--bbox={spec['bbox']}", f"--maxzoom={spec['maxzoom']}",
+            ],
+            check=True,
+        )
+    return out
 
 
 def fetch_assets(*, force: bool) -> int:
@@ -170,7 +178,7 @@ def main() -> int:
         return manifest.verify(CACHE)
 
     print("basemap")
-    tiles = extract_tiles(force=args.force)
+    archives = extract_tiles(force=args.force)
     print("assets")
     fetched = fetch_assets(force=args.force)
     print(f"  {fetched} glyph and sprite files fetched")
@@ -178,8 +186,8 @@ def main() -> int:
     lines = manifest.write(CACHE)
     size = sum(p.stat().st_size for p in CACHE.rglob("*") if p.is_file())
     print(
-        f"\n{tiles.name} {tiles.stat().st_size / 1e6:.0f} MB · "
-        f"{size / 1e6:.0f} MB of tiles and assets. "
+        "\n" + " · ".join(f"{a.name} {a.stat().st_size / 1e6:.0f} MB" for a in archives)
+        + f"\n{size / 1e6:.0f} MB of tiles and assets. "
         f"manifest.sha256 now pins {lines} files.\n"
         "Source: OpenStreetMap via Protomaps, ODbL. Attribution is required on screen."
     )

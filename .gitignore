@@ -20,6 +20,7 @@ next-env.d.ts
 # data/tiles/cache, which is the checksummed copy. Two copies in git would
 # double the repo for no gain, and the staged one has no manifest.
 apps/console/public/tiles/
+apps/console/.tiles/
 apps/console/public/maplibre/
 
 # The basemap archive is 69 MB and rebuildable in twelve seconds from a pinned

@@ -24,11 +24,14 @@ const console_ = resolve(here, "..");
 const repo = resolve(console_, "../..");
 
 const publicTiles = join(console_, "public/tiles");
+// Archives sit outside public/ and are served by app/map/[file]/route.ts,
+// which implements Range correctly. Next's static handler does not.
+const archiveDir = join(console_, ".tiles");
 const publicWorker = join(console_, "public/maplibre");
 
 // Cleared rather than merged: a renamed archive would otherwise leave the old
 // one behind and the map would keep loading a file nobody meant to ship.
-for (const dir of [publicTiles, publicWorker]) {
+for (const dir of [publicTiles, publicWorker, archiveDir]) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 }
@@ -49,13 +52,14 @@ for (const file of ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"]) {
 
 // --- basemap + glyphs: optional ---
 const cache = join(repo, "data/tiles/cache");
-const archive = join(cache, "caribbean-z13.pmtiles");
+const archives = ["caribbean-z11.pmtiles", "jamaica-z15.pmtiles"];
 const assets = join(cache, "assets");
+const present = archives.filter((name) => existsSync(join(cache, name)));
 
-if (existsSync(archive)) {
-  cpSync(archive, join(publicTiles, "caribbean-z13.pmtiles"));
+if (present.length === archives.length) {
+  for (const name of archives) cpSync(join(cache, name), join(archiveDir, name));
   if (existsSync(assets)) cpSync(assets, join(publicTiles, "assets"), { recursive: true });
-  console.log("stage-assets: basemap staged");
+  console.log(`stage-assets: basemap staged (${archives.join(", ")})`);
 } else {
   console.warn(
     "stage-assets: no basemap archive — the console will fall back to the SVG map.\n" +
