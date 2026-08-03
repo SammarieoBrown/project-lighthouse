@@ -82,3 +82,23 @@ def session(engine):
         s.close()
         outer.rollback()
         conn.close()
+
+
+@pytest.fixture(scope="module")
+def session_module(engine):
+    """Same isolation, shared across a module.
+
+    For fixtures that are expensive to build and read-only once built — loading
+    all 41 Melissa advisories takes a few seconds and several hundred PostGIS
+    unions, and doing that per test would trade real minutes for no extra
+    confidence. Still rolled back at teardown, so it leaves nothing behind.
+    """
+    conn = engine.connect()
+    outer = conn.begin()
+    s = Session(bind=conn, expire_on_commit=False)
+    try:
+        yield s
+    finally:
+        s.close()
+        outer.rollback()
+        conn.close()

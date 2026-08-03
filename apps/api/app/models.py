@@ -130,6 +130,64 @@ class HazardEvent(Base):
     ended_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
     replay: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    advisories: Mapped[list[Advisory]] = relationship(
+        back_populates="hazard_event", order_by="Advisory.issued_at"
+    )
+
+
+class Advisory(Base):
+    """One NHC advisory cycle, parsed into geometry.
+
+    ``wind_field_34/50/64`` are the union across forecast hours of the quadrant
+    polygons at each threshold — the area expected to see at least that wind
+    during the forecast period. They answer "is this household inside it".
+
+    They are deliberately not probabilities: NHC publishes no probability
+    surface, only percentages at 26 named locations. That number lives in
+    ``risk_assessment.p34/p50/p64``, and the two questions stay apart on purpose.
+    See the note above the table in packages/contracts/schema.sql.
+
+    ``observed`` marks the post-season best track, which is what actually
+    happened rather than what was forecast. Verification needs both.
+    """
+
+    __tablename__ = "advisory"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    hazard_event_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("hazard_event.id", ondelete="CASCADE")
+    )
+    advisory_number: Mapped[str] = mapped_column(Text)
+    issued_at: Mapped[datetime] = mapped_column(TS)
+    observed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    track: Mapped[object | None] = mapped_column(
+        Geography(geometry_type="LINESTRING", srid=4326), nullable=True
+    )
+    cone: Mapped[object | None] = mapped_column(
+        Geography(geometry_type="POLYGON", srid=4326), nullable=True
+    )
+    wind_field_34: Mapped[object | None] = mapped_column(
+        Geography(geometry_type="MULTIPOLYGON", srid=4326), nullable=True
+    )
+    wind_field_50: Mapped[object | None] = mapped_column(
+        Geography(geometry_type="MULTIPOLYGON", srid=4326), nullable=True
+    )
+    wind_field_64: Mapped[object | None] = mapped_column(
+        Geography(geometry_type="MULTIPOLYGON", srid=4326), nullable=True
+    )
+
+    #: The parsed product, kept whole. Storing the derived geometry without the
+    #: source would make every future question about how a number was reached
+    #: unanswerable — the same reason every agent output is stored raw.
+    raw: Mapped[dict] = mapped_column(JSONB, default=dict)
+    ingested_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+    hazard_event: Mapped[HazardEvent] = relationship(back_populates="advisories")
+
+    def wind_field(self, threshold_kt: int) -> object | None:
+        return getattr(self, f"wind_field_{threshold_kt}")
+
 
 class Claim(Base):
     __tablename__ = "claim"

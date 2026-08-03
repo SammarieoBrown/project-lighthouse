@@ -16,6 +16,7 @@ dependencies = [
   "python-multipart>=0.0.9",
   "geoalchemy2>=0.15",
   "lighthouse-contracts",
+  "pyshp>=2.3",
 ]
 
 [project.optional-dependencies]
