@@ -183,8 +183,16 @@ def surface_wind_kt(
 
     # Tangential direction: counter-clockwise in the northern hemisphere, and
     # rotated inward by the inflow angle.
+    #
+    # The sign is subtracted, and getting it wrong is silent. Cyclonic flow in
+    # the northern hemisphere means the wind at a point due north of the eye
+    # blows west — bearing 0 minus 90. Adding instead returns east-southeast,
+    # which spins the storm backwards, puts the strong flank on the wrong side,
+    # and therefore writes the largest quadrant radius into the wrong quadrant.
+    # Nothing about that fails loudly: the field is still a plausible hurricane,
+    # mirrored, and it warns the wrong parish.
     spin = 1.0 if northern else -1.0
-    flow = bearing_deg + spin * (90.0 + INFLOW_DEG)
+    flow = bearing_deg - spin * (90.0 + INFLOW_DEG)
     ux = v * sin(radians(flow))
     uy = v * cos(radians(flow))
 

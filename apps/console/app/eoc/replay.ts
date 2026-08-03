@@ -137,6 +137,34 @@ export function stamp(at: string): string {
  * ------------------------------------------------------------------------ */
 
 export const REPLAY_URL = "/replay/replay.json";
+export const LIBRARY_URL = "/replay/index.json";
+
+/* One entry per storm the console can open.
+ *
+ * `kind` and `sizeSource` are not decoration. An advisory replay is what the
+ * National Hurricane Center published while the storm was happening. A
+ * hindcast projects the track the storm actually took, which is perfect
+ * foresight and a claim nobody made at the time. `sizeSource` says whether the
+ * wind field's extent was measured or produced by our model — for Gilbert 1988
+ * the radii were digitised decades later, and for most storms before 2004 they
+ * were never recorded at all.
+ *
+ * A picker that listed these as interchangeable would be the exact failure the
+ * evidence contract exists to prevent, so both travel with the entry and both
+ * reach the screen. */
+export type StormEntry = {
+  id: string;
+  name: string;
+  advisories: number;
+  from: string;
+  to: string;
+  file: string;
+  kind: "advisory" | "hindcast";
+  sizeSource: "measured" | "modelled";
+  bytes?: number;
+};
+
+export type Library = { default: string | null; storms: StormEntry[] };
 
 export type ReplayState =
   | { status: "loading" }
@@ -545,14 +573,77 @@ export function validateReplay(raw: unknown): Replay {
  * own replay availability, and this reader can later target the live endpoint
  * without changing the component boundary. The server and first client render
  * both show loading; data lands after hydration, so there is no mismatch. */
-export function useReplay(): ReplayState {
-  const [state, setState] = useState<ReplayState>({ status: "loading" });
+/* The storm library, read once.
+ *
+ * Optional by construction. An older deployment — or a clone that has exported
+ * a single storm and nothing else — has no index, and that must degrade to the
+ * one replay it does have rather than to an empty screen. An absent library is
+ * a console with one storm, not a broken console.
+ */
+export function useLibrary(): Library | null {
+  const [library, setLibrary] = useState<Library | null>(null);
 
   useEffect(() => {
     let live = true;
-    fetch(REPLAY_URL, { cache: "no-store" })
+    fetch(LIBRARY_URL, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((raw: unknown) => {
+        if (!live || !raw || typeof raw !== "object") return;
+        const source = raw as { default?: unknown; storms?: unknown };
+        if (!Array.isArray(source.storms)) return;
+        const storms = source.storms
+          .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+          .map((s) => ({
+            id: String(s.id ?? ""),
+            name: String(s.name ?? ""),
+            advisories: Number(s.advisories ?? 0),
+            from: String(s.from ?? ""),
+            to: String(s.to ?? ""),
+            file: String(s.file ?? ""),
+            kind: s.kind === "hindcast" ? ("hindcast" as const) : ("advisory" as const),
+            sizeSource:
+              s.size_source === "modelled" ? ("modelled" as const) : ("measured" as const),
+            bytes: typeof s.bytes === "number" ? s.bytes : undefined,
+          }))
+          .filter((s) => s.id && s.file);
+        if (storms.length) {
+          setLibrary({
+            default: typeof source.default === "string" ? source.default : storms[0].id,
+            storms,
+          });
+        }
+      })
+      .catch(() => {
+        // Silent, and deliberately. A missing index is the expected state on a
+        // deployment that predates the library; it is not an error to report.
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return library;
+}
+
+/**
+ * Read one storm.
+ *
+ * `url` is a parameter rather than a constant so the console can change storms
+ * without a page load. Passing null holds the reader at `loading`, which is
+ * what the first render does while the library is still arriving — fetching
+ * the legacy path first and then immediately replacing it would download a
+ * megabyte nobody asked for.
+ */
+export function useReplay(url: string | null = REPLAY_URL): ReplayState {
+  const [state, setState] = useState<ReplayState>({ status: "loading" });
+
+  useEffect(() => {
+    if (!url) return;
+    let live = true;
+    setState({ status: "loading" });
+    fetch(url, { cache: "no-store" })
       .then(async (res) => {
-        if (!res.ok) throw new Error(`${REPLAY_URL} returned ${res.status}`);
+        if (!res.ok) throw new Error(`${url} returned ${res.status}`);
         return validateReplay(await res.json());
       })
       .then((replay) => {
@@ -566,7 +657,7 @@ export function useReplay(): ReplayState {
     return () => {
       live = false;
     };
-  }, []);
+  }, [url]);
 
   return state;
 }

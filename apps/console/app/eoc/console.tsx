@@ -14,8 +14,10 @@ import {
   snapshotAt,
   stamp,
   strongestWarning,
+  useLibrary,
   useReplay,
   worstHit,
+  REPLAY_URL,
   type Replay,
 } from "./replay";
 import type { District } from "./map";
@@ -102,7 +104,20 @@ function isLocatedDistrict(district: District): district is LocatedDistrict {
 }
 
 export function EocConsole() {
-  const state = useReplay();
+  /* Which storm, then that storm. The library decides the URL, so switching
+   * storms is a fetch rather than a page load — and until it has arrived the
+   * reader is held at `loading` rather than pulling the legacy single file and
+   * immediately throwing it away.
+   *
+   * A deployment with no index falls back to that legacy path, which is what
+   * keeps an older build working rather than blank. */
+  const library = useLibrary();
+  const [stormId, setStormId] = useState<string | null>(null);
+  const selected = library
+    ? (library.storms.find((s) => s.id === (stormId ?? library.default)) ?? library.storms[0])
+    : null;
+  const replayUrl = library ? (selected ? `/replay/${selected.file}` : null) : REPLAY_URL;
+  const state = useReplay(replayUrl);
   const replay = state.status === "ready" ? state.replay : null;
   const connectivity = useConnectivity();
 
@@ -111,16 +126,19 @@ export function EocConsole() {
   const [rate, setRate] = useState(DEFAULT_RATE);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState<SelectedDistrict | null>(null);
-  const opened = useRef(false);
+  const opened = useRef<string | null>(null);
   const focusRequest = useRef(0);
   const mapSection = useRef<HTMLElement>(null);
   const timeline = useRef<HTMLDivElement>(null);
 
-  // Once, when the file lands. Re-running this on every render would drag the
-  // scrubber back under the operator's hand.
+  /* Once per storm, keyed on which storm. Re-running on every render would
+   * drag the scrubber back under the operator's hand; latching on a boolean
+   * would strand it — advisory 15 of Melissa does not exist in a storm with
+   * twelve frames, and the screen would read from an index past the end. */
   useEffect(() => {
-    if (!replay || opened.current) return;
-    opened.current = true;
+    if (!replay || opened.current === replay.event.id) return;
+    opened.current = replay.event.id;
+    setPlaying(false);
     setIndex(openingFrame(replay));
   }, [replay]);
 
@@ -356,6 +374,31 @@ export function EocConsole() {
         </div>
 
         <div className={styles.stale} aria-live="polite">
+          {library && library.storms.length > 1 ? (
+            <label className={styles.stormPick}>
+              <span className={styles.srOnly}>Storm</span>
+              <select
+                className={styles.stormSelect}
+                value={selected?.id ?? ""}
+                onChange={(event) => setStormId(event.target.value)}
+              >
+                {library.storms.map((storm) => (
+                  <option key={storm.id} value={storm.id}>
+                    {storm.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {selected ? (
+            /* What kind of claim this storm is, stated where the storm is
+               named. An advisory replay is what forecasters published at the
+               time; a hindcast projects the track the storm actually took. */
+            <span className={styles.provenance}>
+              {selected.kind === "hindcast" ? "Hindcast" : "Advisory replay"}
+              {selected.sizeSource === "modelled" ? " · modelled wind extent" : ""}
+            </span>
+          ) : null}
           <span>
             {frame ? `Advisory ${frame.n} · ${stamp(frame.at)}Z` : "No advisory"}
           </span>

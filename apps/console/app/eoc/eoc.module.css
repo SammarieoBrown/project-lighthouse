@@ -854,3 +854,56 @@
     grid-row: 3;
   }
 }
+
+/* ---- Storm picker ----
+ *
+ * The console can now open more than one storm, so the header has to name
+ * which one, and name what kind of claim it is. A hindcast projects the track
+ * a storm actually took — perfect foresight, and a different thing from what
+ * the National Hurricane Center published while it was happening.
+ *
+ * Native select on purpose. A custom listbox here would be new chrome carrying
+ * no new meaning, and this is a control an operator uses once. */
+.stormPick {
+  display: inline-flex;
+  align-items: center;
+}
+
+.stormSelect {
+  font: inherit;
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: var(--lh-space-1) var(--lh-space-2);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  background: transparent;
+  color: var(--lh-figure);
+  cursor: pointer;
+}
+
+.stormSelect:focus-visible {
+  outline: var(--lh-space-1) solid var(--lh-figure);
+  outline-offset: var(--lh-space-1);
+}
+
+/* Quiet, because it qualifies the storm rather than announcing it — but never
+ * hidden, because it is the difference between a record and a reconstruction. */
+.provenance {
+  color: var(--lh-quiet);
+}
+
+/* Label the select for a screen reader without spending header width on it. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
