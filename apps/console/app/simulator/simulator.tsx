@@ -386,6 +386,7 @@ export function StormSimulator() {
         </div>
         <nav className={styles.nav} aria-label="Simulator navigation">
           <Link href="/eoc">Operational replay</Link>
+          <Link href="/operations">Relief operations</Link>
           <span data-numeric>{saveState === "saved" ? "Scenario saved locally" : "Unsaved changes"}</span>
         </nav>
       </header>

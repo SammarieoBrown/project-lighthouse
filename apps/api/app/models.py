@@ -87,6 +87,26 @@ class AppUser(Base):
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 
+class HumanCredential(Base):
+    """Short-lived bearer proof of a human's recent re-authentication.
+
+    Only a SHA-256 digest is stored. The plaintext bearer credential exists
+    only between the identity surface that issues it and the approving client.
+    """
+
+    __tablename__ = "human_credential"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("app_user.id")
+    )
+    token_hash: Mapped[str] = mapped_column(Text, unique=True)
+    reauthenticated_at: Mapped[datetime] = mapped_column(TS)
+    expires_at: Mapped[datetime] = mapped_column(TS)
+    revoked_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
 class StormFile(Base):
     """One record per household. The atomic object of the whole system."""
 
@@ -263,6 +283,7 @@ class Verification(Base):
         PgUUID(as_uuid=True), ForeignKey("verification.id"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    snapshot_hash: Mapped[str] = mapped_column(Text)
 
 
 class Approval(Base):
@@ -280,6 +301,8 @@ class Approval(Base):
     role_at_time: Mapped[AppRole] = mapped_column(_enum(AppRole, "app_role"))
     reauth_at: Mapped[datetime] = mapped_column(TS)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 
@@ -301,8 +324,8 @@ class Allocation(Base):
     __tablename__ = "allocation"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    plan_id: Mapped[uuid.UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("allocation_plan.id"), nullable=True
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("allocation_plan.id")
     )
     claim_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("claim.id", ondelete="CASCADE")
@@ -317,6 +340,10 @@ class Allocation(Base):
     warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
     )
+    verification_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("verification.id")
+    )
+    verification_snapshot_hash: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 
@@ -416,6 +443,7 @@ class AgentJob(Base):
 __all__ = [
     "Base",
     "AppUser",
+    "HumanCredential",
     "StormFile",
     "HazardEvent",
     "Claim",

@@ -554,6 +554,9 @@ export function EocConsole() {
           <Link className={styles.simulatorLink} href="/simulator">
             Storm simulator
           </Link>
+          <Link className={styles.simulatorLink} href="/operations">
+            Relief operations
+          </Link>
           <span>
             {frame
               ? `${isHindcast ? "Historical fix" : isAdvisory ? "Advisory" : "Replay frame"} ${frame.n} · ${stamp(frame.at)}Z`

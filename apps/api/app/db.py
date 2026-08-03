@@ -23,6 +23,9 @@ def get_engine() -> Engine:
             pool_pre_ping=True,  # Neon autosuspends; a stale connection is normal
             pool_size=5,
             max_overflow=5,
+            # DBAPI/SQLAlchemy exceptions otherwise render bound values. Intake
+            # parameters can contain phone numbers, transcripts, or media URLs.
+            hide_parameters=True,
             future=True,
         )
     return _engine

@@ -44,7 +44,7 @@ def _prepared_schema(schema_name: str):
     # Extensions are database-wide. They are needed by the real migration too,
     # so creating them here is not a test artefact we have to clean up.
     with admin.begin() as conn:
-        for ext in ("postgis", "vector", "pg_trgm"):
+        for ext in ("postgis", "vector", "pg_trgm", "pgcrypto"):
             conn.execute(text(f"CREATE EXTENSION IF NOT EXISTS {ext}"))
         conn.execute(text(f'CREATE SCHEMA "{schema_name}"'))
 

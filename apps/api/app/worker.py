@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import signal
 import socket
 import time
@@ -33,6 +34,16 @@ log = logging.getLogger("lighthouse.worker")
 #: Agent handlers register here. Empty in Phase 0 — the contracts exist, the
 #: implementations land in weeks 1 and 2.
 HANDLERS: dict[str, Callable[[Session, dict], None]] = {}
+
+_SAFE_EXCEPTION_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _safe_error_code(exc: BaseException) -> str:
+    """Classify a failure without serialising its potentially sensitive message."""
+    name = type(exc).__name__
+    if not _SAFE_EXCEPTION_NAME.fullmatch(name):
+        name = "Exception"
+    return f"handler_error:{name}"
 
 
 def register(agent: AgentName):
@@ -56,9 +67,8 @@ def run_once(worker_id: str) -> bool:
     """Claim and run one job. Returns False when the queue is empty.
 
     The claim commits before the work starts, in its own transaction. If the
-    handler then rolls back, the job stays claimed rather than becoming
-    invisible — a job that vanishes on failure is exactly the loss this queue
-    exists to prevent.
+    process disappears before it can record success or failure, the bounded
+    queue lease makes that job runnable again instead of leaving it invisible.
     """
     with session_scope() as session:
         job = queue.claim_job(session, worker_id=worker_id)
@@ -88,11 +98,14 @@ def run_once(worker_id: str) -> bool:
                 queue.complete(session, done)
 
     except Exception as exc:  # noqa: BLE001 — the queue is where failures live
-        log.exception("job %s (%s) failed", job_id, job_type)
+        error_code = _safe_error_code(exc)
+        # Never attach exc_info: traceback formatting includes str(exc), and DB
+        # and intake exceptions can contain phone, body, or media parameters.
+        log.error("job %s (%s) failed error=%s", job_id, job_type, error_code)
         with session_scope() as session:
             failed = session.get(AgentJob, job_id)
             if failed is not None:
-                queue.fail(session, failed, str(exc))
+                queue.fail(session, failed, error_code)
 
     return True
 
@@ -125,8 +138,10 @@ def main() -> None:
     while _running:
         try:
             did_work = run_once(worker_id)
-        except Exception:
-            log.exception("worker loop error")
+        except Exception as exc:
+            # Same privacy boundary as handler failures. The loop keeps its
+            # retry behavior, but neither logs nor persists the raw exception.
+            log.error("worker loop failed error=%s", _safe_error_code(exc))
             time.sleep(idle_sleep)
             continue
         if not did_work:

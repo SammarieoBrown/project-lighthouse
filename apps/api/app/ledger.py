@@ -23,7 +23,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+import time
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select, text
@@ -35,6 +38,23 @@ from .models import LedgerEntry
 
 #: Arbitrary but stable key for the advisory lock that serialises appends.
 _LOCK_KEY = 8_140_251_105_301_001
+
+# A verified head is immutable: the database refuses ledger UPDATE and DELETE,
+# and every append creates a different ``(seq, hash)`` pair.  Keep only the
+# most-recent successful proof for a few seconds so health probes and public
+# reads do not repeatedly walk the entire chain.  One entry is deliberately
+# enough (and is an absolute memory bound); a new head replaces the old one.
+_CHAIN_CACHE_TTL_SECONDS = 5.0
+
+
+@dataclass(frozen=True)
+class _ChainVerificationCache:
+    head: tuple[int | None, str | None]
+    expires_at: float
+
+
+_chain_verification_cache: _ChainVerificationCache | None = None
+_chain_verification_lock = threading.Lock()
 
 
 def canonical_json(payload: dict) -> str:
@@ -172,3 +192,66 @@ def verify_chain(session: Session, *, raise_on_error: bool = False) -> bool:
         prev_hash = row.hash
 
     return True
+
+
+def chain_head(session: Session) -> tuple[int | None, str | None]:
+    """Return the immutable identity of the current ledger head."""
+    head = session.execute(
+        select(LedgerEntry.seq, LedgerEntry.hash)
+        .order_by(LedgerEntry.seq.desc())
+        .limit(1)
+    ).one_or_none()
+    return (head.seq, head.hash) if head is not None else (None, None)
+
+
+def clear_verify_chain_cache() -> None:
+    """Clear the successful-proof cache (primarily for deterministic tests)."""
+    global _chain_verification_cache
+    with _chain_verification_lock:
+        _chain_verification_cache = None
+
+
+def cached_verify_chain(
+    session: Session,
+    *,
+    head: tuple[int | None, str | None] | None = None,
+) -> bool:
+    """Verify the full chain, reusing only a recent successful head proof.
+
+    Failures and exceptions are never cached.  The latter are converted to a
+    false result so callers fail closed instead of publishing receipts or
+    reporting readiness when integrity could not be established.
+    """
+    global _chain_verification_cache
+
+    try:
+        resolved_head = head if head is not None else chain_head(session)
+    except Exception:
+        clear_verify_chain_cache()
+        return False
+
+    now = time.monotonic()
+    with _chain_verification_lock:
+        cached = _chain_verification_cache
+        if (
+            cached is not None
+            and cached.head == resolved_head
+            and cached.expires_at > now
+        ):
+            return True
+
+        try:
+            valid = verify_chain(session)
+        except Exception:
+            _chain_verification_cache = None
+            return False
+
+        if not valid:
+            _chain_verification_cache = None
+            return False
+
+        _chain_verification_cache = _ChainVerificationCache(
+            head=resolved_head,
+            expires_at=now + _CHAIN_CACHE_TTL_SECONDS,
+        )
+        return True

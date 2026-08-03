@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_whatsapp_from: str | None = None
+    # Explicitly binds live inbound claims to one hazard. Production commonly
+    # has several historical/open rows, so choosing "latest" is not safe.
+    intake_hazard_external_ref: str | None = None
 
     @property
     def sqlalchemy_url(self) -> str:

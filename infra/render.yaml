@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+
+# Project Lighthouse API deployment. This file intentionally contains no
+# credentials. Render prompts for sync:false values when the Blueprint is
+# created; use the production Neon branch, never the repo-root development
+# DATABASE_URL.
+previews:
+  generation: "off"
+
+services:
+  - type: web
+    name: project-lighthouse-api
+    runtime: python
+    region: ohio
+    plan: starter
+    branch: main
+    autoDeployTrigger: checksPass
+    numInstances: 1
+    buildCommand: python -m pip install uv==0.8.2 && uv sync --project apps/api --frozen --no-dev
+    preDeployCommand: cd apps/api && .venv/bin/alembic upgrade head
+    startCommand: cd apps/api && .venv/bin/uvicorn app.web:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: DATABASE_URL
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: project-lighthouse-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: INTAKE_HAZARD_EXTERNAL_REF
+        value: al132025
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+
+  - type: worker
+    name: project-lighthouse-worker
+    runtime: python
+    region: ohio
+    plan: starter
+    branch: main
+    autoDeployTrigger: checksPass
+    numInstances: 1
+    maxShutdownDelaySeconds: 300
+    buildCommand: python -m pip install uv==0.8.2 && uv sync --project apps/api --frozen --no-dev
+    startCommand: cd apps/api && .venv/bin/python -m app.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: project-lighthouse-api
+          envVarKey: DATABASE_URL
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: project-lighthouse-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: INTAKE_HAZARD_EXTERNAL_REF
+        value: al132025

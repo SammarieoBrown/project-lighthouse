@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from lighthouse_contracts import (
+    ActorKind,
+    AgentName,
     AppRole,
     DisbursementChannel,
     DisbursementStatus,
@@ -15,10 +19,14 @@ from lighthouse_contracts import (
     PayerRoute,
     ResourceKind,
     StormFileState,
+    Verdict,
 )
 
+from app import ledger
+from app.approvals import allocation_ledger_payload
 from app.models import (
     Allocation,
+    AllocationPlan,
     AppUser,
     Approval,
     Claim,
@@ -26,6 +34,11 @@ from app.models import (
     DisbursementBatch,
     HazardEvent,
     StormFile,
+    Verification,
+)
+from app.public_taxonomy import (
+    canonical_public_need_category,
+    canonical_public_parish,
 )
 
 
@@ -85,6 +98,52 @@ def make_claim(session: Session, sf: StormFile, event: HazardEvent, **kw) -> Cla
     return claim
 
 
+def make_verification(
+    session: Session,
+    claim: Claim,
+    *,
+    verdict: Verdict = Verdict.AUTO_VERIFIED,
+    confidence: float = 0.90,
+    capped: bool = False,
+    actor: AppUser | None = None,
+    signals: dict | None = None,
+    created_at: datetime | None = None,
+) -> Verification:
+    """Insert real immutable evidence and refresh its database snapshot hash."""
+    if signals is None:
+        signals = {
+            name: {"present": True, "score": 0.9, "evidence": {}}
+            for name in (
+                "hazard_sufficiency",
+                "satellite_change",
+                "neighbour_corroboration",
+                "registry_match",
+                "media_integrity",
+            )
+        }
+    verification = Verification(
+        claim_id=claim.id,
+        signals=signals,
+        confidence=confidence,
+        verdict=verdict,
+        actor_kind=ActorKind.HUMAN if actor is not None else ActorKind.AGENT,
+        actor_id=actor.id if actor is not None else None,
+        agent_name=None if actor is not None else str(AgentName.VERIFICATION_AGENT),
+        model_version="test-verification-v1",
+        threshold_version="test-threshold-v1",
+        rationale="Synthetic test evidence met the configured threshold.",
+        capped=capped,
+        **({"created_at": created_at} if created_at is not None else {}),
+    )
+    session.add(verification)
+    session.flush()
+    # snapshot_hash is assigned by a BEFORE INSERT trigger. Refreshing is
+    # intentional: relying on the identity map here would bind a stale None.
+    session.refresh(verification)
+    assert verification.snapshot_hash
+    return verification
+
+
 def settle_with_signature(
     session: Session, claim: Claim, finance: AppUser, amount: float = 45000.0
 ) -> Disbursement:
@@ -94,16 +153,81 @@ def settle_with_signature(
     stubbed — it is the thing under test, and a shortcut here would hide the
     exact bug this schema exists to make impossible.
     """
+    if Decimal(str(amount)) != Decimal("45000.00"):
+        raise ValueError("the release fixture only supports the fixed JMD 45000 grant")
+
+    director = make_user(session, AppRole.DIRECTOR)
+    verification = make_verification(session, claim)
+    session.execute(
+        text(
+            "SET CONSTRAINTS signed_plan_complete_trigger, "
+            "allocation_ledger_complete_trigger DEFERRED"
+        )
+    )
+    plan_id = uuid.uuid4()
+    allocation_approval = Approval(
+        gate=GateKind.ALLOCATION_PLAN,
+        subject_type="allocation_plan",
+        subject_id=plan_id,
+        approved_by=director.id,
+        role_at_time=AppRole.DIRECTOR,
+        reauth_at=datetime.now(UTC),
+        note="test allocation signature",
+    )
+    session.add(allocation_approval)
+    session.flush()
+    plan = AllocationPlan(
+        id=plan_id,
+        hazard_event_id=claim.hazard_event_id,
+        proposed_by="test_fixture",
+        approval_id=allocation_approval.id,
+    )
+    session.add(plan)
+    session.flush()
+
     allocation = Allocation(
+        plan_id=plan.id,
         claim_id=claim.id,
         resource=ResourceKind.CASH,
-        amount=amount,
+        amount=Decimal("45000.00"),
+        currency="JMD",
         payer_route=PayerRoute.GOV_RELIEF,
+        verification_id=verification.id,
+        verification_snapshot_hash=verification.snapshot_hash,
     )
     session.add(allocation)
     session.flush()
 
-    batch = DisbursementBatch(channel=DisbursementChannel.BANK, total=amount)
+    storm_file = session.get(StormFile, claim.storm_file_id)
+    assert storm_file is not None
+    ledger.append(
+        session,
+        action="allocation.approved",
+        subject_type="allocation",
+        subject_id=allocation.id,
+        actor_kind=ActorKind.HUMAN,
+        actor_id=director.id,
+        payload=allocation_ledger_payload(
+            approval=allocation_approval,
+            plan=plan,
+            allocation=allocation,
+            claim=claim,
+            verification=verification,
+            parish=canonical_public_parish(storm_file.parish),
+            need_category=canonical_public_need_category(claim.damage_type),
+            synthetic=storm_file.synthetic,
+        ),
+    )
+    session.execute(
+        text(
+            "SET CONSTRAINTS signed_plan_complete_trigger, "
+            "allocation_ledger_complete_trigger IMMEDIATE"
+        )
+    )
+
+    batch = DisbursementBatch(
+        channel=DisbursementChannel.BANK, total=Decimal("45000.00")
+    )
     session.add(batch)
     session.flush()
 

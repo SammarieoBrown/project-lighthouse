@@ -30,7 +30,7 @@ def migrated_schema() -> Iterator[str]:
     admin = create_engine(get_settings().sqlalchemy_url, poolclass=NullPool, future=True)
 
     with admin.begin() as connection:
-        for extension in ("postgis", "vector", "pg_trgm"):
+        for extension in ("postgis", "vector", "pg_trgm", "pgcrypto"):
             connection.execute(text(f"CREATE EXTENSION IF NOT EXISTS {extension}"))
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
 
@@ -130,6 +130,42 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
                     {"schema": migrated_schema},
                 ).scalars()
             )
+            approval_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = :schema AND table_name = 'approval'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+            approval_indexes = set(
+                connection.execute(
+                    text(
+                        "SELECT indexname FROM pg_indexes "
+                        "WHERE schemaname = :schema AND tablename = 'approval'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+            approval_rules = set(
+                connection.execute(
+                    text(
+                        "SELECT rulename FROM pg_rules "
+                        "WHERE schemaname = :schema AND tablename = 'approval'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+            approval_constraints = set(
+                connection.execute(
+                    text(
+                        "SELECT constraint_name FROM information_schema.table_constraints "
+                        "WHERE table_schema = :schema AND table_name = 'approval'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
     finally:
         engine.dispose()
 
@@ -140,6 +176,7 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
         "place_structure_build",
         "place_exposure",
         "place_exposure_build",
+        "human_credential",
     } <= tables
     assert {"wind_field_34", "wind_field_50", "wind_field_64"} <= advisory_columns
     assert not {"wind_prob_34", "wind_prob_50", "wind_prob_64"} & advisory_columns
@@ -157,6 +194,17 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
         "exposure_rows_sha256",
     } <= exposure_build_columns
     assert "hazard_event_external_ref_uidx" in hazard_external_ref_indexes
+    assert {"idempotency_key", "request_hash"} <= approval_columns
+    assert {
+        "approval_gate_subject_uidx",
+        "approval_idempotency_uidx",
+    } <= approval_indexes
+    assert {"approval_no_update", "approval_no_delete"} <= approval_rules
+    assert {
+        "approval_gate_role_chk",
+        "approval_recent_reauth_chk",
+        "approval_request_pair_chk",
+    } <= approval_constraints
 
 
 def test_alembic_incremental_0003_to_0004_creates_digest_markers(

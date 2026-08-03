@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from lighthouse_contracts import DEFAULT_PRIORITY, AgentName, JobStatus
@@ -20,6 +20,52 @@ from lighthouse_contracts import DEFAULT_PRIORITY, AgentName, JobStatus
 from .models import AgentJob
 
 CHANNEL = "lighthouse_jobs"
+JOB_LEASE_TIMEOUT = timedelta(minutes=15)
+
+
+def _lease_is_expired(cutoff: datetime):
+    return and_(
+        AgentJob.status == JobStatus.RUNNING,
+        or_(AgentJob.locked_at.is_(None), AgentJob.locked_at <= cutoff),
+    )
+
+
+def recover_expired_leases(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    lease_timeout: timedelta = JOB_LEASE_TIMEOUT,
+) -> int:
+    """Recover work abandoned by a crashed or replaced worker.
+
+    Claiming is intentionally committed before a handler runs, so crash safety
+    requires a bounded lease. An expired claim has already spent an attempt;
+    it is either made runnable again or parked as ``DEAD`` once its retry
+    budget is exhausted. Row locks keep concurrent workers from recovering the
+    same job.
+    """
+    current = now or datetime.now(UTC)
+    cutoff = current - lease_timeout
+    expired = list(
+        session.scalars(
+            select(AgentJob)
+            .where(_lease_is_expired(cutoff))
+            .with_for_update(skip_locked=True)
+        )
+    )
+    for job in expired:
+        job.locked_by = None
+        job.locked_at = None
+        job.last_error = "worker_lease_expired"
+        if job.attempts >= job.max_attempts:
+            job.status = JobStatus.DEAD
+            job.finished_at = current
+        else:
+            job.status = JobStatus.QUEUED
+            job.run_after = current
+    if expired:
+        session.flush()
+    return len(expired)
 
 
 def enqueue(
@@ -49,6 +95,7 @@ def claim_job(session: Session, *, worker_id: str) -> AgentJob | None:
     ``FOR UPDATE SKIP LOCKED`` is what makes this safe to run from many workers
     at once: each one takes a different row instead of blocking on the same one.
     """
+    recover_expired_leases(session)
     row = session.execute(
         text(
             """
@@ -78,6 +125,7 @@ def complete(session: Session, job: AgentJob) -> None:
     job.status = JobStatus.DONE
     job.finished_at = datetime.now(UTC)
     job.locked_by = None
+    job.locked_at = None
     session.flush()
 
 
@@ -89,6 +137,7 @@ def fail(session: Session, job: AgentJob, error: str) -> None:
     """
     job.last_error = error[:2000]
     job.locked_by = None
+    job.locked_at = None
     if job.attempts >= job.max_attempts:
         job.status = JobStatus.DEAD
         job.finished_at = datetime.now(UTC)
@@ -119,9 +168,27 @@ def park(session: Session, job: AgentJob, reason: str, *, retry_after_s: int = 6
 def pending_count(session: Session) -> int:
     """Backlog depth. Surfaced on the console so a queue that is falling behind
     is visible rather than inferred (NFR-P-02: degrade by delay, never by loss)."""
+    lease_cutoff = datetime.now(UTC) - JOB_LEASE_TIMEOUT
     return session.execute(
-        select(func.count()).select_from(AgentJob).where(AgentJob.status == JobStatus.QUEUED)
+        select(func.count())
+        .select_from(AgentJob)
+        .where(
+            or_(
+                AgentJob.status == JobStatus.QUEUED,
+                _lease_is_expired(lease_cutoff),
+            )
+        )
     ).scalar_one()
 
 
-__all__ = ["enqueue", "claim_job", "complete", "fail", "park", "pending_count", "CHANNEL"]
+__all__ = [
+    "CHANNEL",
+    "JOB_LEASE_TIMEOUT",
+    "claim_job",
+    "complete",
+    "enqueue",
+    "fail",
+    "park",
+    "pending_count",
+    "recover_expired_leases",
+]
