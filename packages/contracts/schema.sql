@@ -142,8 +142,26 @@ CREATE TABLE hazard_event (
   replay          boolean NOT NULL DEFAULT false
 );
 
--- HAZ-01: one row per NHC advisory cycle. Cone, wind-speed probabilities and
--- radii are stored as geometry so verification can ask "what happened here".
+-- HAZ-01: one row per NHC advisory cycle. Cone, track and wind field are stored
+-- as geometry so verification can ask "what happened here".
+--
+-- The wind_field_* columns were called wind_prob_* until Aug 2, and the rename
+-- is a deliberate contract change rather than tidying. NHC does not publish
+-- gridded wind-speed-probability polygons in its public archive: what exists is
+-- (a) forecast wind radii, four quadrant distances per threshold per forecast
+-- hour, which are a deterministic extent, and (b) the wind speed probability
+-- text product, which is a real percentage but only at 26 named locations —
+-- two of them in Jamaica. Neither is a probability surface.
+--
+-- So these columns hold what we can actually build: the union across forecast
+-- hours of the quadrant polygons at each threshold, i.e. the area expected to
+-- see at least 34/50/64 kt over the advisory's forecast period. That answers
+-- "is this household inside it". How likely is a different question and lives
+-- in risk_assessment.p34/p50/p64, which are correctly named already.
+--
+-- Renamed while the table held zero rows and nothing referenced it. A column
+-- whose name asserts something the data cannot support is the same class of
+-- defect as an interface that decorates: it will be believed.
 CREATE TABLE advisory (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   hazard_event_id uuid NOT NULL REFERENCES hazard_event(id) ON DELETE CASCADE,
@@ -152,9 +170,9 @@ CREATE TABLE advisory (
   observed        boolean NOT NULL DEFAULT false,  -- HAZ-04: post-event best track
   track           geography(LineString, 4326),
   cone            geography(Polygon, 4326),
-  wind_prob_34    geography(MultiPolygon, 4326),
-  wind_prob_50    geography(MultiPolygon, 4326),
-  wind_prob_64    geography(MultiPolygon, 4326),
+  wind_field_34   geography(MultiPolygon, 4326),
+  wind_field_50   geography(MultiPolygon, 4326),
+  wind_field_64   geography(MultiPolygon, 4326),
   raw             jsonb NOT NULL DEFAULT '{}'::jsonb,
   ingested_at     timestamptz NOT NULL DEFAULT now(),
   UNIQUE (hazard_event_id, advisory_number, observed)
@@ -165,6 +183,12 @@ CREATE INDEX advisory_event_idx ON advisory (hazard_event_id, issued_at);
 -- IMP-01: one assessment per household per advisory. Transparent parametric
 -- lookup in v1 — method and model_version are stored so a prediction can
 -- always be explained, and so the learning loop (IMP-04) has provenance.
+--
+-- p34/p50/p64 are the probabilities the wind_field_* geometry cannot carry:
+-- percentages from the NHC wind speed probability product, interpolated to the
+-- household from the nearest named locations. `method` records how, because an
+-- interpolated probability presented as a measured one is a lie the whole
+-- platform exists to prevent.
 CREATE TABLE risk_assessment (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   storm_file_id   uuid NOT NULL REFERENCES storm_file(id) ON DELETE CASCADE,
