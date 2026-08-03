@@ -10,6 +10,10 @@ Start here: [docs/engineering/lighthouse-build-spec.md](docs/engineering/lightho
 
 The pre-merge checklist in its Part 5 applies to every PR that touches frontend code.
 
+## Before any map work
+
+Read [docs/engineering/lighthouse-map-stack.md](docs/engineering/lighthouse-map-stack.md). It documents four traps that each cost hours, and every one of them fails silently — the map builds, the canvas sizes, the controls draw, and the result is wrong in a way that survives to a demo. It also has a debugging order for the blank map, which is this stack's default failure.
+
 ## Standing rules (from the build spec — these are not negotiable)
 
 - **Agents propose, humans dispose, the ledger remembers.** Any code path that moves money without an `approved_by` is a bug. Two of these guarantees are enforced in the database, not in application code — keep them there.
