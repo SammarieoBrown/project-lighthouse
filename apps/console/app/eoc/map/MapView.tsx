@@ -126,26 +126,6 @@ const ESRI_IMAGERY =
  */
 const WORKER = "/maplibre/maplibre-gl-worker.mjs";
 
-/* What survives in the structures view besides the buildings.
- *
- * Land and water, and they are not optional. Jamaica's shape on this map comes
- * entirely from the basemap — there is no parish outline layer of our own — so
- * hiding every basemap layer takes the island with it. Buildings only exist
- * from about z14, which left the wide view as wind bands floating on an empty
- * sea: nothing to orient by, and no way to tell a missing layer from a country
- * with no buildings in it.
- *
- * So the coast stays and the roads, labels, landuse and POIs go. The buildings
- * become the only thing drawn *on* the island rather than the only thing on
- * the screen.
- *
- * The label exclusion is load-bearing, not tidiness: Protomaps names its text
- * layers `water_label_ocean`, `earth_label_islands` and so on, so matching on
- * "water" or "earth" alone keeps every place name on the map and the view is
- * no longer isolated at all. */
-const keepInStructures = (id: string) =>
-  /-(background|earth|water)/.test(id) && !id.includes("label");
-
 // Both are global and throw if repeated, so they happen once per document
 // rather than once per mount.
 let configured = false;
@@ -334,15 +314,16 @@ export default function MapView({
     applyFrame(instance, snapshot);
   }, [snapshot]);
 
-  /* Structures: the basemap steps back so the buildings are the only thing on
-   * it. Every basemap layer is hidden except the buildings, which are turned up
-   * from the near-invisible weight they carry as context.
+  /* Structures adds a layer; it does not take the map away.
    *
-   * Visibility and paint, never a restyle — the same reason the satellite layer
-   * is added rather than swapped in. Our own layers all carry the `lh-` prefix
-   * and are left alone: the hazard bands stay, the parish outlines stay, and
-   * those outlines are what keeps the view navigable once the coastline the
-   * basemap was drawing is gone. */
+   * The first version hid every basemap layer so the buildings stood alone,
+   * copying the standalone damage viewer. That viewer is looked at. This is
+   * navigated — and stripped of roads, rivers and town names there was no way
+   * to tell Black River from Old Harbour, which is the first question anyone
+   * asks of a map before acting on it. Same context in all three views.
+   *
+   * Visibility only, never a restyle: rebuilding the style drops the data
+   * layers and the viewport with them. */
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
@@ -354,20 +335,16 @@ export default function MapView({
 
       for (const layer of style.layers) {
         if (layer.id.startsWith("lh-")) continue;
+        // Only the basemap's own buildings change: ours replace them, and two
+        // sets of footprints drawn over each other is just a heavier smudge.
+        // Everything else — coastline, roads, rivers, town names — stays
+        // exactly as it is in the Map view.
         const isBuilding = layer.id.endsWith("-buildings");
         instance.setLayoutProperty(
           layer.id,
           "visibility",
-          !structures || isBuilding || keepInStructures(layer.id) ? "visible" : "none",
+          structures && isBuilding ? "none" : "visible",
         );
-        if (isBuilding && layer.type === "fill") {
-          const w = buildingWeights(readTokens(container.current ?? undefined));
-          instance.setPaintProperty(
-            layer.id,
-            "fill-color",
-            structures ? w.subject : w.quiet,
-          );
-        }
       }
     };
 
