@@ -1,0 +1,96 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  19
+NWS National Hurricane Center Miami FL       AL132025
+1100 PM EDT Sat Oct 25 2025
+ 
+Reports from NOAA and Air Force Reserve Hurricane Hunter aircraft
+indicate that Melissa is continuing rapid intensification. The Air 
+Force aircraft reported flight-level winds of 115 kt in the north 
+eyewall of the 17 nm wide eye at 700 mb, along with a central 
+pressure of 967 mb.  Based on these data, the initial intensity is 
+increased to 100 kt, making Melissa a category 3 major hurricane.
+ 
+The initial motion is now just south of due west or 265/3 kt.  A
+low- to mid-level ridge to the north of Melissa should steer the
+hurricane generally westward at a slow forward speed during the
+next 36 h or so. After that time, a deep-layer mid-latitude trough
+moving through the southeastern United States will break the ridge,
+with Melissa expected to turn northward and then recurve into the
+mid-latitude southwesterly flow. The guidance is fairly well
+clustered during the first 72 h, with Melissa expected to pass over
+Jamaica in 48-60 h and then be near or over eastern Cuba around 72
+h. Beyond 72 h, there is some speed and direction spread, but
+overall the guidance is in good agreement that Melissa should
+accelerate northeastward through portions of the Bahamas into the
+Atlantic.  The new forecast track is a little to the south and west
+of the previous track through 60 h and similar to the previous
+track after that time.
+ 
+Rapid intensification is expected to continue for the next 24-36 h,
+and it is possible that during this time Melissa could intensify 
+even faster than what is currently forecast.  The regional hurricane
+models show the cyclone peaking before it reaches Jamaica, and
+based on this the new forecast keeps a 48-h peak intensity of 140
+kt. Afterwards, some inner-core oscillations such as eyewall
+replacement cycles could lead to fluctuations in intensity before
+Melissa's first landfall in Jamaica. It must be noted that there is 
+very little practical difference in the overall impacts of a 
+Category 4 or 5 landfall, and Melissa is expected to be at least 
+that intensity when it moves over Jamaica.  Melissa should weaken 
+as it interacts with Jamaica and Cuba, although it is still forecast 
+to be a major hurricane when it nears Cuba. A faster weakening 
+should occur after passing Cuba when the cyclone encounters strong 
+shear over the southwestern Atlantic.
+ 
+This remains a very serious situation, in terms of catastrophic
+rainfall, wind, and storm surge hazards for Jamaica, and
+preparations should be rushed to completion in the area currently
+under a Hurricane Warning.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica:  Seek shelter now.  A multi-day period of damaging
+winds and heavy rainfall have begun and will cause catastrophic and
+life-threatening flash flooding and numerous landslides.  Extensive
+infrastructural damage, long-duration power and communication
+outages, and isolation of communities are expected.
+Life-threatening storm surge is likely along portions of the
+southern coast early next week.
+ 
+2. Haiti:  Catastrophic and life-threatening flash flooding and
+landslides are expected across southwestern Haiti into early next
+week, likely causing extensive infrastructural damage and isolation
+of communities.  Strong winds could last for a day or more over the
+Tiburon peninsula.
+ 
+3. Dominican Republic: Heavy rainfall through the middle of next
+week could produce catastrophic flash flooding and numerous
+landslides in southern portions of the country.
+ 
+4. Eastern Cuba, Southeast Bahamas, and the Turks and Caicos:
+Monitor Melissa closely.  There is an increasing risk of a
+significant storm surge, damaging winds, and heavy rainfall by the
+middle of next week. In eastern Cuba, the risk of life-threatening
+flash flooding and landslides is increasing. A Hurricane Watch is in
+effect for portions of eastern Cuba.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  26/0300Z 16.4N  75.9W  100 KT 115 MPH
+ 12H  26/1200Z 16.4N  76.4W  110 KT 125 MPH
+ 24H  27/0000Z 16.4N  77.0W  125 KT 145 MPH
+ 36H  27/1200Z 16.6N  77.5W  135 KT 155 MPH
+ 48H  28/0000Z 17.2N  77.7W  140 KT 160 MPH
+ 60H  28/1200Z 18.0N  77.2W  120 KT 140 MPH...INLAND JAMAICA
+ 72H  29/0000Z 19.4N  76.1W  105 KT 120 MPH...OVER WATER
+ 96H  30/0000Z 23.0N  72.8W   90 KT 105 MPH
+120H  31/0000Z 28.0N  68.0W   75 KT  85 MPH
+ 
+$$
+Forecaster Beven
+ 
+NNNN

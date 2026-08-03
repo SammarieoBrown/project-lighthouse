@@ -1,0 +1,81 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Tropical Storm Melissa Discussion Number   4
+NWS National Hurricane Center Miami FL       AL132025
+500 AM EDT Wed Oct 22 2025
+ 
+Data from an Air Force Reserve Hurricane Hunter aircraft has been
+extremely useful in showing that the center of Melissa has
+re-formed to the northeast of the previous center.  Earlier
+scatterometer data had already shown an elongated circulation, and
+the very deep convection combined with the moderate westerly shear
+has caused the re-formation.  The initial intensity is kept at 45
+kt, a compromise between somewhat lower aircraft winds but also
+lower central pressure, now at 1000 mb.
+ 
+The initial motion is estimated, with low confidence, to be 295/6.
+Melissa is forecast to move very slowly to the northwest and
+north-northwest during the next few days into a weakness by an
+approaching mid-latitude trough.  There continues to be a very
+large uncertainty on whether the storm would turn more into the
+weakness and threaten Haiti or Cuba, or whether it would turn
+more westward to the south of Jamaica as a ridge rebuilds over the
+Bahamas, with reliable models in either camp.  This appears to be
+somewhat tied to the storm's structure, with the less vertically
+coherent model solutions generally ending up on the western side of
+the track envelope this weekend, and stronger initial storm
+representations on the northeastern side.  With such a distinct
+track bifurcation noted in the guidance (excluding the consensus
+aids) and dependence on structure, this should be considered an
+extremely uncertain forecast, and significant changes could be
+required.  The model trends have been favoring the more westward
+solutions recently, and the official forecast is nudged in that
+direction at long range.
+ 
+Melissa is likely to be encountering moderate wind shear for the
+next few days, counteracted by the very warm and moist conditions
+in the Caribbean Sea.  This pattern favors slow intensification 
+through that time.  At long range, some relaxation of this shear is 
+anticipated with the more equatorward storm solutions showing the 
+most conducive environment.  The new NHC wind speed prediction
+is much higher than the last one by day 5, but still lower than the 
+model consensus due to continuity constraints.  While there is 
+still a large forecast intensity uncertainty, the chances of a major
+hurricane increase if this forecast were to trend farther southwest
+at long range, similar to many of the recent regional hurricane
+model forecasts.
+ 
+ 
+Key Messages:
+ 
+1. Melissa is expected to produce heavy rainfall across portions of
+the Dominican Republic, Haiti, and Jamaica through this weekend,
+bringing a risk of significant flash flooding and landslides.
+ 
+2. Hurricane conditions are possible in the southwestern peninsula
+of Haiti where a Hurricane Watch is in effect.  A Tropical Storm
+Watch is in effect for Jamaica.  Preparations to protect life and
+property should be completed by Thursday.
+ 
+3. There is significant uncertainty in the track and intensity
+forecast of Melissa.  Interests elsewhere in Hispaniola and Cuba
+should continue to monitor the latest forecasts.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  22/0900Z 14.3N  73.5W   45 KT  50 MPH
+ 12H  22/1800Z 14.7N  74.3W   45 KT  50 MPH
+ 24H  23/0600Z 15.2N  74.9W   50 KT  60 MPH
+ 36H  23/1800Z 15.6N  75.1W   55 KT  65 MPH
+ 48H  24/0600Z 16.0N  75.2W   60 KT  70 MPH
+ 60H  24/1800Z 16.3N  75.3W   65 KT  75 MPH
+ 72H  25/0600Z 16.7N  75.5W   70 KT  80 MPH
+ 96H  26/0600Z 17.0N  76.0W   80 KT  90 MPH
+120H  27/0600Z 17.0N  76.5W   90 KT 105 MPH
+ 
+$$
+Forecaster Blake
+ 
+NNNN

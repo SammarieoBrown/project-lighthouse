@@ -1,0 +1,78 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  35
+NWS National Hurricane Center Miami FL       AL132025
+1100 PM EDT Wed Oct 29 2025
+
+Melissa is starting to re-intensify.  A large convective burst 
+continues near the center, albeit stretched from northeast to 
+southwest.  An Air Force Reserve Hurricane Hunter aircraft found 
+that the pressure has fallen a few mb to 970 mb, with increased 
+maximum 700-mb flight-level wind to 100 kt.  While normally this 
+would support closer to 90-kt surface winds, those strong winds 
+were over 75 n mi from the center well away from the central core.  
+This typically signifies a lower-than-standard wind reduction, so 
+the initial intensity is set to 85 kt on this advisory.  
+
+The hurricane is moving faster tonight, with microwave and 
+aircraft fixes resulting in an initial motion estimate of 030/18 
+kt. Melissa is forecast to greatly accelerate during the next 
+two days due to steering flow between a trough moving through 
+the southeastern United States and a mid-level ridge over the 
+central Atlantic.  This should cause the hurricane to move away 
+from the Central Bahamas on Thursday morning and to the northwest 
+of Bermuda Thursday night.  The fast track continues into Friday, 
+with the then post-tropical Melissa forecast to move near the 
+Avalon Peninsula of Newfoundland as the calendar turns to November.  
+Only a slight westward adjustment was made to the NHC forecast, 
+near the Google DeepMind and HFIP Corrected Consensus models.
+
+Melissa has a short window of time to intensify during the next day 
+or so as it remains over warm waters with moderate shear.  While 
+the shear greatly increases on Halloween along with cooling waters, 
+the forecast speed of the cyclone also jumps up along with upper- 
+level divergence from an approaching trough, which could lessen 
+the weakening rate.  Extratropical transition is anticipated in 
+about 48 hours due to very strong shear and cold waters.  The new 
+NHC intensity forecast is close to the previous one, remaining on 
+the high side of the guidance.
+
+ 
+Key Messages:
+ 
+1. Bahamas and the Turks and Caicos: Hurricane conditions,
+life-threatening storm surge, and heavy rainfall are expected across
+portions of the southeastern and central Bahamas through overnight. 
+Remain sheltered until local officials deem it safe to venture out. 
+Tropical storm conditions, heavy rains, and significant storm surge 
+are expected in the Turks and Caicos Islands through overnight.
+ 
+2. Bermuda: Hurricane conditions are expected in Bermuda beginning 
+late Thursday and continuing through Thursday night.
+ 
+3. Post-storm safety:  Follow advice of local officials as you may
+need to remain sheltered after the storm due to downed power lines
+and flooded areas.  Ensure generators are properly ventilated and
+placed outside at least 20 feet away from dwellings and garages to
+avoid carbon monoxide poisoning. During clean up, be careful when
+using chainsaws and power tools. Drink plenty of water to avoid heat
+exhaustion.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  30/0300Z 24.3N  74.3W   85 KT 100 MPH
+ 12H  30/1200Z 26.9N  72.4W   90 KT 105 MPH
+ 24H  31/0000Z 31.7N  68.2W   90 KT 105 MPH
+ 36H  31/1200Z 37.6N  62.2W   75 KT  85 MPH
+ 48H  01/0000Z 44.0N  55.5W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 60H  01/1200Z 50.0N  49.0W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 72H  02/0000Z 53.0N  43.0W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 96H  03/0000Z 56.5N  29.5W   45 KT  50 MPH...POST-TROP/EXTRATROP
+120H  04/0000Z 57.5N  25.0W   40 KT  45 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Blake
+ 
+NNNN

@@ -1,0 +1,106 @@
+ZCZC MIAPWSAT3 ALL                                                  
+TTAA00 KNHC DDHHMM                                                  
+                                                                    
+HURRICANE MELISSA WIND SPEED PROBABILITIES NUMBER  29               
+NWS NATIONAL HURRICANE CENTER MIAMI FL       AL132025               
+1500 UTC TUE OCT 28 2025                                            
+                                                                    
+AT 1500Z THE CENTER OF HURRICANE MELISSA WAS LOCATED NEAR LATITUDE  
+17.9 NORTH...LONGITUDE 77.9 WEST WITH MAXIMUM SUSTAINED WINDS NEAR  
+160 KTS...185 MPH...295 KM/H.                                       
+                                                                    
+Z INDICATES COORDINATED UNIVERSAL TIME (GREENWICH)                  
+   ATLANTIC STANDARD TIME (AST)...SUBTRACT 4 HOURS FROM Z TIME      
+   EASTERN  DAYLIGHT TIME (EDT)...SUBTRACT 4 HOURS FROM Z TIME      
+   CENTRAL  DAYLIGHT TIME (CDT)...SUBTRACT 5 HOURS FROM Z TIME      
+                                                                    
+WIND SPEED PROBABILITY TABLE FOR SPECIFIC LOCATIONS                 
+                                                                    
+CHANCES OF SUSTAINED (1-MINUTE AVERAGE) WIND SPEEDS OF AT LEAST     
+   ...34 KT (39 MPH... 63 KM/H)...                                  
+   ...50 KT (58 MPH... 93 KM/H)...                                  
+   ...64 KT (74 MPH...119 KM/H)...                                  
+FOR LOCATIONS AND TIME PERIODS DURING THE NEXT 5 DAYS               
+                                                                    
+PROBABILITIES FOR LOCATIONS ARE GIVEN AS OP(CP) WHERE               
+    OP  IS THE PROBABILITY OF THE EVENT BEGINNING DURING            
+        AN INDIVIDUAL TIME PERIOD (ONSET PROBABILITY)               
+   (CP) IS THE PROBABILITY OF THE EVENT OCCURRING BETWEEN           
+        12Z TUE AND THE FORECAST HOUR (CUMULATIVE PROBABILITY)      
+                                                                    
+PROBABILITIES ARE GIVEN IN PERCENT                                  
+X INDICATES PROBABILITIES LESS THAN 1 PERCENT                       
+PROBABILITIES FOR 34 KT AND 50 KT ARE SHOWN AT A GIVEN LOCATION WHEN
+THE 5-DAY CUMULATIVE PROBABILITY IS AT LEAST 3 PERCENT.             
+PROBABILITIES FOR 34...50...64 KT SHOWN WHEN THE 5-DAY              
+64-KT CUMULATIVE PROBABILITY IS AT LEAST 1 PERCENT.                 
+                                                                    
+                                                                    
+  - - - - WIND SPEED PROBABILITIES FOR SELECTED LOCATIONS - - - -   
+                                                                    
+               FROM    FROM    FROM    FROM    FROM    FROM    FROM 
+  TIME       12Z TUE 00Z WED 12Z WED 00Z THU 12Z THU 12Z FRI 12Z SAT
+PERIODS         TO      TO      TO      TO      TO      TO      TO  
+             00Z WED 12Z WED 00Z THU 12Z THU 12Z FRI 12Z SAT 12Z SUN
+                                                                    
+FORECAST HOUR    (12)   (24)    (36)    (48)    (72)    (96)   (120)
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+LOCATION       KT                                                   
+                                                                    
+HIBERNIA OILFD 34  X   X( X)   X( X)   X( X)   X( X)  24(24)   6(30)
+HIBERNIA OILFD 50  X   X( X)   X( X)   X( X)   X( X)   5( 5)   3( 8)
+HIBERNIA OILFD 64  X   X( X)   X( X)   X( X)   X( X)   1( 1)   1( 2)
+ 
+CAPE RACE NFLD 34  X   X( X)   X( X)   X( X)   X( X)  12(12)   X(12)
+ 
+ILE ST PIERRE  34  X   X( X)   X( X)   X( X)   X( X)   4( 4)   X( 4)
+ 
+SABLE ISLAND   34  X   X( X)   X( X)   X( X)   X( X)   3( 3)   X( 3)
+ 
+BERMUDA        34  X   X( X)   X( X)   X( X)  82(82)   X(82)   X(82)
+BERMUDA        50  X   X( X)   X( X)   X( X)  46(46)   X(46)   X(46)
+BERMUDA        64  X   X( X)   X( X)   X( X)  18(18)   X(18)   X(18)
+ 
+NEW PROVIDENCE 34  X   2( 2)   4( 6)   1( 7)   X( 7)   X( 7)   X( 7)
+ 
+ANDROS         34  X   4( 4)   4( 8)   1( 9)   X( 9)   X( 9)   X( 9)
+ 
+GREAT EXUMA    34  1  16(17)  38(55)   1(56)   X(56)   X(56)   X(56)
+GREAT EXUMA    50  X   1( 1)  17(18)   X(18)   X(18)   X(18)   X(18)
+GREAT EXUMA    64  X   X( X)   7( 7)   1( 8)   X( 8)   X( 8)   X( 8)
+ 
+SAN SALVADOR   34  X   8( 8)  72(80)   4(84)   X(84)   X(84)   X(84)
+SAN SALVADOR   50  X   X( X)  44(44)  11(55)   X(55)   X(55)   X(55)
+SAN SALVADOR   64  X   X( X)  22(22)  11(33)   X(33)   X(33)   X(33)
+ 
+MAYAGUANA      34  1  20(21)  61(82)   3(85)   X(85)   X(85)   X(85)
+MAYAGUANA      50  X   1( 1)  24(25)   2(27)   X(27)   X(27)   X(27)
+MAYAGUANA      64  X   X( X)   7( 7)   1( 8)   X( 8)   X( 8)   X( 8)
+ 
+GRAND TURK     34  X   4( 4)  15(19)   4(23)   X(23)   X(23)   X(23)
+ 
+CIENFUEGOS     34  1   2( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+CAMAGUEY       34  2   5( 7)   2( 9)   X( 9)   X( 9)   X( 9)   X( 9)
+ 
+GUANTANAMO BAY 34 42  51(93)   1(94)   X(94)   X(94)   X(94)   X(94)
+GUANTANAMO BAY 50  1  15(16)   1(17)   X(17)   X(17)   X(17)   X(17)
+GUANTANAMO BAY 64  X   5( 5)   1( 6)   X( 6)   X( 6)   X( 6)   X( 6)
+ 
+MONTEGO BAY    34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+MONTEGO BAY    50 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+MONTEGO BAY    64 67   X(67)   X(67)   X(67)   X(67)   X(67)   X(67)
+ 
+KINGSTON       34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+KINGSTON       50 15   X(15)   X(15)   X(15)   X(15)   X(15)   X(15)
+KINGSTON       64  3   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+LES CAYES      34  2   3( 5)   1( 6)   X( 6)   X( 6)   X( 6)   X( 6)
+ 
+PORT-AU-PRINCE 34  2   3( 5)   2( 7)   X( 7)   X( 7)   X( 7)   X( 7)
+ 
+PUERTO PLATA   34  X   2( 2)   3( 5)   1( 6)   X( 6)   X( 6)   X( 6)
+ 
+$$                                                                  
+FORECASTER BEVEN                                                    
+NNNN                                                                

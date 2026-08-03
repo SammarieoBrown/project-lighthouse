@@ -1,0 +1,101 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Tropical Storm Melissa Discussion Number   6
+NWS National Hurricane Center Miami FL       AL132025
+500 PM EDT Wed Oct 22 2025
+
+Like yesterday, Melissa's structure has come unglued this 
+afternoon, with the low-level circulation becoming exposed to 
+the west of the bursting deep convection. While that convection 
+continues to have very cold cloud tops, it lacks much organization, 
+remaining parked down-shear of the storm with 20-30 kt of 
+west-northwesterly shear undercutting the outflow layer. This 
+disjointed structure is nicely exhibited on an 1825 UTC AMSR2 pass. 
+While the objective intensity estimates in general are a little 
+higher than this morning, the subjective Dvorak estimates are lower, 
+and given the disjointed structure of Melissa, it favors holding the 
+intensity at 45 kt this advisory. Another Air Force Reserve and the 
+first NOAA Hurricane Hunter mission will be in the storm this 
+evening to provide more structural information. 
+
+Melissa has taken a short-term jog westward as it became exposed, 
+but now appears to be resuming a very slow west-northwestward motion 
+at 290/2 kt. The track reasoning remains similar to the previous 
+forecast over the next 2-3 days, with the forecast storm structure 
+likely to have a significant role in the future track. Dynamical 
+models that show the storm becoming more vertically aligned and deep 
+(GFS, HWRF) show Melissa turning north or northeastward due to 
+westerly deep-layer steering into a weakness induced by a broad 
+upper-level trough located over the Bahamas. However, models that 
+show Melissa remaining more shallow and misaligned (ECMWF, HAFS-A/B) 
+maintain a northwestward or north-northwestward component of 
+motion. Compared to this morning, the track guidance has shifted 
+slower and farther west, possibly due to the farther west initial 
+position. The NHC track has been shifted westward and is also a 
+little southward after 60 h, but remains farther north and east of 
+the ECMWF and HAFS models this cycle, and is roughly in between the 
+HFIP consensus approach (HCCA) and Google DeepMind ensemble mean 
+(GDMI). This track forecast favors the models that keep Melissa weak 
+and less prone to the deep-layer steering over the next 24-48 hours. 
+However, this remains a low confidence track forecast other than 
+Melissa maintaining a slow motion for the majority of the period. 
+
+The current vortex misalignment of Melissa is a significant 
+impediment to short-term intensification, and the vertical wind 
+shear is expected to maintain this tilted structure over the next 
+24-36 hours, although I can't preclude any center reformations 
+down-shear, like what occurred last night. After this period, the 
+ECWMF-SHIPS guidance now indicates the ongoing westerly shear will 
+decrease to 10-15 knots, and the storm remains over very warm 
+sea-surface temperatures and high oceanic heat content. The 
+hurricane-regional models have all responded by showing significant 
+intensification after the vortex becomes vertically aligned, 
+sometime in the 60-96 h period, though timing when this may occur is 
+challenging. The intensity guidance is once again higher than the 
+previous cycle, and the NHC intensity forecast was raised once 
+again, showing Melissa becoming a hurricane in 72 h, rapidly 
+intensifying into a major hurricane by 96 h, with additional 
+intensification likely thereafter. This forecast is in the best 
+agreement with the HCCA intensity aid, but it is worth noting it's 
+under the latest HAFS-A/B and HMON forecasts. Unfortunately, it is 
+becoming increasingly likely that Melissa will become a large and 
+dangerous hurricane by the end of the forecast period. 
+
+
+Key Messages:
+ 
+1. Melissa is forecast to meander over the central Caribbean Sea and 
+could potentially become a major hurricane by early next week. 
+Interests in Jamaica, Haiti, Cuba, and the Dominican Republic are 
+urged to continue monitoring the latest forecasts.
+
+2. Due to Melissa’s slow motion, the risk of a prolonged period of 
+strong winds, possibly lasting for a day or more, is increasing for 
+Jamaica and the Tiburon peninsula of Haiti.  Preparations to protect 
+life and property should be rushed to completion, since strong 
+winds could begin in these areas as early as late Thursday or 
+Friday and continue increasing over the weekend.
+
+3. Melissa is expected to produce heavy rainfall across portions of 
+the Dominican Republic, Haiti, and Jamaica through this weekend, 
+bringing a risk of significant, life-threatening flash flooding and 
+numerous landslides.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  22/2100Z 14.4N  74.3W   45 KT  50 MPH
+ 12H  23/0600Z 14.6N  74.5W   45 KT  50 MPH
+ 24H  23/1800Z 14.9N  74.6W   50 KT  60 MPH
+ 36H  24/0600Z 15.2N  74.7W   50 KT  60 MPH
+ 48H  24/1800Z 15.6N  74.8W   55 KT  65 MPH
+ 60H  25/0600Z 16.1N  75.0W   60 KT  70 MPH
+ 72H  25/1800Z 16.3N  75.6W   70 KT  80 MPH
+ 96H  26/1800Z 16.2N  76.7W  100 KT 115 MPH
+120H  27/1800Z 16.0N  78.0W  115 KT 130 MPH
+ 
+$$
+Forecaster Papin
+ 
+NNNN

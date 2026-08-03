@@ -1,0 +1,86 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Tropical Storm Melissa Discussion Number   8
+NWS National Hurricane Center Miami FL       AL132025
+500 AM EDT Thu Oct 23 2025
+ 
+Melissa continues to struggle in strong westerly vertical wind
+shear.  Surface observations and Air Force aircraft data show that
+the system is vertically tilted with the low-level center partially
+exposed and located nearly 100 miles west of the mid-level center
+that is apparent in satellite images.  The wind field of the storm
+also remains lopsided, with most of the strong winds confined to the
+eastern half of the circulation.  The initial intensity is held at
+45 kt, but this is probably generous based on the aircraft data and
+an ASCAT pass from last evening.
+ 
+The storm has been crawling and moving erratically.  In general,
+Melissa is likely to inch northward during the next 36 to 48 hours
+as the storm is influenced by a weakness in the subtropical ridge.
+By late Friday, a mid-level ridge is forecast to build eastward to
+the north of the storm, and that pattern change should induce a slow
+westward or west-northwestward motion over the weekend.  By early
+next week, that ridge is expected to move away as a large-scale
+trough amplifies over the eastern U.S.  This change in the steering
+flow should cause Melissa to begin to gain more latitude again by
+the end of the forecast period.  Given the complex steering pattern
+and continued model differences in the predicted vertical depth of
+Melissa, there remains a significant spread in the deterministic
+guidance and the ensemble solutions. One thing we feel confident
+about is that Melissa is likely to move slowly and remain in the
+vicinity of Haiti, Jamaica, and eastern Cuba for several days. The
+NHC track forecast is shifted a little to the right of the previous
+one, trending toward a blend of the latest Google DeepMind ensemble
+mean and HCCA solution.
+ 
+The current westerly vertical wind shear over Melissa is expected to
+linger for about another day, and that should keep the storm at
+around the same intensity during that time.  However, after that,
+the upper-level wind pattern will gradually become more conducive
+while the system remains over the very warm waters of the central
+and northwestern Caribbean Sea.  These conditions should allow
+Melissa to become vertically aligned and strengthen significantly.
+In fact, rapid intensification appears likely this weekend and
+early next week. The NHC intensity forecast lies near the middle of
+the guidance envelope from 12 to 72 hours, but leans toward the
+upper end of the guidance at days 4 and 5.  As Melissa intensifies,
+its wind field is expected to grow and become more symmetric.
+ 
+Key Messages:
+ 
+1. Melissa is expected to meander over the central Caribbean Sea for
+several days and is forecast to become a major hurricane by late
+this weekend or early next week.  Interests in Jamaica, Haiti, Cuba,
+and the Dominican Republic are urged to continue monitoring the
+latest forecasts.
+ 
+2. Due to Melissa’s slow motion, the risk of a prolonged period of
+strong winds, possibly lasting for a day or more, is increasing for
+Jamaica and the Tiburon peninsula of Haiti.  Preparations to protect
+life and property should be rushed to completion, since strong winds
+could begin in these areas on Friday and continue increasing over
+the weekend.
+ 
+3. Melissa is expected to produce heavy rainfall across portions of
+the Dominican Republic, Haiti, and Jamaica through the weekend,
+bringing a risk of significant, life-threatening flash flooding and
+numerous landslides.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  23/0900Z 15.0N  74.9W   45 KT  50 MPH
+ 12H  23/1800Z 15.2N  75.0W   45 KT  50 MPH
+ 24H  24/0600Z 15.6N  75.0W   50 KT  60 MPH
+ 36H  24/1800Z 16.0N  75.0W   55 KT  65 MPH
+ 48H  25/0600Z 16.4N  75.1W   60 KT  70 MPH
+ 60H  25/1800Z 16.6N  75.4W   70 KT  80 MPH
+ 72H  26/0600Z 16.7N  76.0W   85 KT 100 MPH
+ 96H  27/0600Z 16.9N  77.0W  105 KT 120 MPH
+120H  28/0600Z 17.1N  78.0W  115 KT 130 MPH
+ 
+$$
+Forecaster Cangialosi
+ 
+NNNN

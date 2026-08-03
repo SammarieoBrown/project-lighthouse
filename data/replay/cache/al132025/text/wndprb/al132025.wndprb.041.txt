@@ -1,0 +1,68 @@
+ZCZC MIAPWSAT3 ALL                                                  
+TTAA00 KNHC DDHHMM                                                  
+                                                                    
+POST-TROPICAL CYCLONE MELISSA WIND SPEED PROBABILITIES NUMBER  41   
+NWS NATIONAL HURRICANE CENTER MIAMI FL       AL132025               
+1500 UTC FRI OCT 31 2025                                            
+                                                                    
+AT 1500Z THE CENTER OF POST-TROPICAL CYCLONE MELISSA WAS LOCATED    
+NEAR LATITUDE 39.0 NORTH...LONGITUDE 60.5 WEST WITH MAXIMUM         
+SUSTAINED WINDS NEAR 75 KTS...85 MPH...140 KM/H.                    
+                                                                    
+Z INDICATES COORDINATED UNIVERSAL TIME (GREENWICH)                  
+   ATLANTIC STANDARD TIME (AST)...SUBTRACT 4 HOURS FROM Z TIME      
+   EASTERN  DAYLIGHT TIME (EDT)...SUBTRACT 4 HOURS FROM Z TIME      
+   CENTRAL  DAYLIGHT TIME (CDT)...SUBTRACT 5 HOURS FROM Z TIME      
+                                                                    
+WIND SPEED PROBABILITY TABLE FOR SPECIFIC LOCATIONS                 
+                                                                    
+CHANCES OF SUSTAINED (1-MINUTE AVERAGE) WIND SPEEDS OF AT LEAST     
+   ...34 KT (39 MPH... 63 KM/H)...                                  
+   ...50 KT (58 MPH... 93 KM/H)...                                  
+   ...64 KT (74 MPH...119 KM/H)...                                  
+FOR LOCATIONS AND TIME PERIODS DURING THE NEXT 5 DAYS               
+                                                                    
+PROBABILITIES FOR LOCATIONS ARE GIVEN AS OP(CP) WHERE               
+    OP  IS THE PROBABILITY OF THE EVENT BEGINNING DURING            
+        AN INDIVIDUAL TIME PERIOD (ONSET PROBABILITY)               
+   (CP) IS THE PROBABILITY OF THE EVENT OCCURRING BETWEEN           
+        12Z FRI AND THE FORECAST HOUR (CUMULATIVE PROBABILITY)      
+                                                                    
+PROBABILITIES ARE GIVEN IN PERCENT                                  
+X INDICATES PROBABILITIES LESS THAN 1 PERCENT                       
+PROBABILITIES FOR 34 KT AND 50 KT ARE SHOWN AT A GIVEN LOCATION WHEN
+THE 5-DAY CUMULATIVE PROBABILITY IS AT LEAST 3 PERCENT.             
+PROBABILITIES FOR 34...50...64 KT SHOWN WHEN THE 5-DAY              
+64-KT CUMULATIVE PROBABILITY IS AT LEAST 1 PERCENT.                 
+                                                                    
+                                                                    
+  - - - - WIND SPEED PROBABILITIES FOR SELECTED LOCATIONS - - - -   
+                                                                    
+               FROM    FROM    FROM    FROM    FROM    FROM    FROM 
+  TIME       12Z FRI 00Z SAT 12Z SAT 00Z SUN 12Z SUN 12Z MON 12Z TUE
+PERIODS         TO      TO      TO      TO      TO      TO      TO  
+             00Z SAT 12Z SAT 00Z SUN 12Z SUN 12Z MON 12Z TUE 12Z WED
+                                                                    
+FORECAST HOUR    (12)   (24)    (36)    (48)    (72)    (96)   (120)
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+LOCATION       KT                                                   
+                                                                    
+HIBERNIA OILFD 34  X  88(88)   X(88)   X(88)   X(88)   X(88)   X(88)
+HIBERNIA OILFD 50  X  58(58)   X(58)   X(58)   X(58)   X(58)   X(58)
+HIBERNIA OILFD 64  X  11(11)   X(11)   X(11)   X(11)   X(11)   X(11)
+ 
+CAPE RACE NFLD 34  8  76(84)   X(84)   X(84)   X(84)   X(84)   X(84)
+CAPE RACE NFLD 50  X  19(19)   X(19)   X(19)   X(19)   X(19)   X(19)
+CAPE RACE NFLD 64  X   2( 2)   X( 2)   X( 2)   X( 2)   X( 2)   X( 2)
+ 
+ILE ST PIERRE  34  5   7(12)   X(12)   X(12)   X(12)   X(12)   X(12)
+ 
+BURGEO NFLD    34  3   2( 5)   X( 5)   X( 5)   X( 5)   X( 5)   X( 5)
+ 
+SYDNEY NS      34  3   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+SABLE ISLAND   34  7   X( 7)   X( 7)   X( 7)   X( 7)   X( 7)   X( 7)
+ 
+$$                                                                  
+FORECASTER HAGEN                                                    
+NNNN                                                                

@@ -1,0 +1,123 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  22
+NWS National Hurricane Center Miami FL       AL132025
+500 PM EDT Sun Oct 26 2025
+ 
+After an earlier pause in intensification, this afternoon's Air 
+Force Reserve reconnaissance mission has found Melissa intensifying 
+again. The minimum pressure has fallen 12 mb from this morning 
+NOAA-P3 mission, with the last dropsonde indicating a minimum 
+pressure of 941 mb, and the plane reported a shrinking eyewall down 
+to 6 n mi in diameter. In addition to the low pressure, the 
+satellite presentation of Melissa remains very impressive, with 
+1-minute visible satellite images from a GOES-19 meso-sector showing 
+a very clear eye with a stadium effect. The eye temperature on water 
+vapor imagery has continued to warm, while the thick ring of eyewall 
+cloud tops remains between -75 to -80 C around the eye. The 
+presentation of Melissa on radar reflectivity from Kingston, Jamaica 
+has also improved, though there still appear to be hints of a moat 
+forming around the inner eyewall, though without an obvious 
+secondary eyewall formation yet. Subjective Dvorak CI-numbers from 
+both SAB and TAFB were T7.0/140 kt, with objective satellite 
+estimates between 132-143 kt. However, Melissa's peak winds from the 
+last couple of recon missions have been lagging the satellite-based 
+estimates. The last fix had peak 700 mb flight level winds of only 
+129 kt, but a dropsonde launched in the north eyewall also reported 
+a 500 m layer average of 142 kt, with an earlier dropsonde in the NE 
+eyewall with a surface wind gust of 131 kt. This data is enough to 
+raise the maximum sustained winds of 125 kt, and given the satellite 
+presentation, this could be conservative. 
+
+Melissa continues to move slowly westward, estimated at 270/4 kt. 
+The hurricane has been moving a little faster to the west today, and 
+this motion will likely continue for another 12-18 hours while the 
+narrow mid-level ridge to the north remains in place. Soon, a 
+short-wave trough will be moving into the SE United States, and this 
+feature should create a weakness that Melissa will turn 
+sharply northeast into, as it gradually accelerates. The track 
+guidance has shifted a little westward again this cycle, and the NHC 
+track forecast was nudged a little west again, but still shows 
+landfall on Tuesday morning along the south coast of Jamaica. There 
+remain some timing differences thereafter, but a second landfall is 
+anticipated along the southeastern Cuba coast by Tuesday night or 
+early Wednesday morning. As Melissa then accelerates into the 
+southwestern Atlantic, it will move through the Bahamas and 
+potentially approach Bermuda by the day 4-5 time frame, with a 
+reinforcing trough helping to kick it farther out to sea. The latest 
+NHC track forecast is a little west in the first 24-60 h, but falls 
+back near the previous forecast track thereafter. The track is 
+roughly a blend of the reliable HFIP Corrected Consensus Approach 
+(HCCA) and Google Deep Mind ensemble mean (GDMI). 
+
+Now that Melissa is intensifying again, it seems more clear that the 
+earlier pause in intensification was a temporary oscillation, and 
+the hurricane now appears poised to intensify more in the 
+short-term. The latest NHC intensity forecast shows a little more 
+intensification in 12 h, but continues to show a peak intensity of 
+140 kt, which is supported by HAFS-B which shows landfall of Melissa 
+as a catastrophic Category 5 hurricane. The Google DeepMind ensemble 
+members also continue to indicate this peak, with now 48/50 members 
+reaching this lofty intensity. However, inner-core processes like 
+ERCs could occur at any time, and the current small eye of Melissa 
+likely suggests an ERC could begin in the next 24 hours or so, 
+though it is very difficult to predict these occurrences with much 
+skill. After landfall in Jamaica, Melissa will likely weaken some 
+due to the interaction with that Island's high terrain, but it is 
+still expected to be a major hurricane when crossing the Cuba 
+coastline on Tuesday night. After emerging into the southwestern 
+Atlantic Ocean, increasing vertical wind shear should continue 
+gradual weakening through the end of the forecast, with the 
+possibility that Melissa could start extratropical transition by day 
+5. The NHC intensity forecast continues to be on the high side of 
+the guidance, but falls closer to the HCCA and IVCN aids towards the 
+end of the forecast period.
+ 
+Key Messages:
+ 
+1. Jamaica:  Seek shelter now.  Damaging winds and heavy rainfall 
+tonight and Monday will cause catastrophic and life-threatening 
+flash flooding and numerous landslides before potentially 
+devastating winds arrive Monday night and Tuesday morning.  
+Extensive infrastructural damage, long-duration power and 
+communication outages, and isolation of communities are expected. 
+Life-threatening storm surge and damaging waves are expected along 
+portions of the southern coast Monday night and Tuesday morning.
+ 
+2. Haiti and the Dominican Republic:  Catastrophic and 
+life-threatening flash flooding and landslides are expected across 
+southwestern Haiti and southern portions of the Dominican Republic 
+through midweek.  In Haiti, extensive infrastructural damage and 
+isolation of communities is likely. Although winds have temporarily 
+decreased on the Tiburon peninsula, they are likely to increase 
+again across much of western Haiti on Tuesday.
+ 
+3. Eastern Cuba:  Life-threatening storm surge is expected along 
+portions of the southern coast of eastern Cuba late Tuesday and 
+Tuesday night.  Damaging winds and heavy rainfall with 
+life-threatening and potentially catastrophic flash flooding and 
+landslides are also expected beginning on Monday.  Preparations 
+should be rushed to completion.
+ 
+4. Southeast Bahamas and the Turks and Caicos: Monitor Melissa 
+closely.  There is an increasing risk of a significant storm surge, 
+damaging winds, and heavy rainfall Tuesday and Wednesday.  Watches 
+will likely be required early Monday.
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  26/2100Z 16.4N  77.2W  125 KT 145 MPH
+ 12H  27/0600Z 16.4N  77.7W  135 KT 155 MPH
+ 24H  27/1800Z 16.6N  78.2W  140 KT 160 MPH
+ 36H  28/0600Z 17.2N  78.2W  140 KT 160 MPH
+ 48H  28/1800Z 18.4N  77.5W  115 KT 130 MPH...INLAND OVER JAMAICA
+ 60H  29/0600Z 20.0N  76.1W  105 KT 120 MPH...ON THE SE CUBA COAST
+ 72H  29/1800Z 22.1N  74.4W   90 KT 105 MPH...OVER WATER
+ 96H  30/1800Z 28.0N  69.5W   80 KT  90 MPH
+120H  31/1800Z 37.0N  60.0W   70 KT  80 MPH
+ 
+$$
+Forecaster Papin
+ 
+NNNN

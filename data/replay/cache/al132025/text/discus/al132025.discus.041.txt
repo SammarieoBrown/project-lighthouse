@@ -1,0 +1,69 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Post-Tropical Cyclone Melissa Discussion Number  41
+NWS National Hurricane Center Miami FL       AL132025
+1100 AM AST Fri Oct 31 2025
+ 
+Melissa no longer possesses organized convection, and is now merging 
+with a warm front extending eastward and a cold front extending 
+toward the southwest.  Therefore, Melissa is now a post-tropical 
+cyclone.  Melissa still has hurricane-force winds, especially in 
+the southeastern semicircle, as shown in Thursday evening ASCAT data 
+and also shown in the latest global model fields for the current 
+time of 15Z.  The initial intensity is lowered slightly to 75 kt, 
+mainly based on forecast continuity.  Large swells from Melissa are 
+spreading over much of the western Atlantic, resulting in hazardous 
+marine conditions in this region.
+
+The post-tropical cyclone is racing northeastward, or 40 degrees at 
+42 kt.  This motion should continue into Saturday within the flow 
+ahead of an upper-level trough.  Track guidance is in excellent 
+agreement that the center of post-tropical Melissa will pass near, 
+but to the southeast of, the Avalon Peninsula of Newfoundland late 
+tonight, bringing the potential for some gusty winds and heavy rain. 
+Later this weekend, Melissa is forecast to turn east-northeastward 
+while interacting with a higher-latitude, upper-level low over the 
+North Atlantic.  Very little change has been made to the NHC track 
+forecast, which lies very close to the average of the GFS and ECMWF 
+deterministic models (GFEX).
+
+Global models indicate that Melissa will continue to be a large and 
+strong extratropical cyclone for the next couple of days as it 
+traverses the North Atlantic.  Only gradual weakening is expected 
+through the weekend, with the system forecast to have 
+hurricane-force winds for another 24 h and still be a storm-force 
+cyclone in 60 hours.  The NHC intensity forecast is at the high end 
+of the guidance suite through 60 hours.  By early next week, global 
+models show the large system weakening further as it begins to join 
+up with a large and elongated area of low pressure over the far 
+northeastern Atlantic, and the system should be absorbed and 
+dissipated just beyond the 96-hour point.
+
+ 
+Key Messages:
+ 
+1. Post-storm safety:  Follow advice of local officials and avoid
+areas of downed power lines and flooding. Ensure generators are 
+properly ventilated and placed outside at least 20 feet away from 
+dwellings and garages to avoid carbon monoxide poisoning. During 
+clean up, be careful when using chainsaws and power tools. Drink 
+plenty of water to avoid heat exhaustion.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  31/1500Z 39.0N  60.5W   75 KT  85 MPH...POST-TROP/EXTRATROP
+ 12H  01/0000Z 43.5N  55.2W   70 KT  80 MPH...POST-TROP/EXTRATROP
+ 24H  01/1200Z 49.4N  48.0W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 36H  02/0000Z 53.2N  41.8W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 48H  02/1200Z 55.0N  35.8W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 60H  03/0000Z 56.2N  29.7W   50 KT  60 MPH...POST-TROP/EXTRATROP
+ 72H  03/1200Z 57.5N  24.4W   40 KT  45 MPH...POST-TROP/EXTRATROP
+ 96H  04/1200Z 60.5N  16.5W   35 KT  40 MPH...POST-TROP/EXTRATROP
+120H  05/1200Z...DISSIPATED
+ 
+$$
+Forecaster Hagen
+ 
+NNNN

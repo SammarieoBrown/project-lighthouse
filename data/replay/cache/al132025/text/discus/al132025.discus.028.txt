@@ -1,0 +1,96 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  28
+NWS National Hurricane Center Miami FL       AL132025
+500 AM EDT Tue Oct 28 2025
+ 
+Melissa has a circular, 10-n-mi-wide eye surrounded by a symmetric 
+ring of very intense convection with cloud tops colder than -80 deg 
+C. Radar data from Jamaica suggests that a secondary outer eyewall 
+may have formed, which could signal that an eyewall replacement 
+cycle is underway. The last couple of overnight center fixes by the 
+Air Force Hurricane Hunters revealed 700-mb height falls within the 
+eye, and dropsonde data indicated the central pressure had fallen to 
+around 901 mb. A standard reduction of the peak 700-mb flight-level 
+winds from that mission (165 kt) supports an initial intensity of 
+150 kt. Conditions are deteriorating across Jamaica, where heavy 
+rainfall and tropical storm conditions have spread across the 
+island. NOAA and Air Force Hurricane Hunter aircraft are scheduled 
+to investigate the hurricane again this morning.
+
+Melissa is moving slowly north-northeastward (025/4 kt). Over the 
+next several days, the hurricane is expected to accelerate to the 
+northeast within the flow ahead of an amplifying trough over the 
+southeastern U.S. This steering flow will bring the core of Melissa 
+across Jamaica today, over eastern Cuba early Wednesday, and across 
+the southeastern or central Bahamas later on Wednesday. Then, the 
+hurricane is forecast to pass near Bermuda Thursday night or early 
+Friday. Overall, the near-term NHC track forecast is very similar to 
+the previous one. At 72-120 h, the official forecast was adjusted to 
+the left of the previous prediction based on the latest multi-model 
+consensus aids and Google DeepMind ensemble guidance.
+
+Near-term intensity fluctuations are possible this morning and will 
+likely be driven by internal dynamic processes like eyewall 
+replacement cycles. Regardless, Melissa will reach Jamaica as an 
+extremely dangerous major hurricane within the next 12 h. While land 
+interaction with Jamaica and eastern Cuba is expected to cause some 
+weakening, Melissa is still forecast to pass over portions of the 
+Bahamas as a strong hurricane on Wednesday. Increasing westerly 
+shear is likely to impact Melissa later this week while the 
+hurricane accelerates toward higher latitudes. As a result, the 
+hurricane is forecast to have a broader and asymmetric wind field 
+when it passes near Bermuda later this week. Some minor upward 
+adjustments were made to the NHC intensity forecast during the 
+middle portion of the period in agreement with the latest HCCA 
+and GDMI aids. Melissa is forecast to become a strong extratropical 
+cyclone over the North Atlantic by 96 h.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica: Remain sheltered! Catastrophic flash flooding, 
+landslides, and destructive winds will continue through today, 
+causing widespread infrastructure damage, power and communication 
+outages, and isolated communities. Total structural failure is 
+possible near the path of Melissa’s center. Along the southern 
+coast, life-threatening storm surge and damaging waves are expected 
+through the day. Failure to act may result in serious injury or loss 
+of life.
+ 
+2. Haiti and the Dominican Republic: Catastrophic flash flooding 
+and landslides are expected across southwestern Haiti and southern 
+portions of the Dominican Republic through midweek. In Haiti, 
+extensive damage and isolation of communities is likely. Tropical 
+storm conditions are expected later today and Wednesday.
+ 
+3. Eastern Cuba: Heavy rainfall, flash flooding and landslides are 
+expected soon. Life-threatening storm surge and damaging winds are 
+likely to begin later today. Complete all preparations now.
+ 
+4. Southeastern and Central Bahamas and the Turks and Caicos: 
+Hurricane conditions, life-threatening storm surge, and heavy 
+rainfall are expected across portions of the southeastern and 
+central Bahamas on Wednesday. Complete preparations by tonight and 
+follow local official guidance. Tropical storm conditions, heavy 
+rains, and significant storm surge are expected in the Turks and 
+Caicos Islands on Wednesday.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  28/0900Z 17.2N  78.3W  150 KT 175 MPH
+ 12H  28/1800Z 18.2N  77.7W  145 KT 165 MPH...INLAND
+ 24H  29/0600Z 19.9N  76.5W  120 KT 140 MPH...NEAR THE COAST
+ 36H  29/1800Z 21.9N  75.1W   95 KT 110 MPH
+ 48H  30/0600Z 24.6N  73.1W   90 KT 105 MPH
+ 60H  30/1800Z 28.1N  70.0W   85 KT 100 MPH
+ 72H  31/0600Z 32.4N  65.4W   80 KT  90 MPH
+ 96H  01/0600Z 43.0N  52.0W   65 KT  75 MPH...POST-TROP/EXTRATROP
+120H  02/0600Z 51.0N  35.0W   50 KT  60 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Reinhart
+ 
+NNNN

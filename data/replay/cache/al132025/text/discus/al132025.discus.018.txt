@@ -1,0 +1,131 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  18
+NWS National Hurricane Center Miami FL       AL132025
+500 PM EDT Sat Oct 25 2025
+
+Melissa is likely beginning a period of rapid intensification (RI). 
+Since both the NOAA-P3 and Air Force Reserve C-130 aircraft sampled 
+the system this morning, the satellite presentation has continued to 
+improve, with cold -75 to -80 C cloud tops wrapping around the 
+center with hints of an eye starting to appear on visible images. 
+The eye is also becoming better defined on radar images out of 
+Jamaica with an overall diameter of around 20 n mi. In addition, an 
+earlier GMI microwave pass received after the prior advisory showed 
+a well-defined cyan ring on the 37-GHz, which is often a harbinger 
+of RI. Subjective Dvorak intensity estimates were T5.0/90 kt from 
+SAB, and T4.5/77 kt from TAFB. The objective estimates from UW-CIMSS 
+were a little lower, but are also quickly rising, and the initial 
+intensity will be set at 80 kt this advisory, blending these 
+intensity estimates. 
+
+The hurricane now appears to be moving slowly westward, at an 
+estimated motion of 275/3 kt. A narrow mid-level ridge has built in 
+to the north of Melissa, and should be the main steering feature 
+over the next 24-48 hours to help move the hurricane slowly 
+westward. The deep-layer steering vector still has a slight 
+southward component, and it wouldn't be surprising to even see a 
+little south of due west motion occur, like the Google DeepMind 
+ensembles and ECMWF-AI model have been suggesting in the short-term 
+forecast. After the next couple of days, the ridging to the north 
+becomes quickly eroded by a shortwave trough moving across the 
+southeastern United States. The net result of this changing synoptic 
+pattern is that Melissa is expected to turn rather abruptly 
+northward and northeastward by the early to middle part of next 
+week. Compared to this morning, the track guidance has become more 
+tightly clustered in the across track direction, and even the 12z 
+GFS run, which was previous a eastward outlier, is now in better 
+agreement with the track guidance suite showing a direct landfall in 
+Jamaica. The main uncertainty is related to the amount of 
+acceleration that Melissa will undergo after it turns to the 
+northeast, and there remains large spread in the along-track 
+direction in both the deterministic and ensemble guidance in the day 
+3-5 time frame. The NHC track forecast is only slightly more 
+poleward compared to the prior forecast over the first 12-24 hours, 
+and convergences very close to the prior track thereafter. This 
+track is roughly a blend of the latest HCCA and GDMI track guidance. 
+On this track, this brings Melissa's core near Jamaica early on 
+Tuesday, and early on Wednesday along the eastern Cuba provinces, 
+where a hurricane watch is now in effect. 
+
+Rapid intensification appears to have started, and assuming Melissa 
+stays far enough south of Jamaica over the next couple of days, 
+there appear few impediments to its intensification in the 
+short-term. Both the hurricane-regional models and the Google 
+DeepMind ensembles suggest RI could continue for the next 36 to 48 
+hours. In fact, once again 4/5th s of the latter 50 member ensemble 
+are forecasting a peak intensity of Category 5 intensity. The 12z 
+HAFS-A run also showed a peak intensity of Category 5 in 48 hours, 
+and both HAFS-A/B have been suggesting a similar peak on and off 
+over the past few days. Given the current trends, the NHC intensity 
+forecast now shows a 140 kt peak in 48 hours, in general agreement 
+with this aggressive guidance. Afterwards, some inner-core 
+oscillations such as eyewall replacement cycles could lead to 
+fluctuations in intensity before its first landfall in Jamaica. It 
+is worth stressing that there is very little practical difference 
+in the overall impacts of a Category 4 or 5 landfall, and 
+Melissa is expected to be at least that intensity when moves over 
+Jamaica early next week. Land interaction will likely lead to some 
+weakening as it moves northeastward across Jamaica, but the storm 
+will likely also grow in size and is still forecast to be a major 
+hurricane when it moves over Cuba by the middle of this week. Only 
+after this period that southwesterly shear begins to increase in 
+earnest after it moves into the Southwestern Atlantic. The NHC 
+intensity forecast continues to be on the high end of the overall 
+guidance, siding with the higher intensity aids such as GDMI (which 
+has been the best preforming intensity guidance thus far this year) 
+and HAFS-A, but all the hurricane-regional models show a peak 
+intensity of at least Category 4 intensity. 
+ 
+Needless to say, there is a very serious situation, in terms of 
+catastrophic rainfall, wind, and storm surge hazards for Jamaica 
+and preparations should be rushed to completion in the area 
+currently under a Hurricane Warning. 
+ 
+ 
+Key Messages:
+ 
+1. Jamaica:   A multi-day period of damaging winds and heavy 
+rainfall is expected to begin tonight, causing catastrophic and 
+life-threatening flash flooding and numerous landslides.  Extensive 
+infrastructural damage, long-duration power and communication 
+outages, and potentially prolonged isolation of communities is 
+likely.  A life-threatening storm surge is also likely along 
+portions of the southern coast early next week. All preparations 
+should be completed today.
+ 
+2. Haiti:  Catastrophic and life-threatening flash flooding and 
+landslides are expected across southwestern Haiti into early next 
+week, likely causing extensive infrastructural damage and 
+potentially prolonged isolation of communities.  Strong winds could 
+also potentially last for a day or more over the Tiburon peninsula.
+ 
+3. Dominican Republic: Heavy rainfall could produce catastrophic 
+flash flooding and numerous landslides in southern portions of the 
+country.
+ 
+4. Eastern Cuba, Southeast Bahamas, and the Turks and Caicos:  
+Monitor Melissa closely.  There is an increasing risk of a 
+significant storm surge, damaging winds, and heavy rainfall by the 
+middle of next week. In eastern Cuba, the risk of life-threatening 
+flash flooding and landslides is increasing. A Hurricane Watch is 
+now in effect for portions of eastern Cuba.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  25/2100Z 16.6N  75.5W   80 KT  90 MPH
+ 12H  26/0600Z 16.7N  75.9W  100 KT 115 MPH
+ 24H  26/1800Z 16.7N  76.5W  115 KT 130 MPH
+ 36H  27/0600Z 16.7N  77.2W  135 KT 155 MPH
+ 48H  27/1800Z 16.9N  77.6W  140 KT 160 MPH
+ 60H  28/0600Z 17.6N  77.4W  130 KT 150 MPH
+ 72H  28/1800Z 18.8N  76.7W  115 KT 130 MPH
+ 96H  29/1800Z 22.0N  73.4W   90 KT 105 MPH
+120H  30/1800Z 27.0N  69.0W   80 KT  90 MPH
+ 
+$$
+Forecaster Papin
+ 
+NNNN

@@ -1,0 +1,74 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  39
+NWS National Hurricane Center Miami FL       AL132025
+1100 PM AST Thu Oct 30 2025
+
+Satellite imagery suggests that Melissa is starting the 
+extratropical transition process, with cold air clouds beginning to 
+enter the southwestern side of the circulation and the remaining 
+convection now confined to the northeastern quadrant. Reports from 
+the last Air Force Reserve Hurricane Hunter mission into the storm 
+included a central pressure near 971 mb and 700-mb flight-level 
+winds of 111 kt well to the southeast of the center. Since there is 
+no convection in this area to mix these winds to the surface, it is 
+difficult to tell just how strong the surface winds may be. However, 
+based on the observed structural decay and the trends in satellite 
+intensity estimates, the initial intensity is reduced to a possibly 
+generous 85 kt.
+
+Melissa continues to accelerate to the northeast with the initial 
+motion now 040/33 kt.  An even faster motion toward the northeast is 
+expected during the next 48 h as the cyclone becomes embedded in 
+strong southwesterly flow associated with a mid-latitude cyclone to 
+the northwest. This track should bring the center to the northwest 
+of Bermuda during the next 6 h or so, and just south of the Avalon 
+Peninsula of Newfoundland between 24-36 h.  After 48 h, an 
+east-northeastward motion with some decrease in forward speed is 
+expected as Melissa becomes part of an elongated area of low 
+pressure over the northeastern Atlantic. The new forecast track is 
+faster than the previous one, but has little difference in direction 
+of motion from the previous track through 96 h. An eastward 
+adjustment was made at 120 h. Overall, the new forecast track is 
+close to the consensus models in a tightly-packed guidance suite.
+
+Melissa is now moving over decreasing sea surface temperatures, and 
+this should aid the ongoing extratropical transition.  The cyclone 
+is expected to become post-tropical by 24 h, then continue as a 
+gradually weakening extratropical low as it crosses the north 
+Atlantic. The forecast intensities during the extratropical stage 
+are based on a blend of the GFS and ECMWF forecast intensities. 
+ 
+Key Messages:
+ 
+1. Bermuda: Hurricane conditions are expected in Bermuda tonight,
+with tropical storm conditions now occurring on the island.
+ 
+2. Post-storm safety:  Follow advice of local officials as you may
+need to remain sheltered after the storm due to downed power lines
+and flooding. Any flooding across the Bahamas is expected to subside
+today. Flooding across Cuba, Jamaica, and Hispaniola could persist
+for another few days. Ensure generators are properly ventilated and
+placed outside at least 20 feet away from dwellings and garages to
+avoid carbon monoxide poisoning. During clean up, be careful when
+using chainsaws and power tools. Drink plenty of water to avoid heat
+exhaustion.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  31/0300Z 32.8N  67.5W   85 KT 100 MPH
+ 12H  31/1200Z 37.3N  62.7W   80 KT  90 MPH
+ 24H  01/0000Z 43.5N  55.7W   70 KT  80 MPH...POST-TROP/EXTRATROP
+ 36H  01/1200Z 49.2N  48.5W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 48H  02/0000Z 52.9N  42.8W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 60H  02/1200Z 54.6N  36.4W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 72H  03/0000Z 55.6N  30.0W   50 KT  60 MPH...POST-TROP/EXTRATROP
+ 96H  04/0000Z 59.5N  17.7W   40 KT  45 MPH...POST-TROP/EXTRATROP
+120H  05/0000Z 62.6N  11.7W   30 KT  35 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Beven
+ 
+NNNN

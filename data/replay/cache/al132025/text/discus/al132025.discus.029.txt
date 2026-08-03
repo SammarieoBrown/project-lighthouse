@@ -1,0 +1,82 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  29
+NWS National Hurricane Center Miami FL       AL132025
+1100 AM EDT Tue Oct 28 2025
+ 
+Reports from Air Force Reserve and NOAA Hurricane Hunter aircraft
+show that Melissa has strengthened since the last advisory.  The
+central pressure inside the 15 n mi wide eye has fallen to near
+892 mb, and the NOAA aircraft reported flight-level winds of 172 kt 
+at 700 mb.  Based on these data, the the initial intensity has been 
+increased to 160 kt.
+ 
+The initial motion is now 025/8. This general motion should 
+continue with some increase in forward speed, with the center 
+making landfall in Jamaica in a couple of hours and reaching 
+eastern Cuba late tonight or early Wednesday. After that, a faster 
+motion toward the northeast should bring the center through the 
+southeastern and central Bahamas on Wednesday and near Bermuda 
+Thursday or Thursday night. After passing Bermuda the cyclone 
+should continue quickly northeastward into the north Atlantic. The 
+new forecast track is similar to the previous track through 36 h 
+and a little north of the previous track after that time.
+
+Melissa should weaken over Jamaica as the inner core gets disrupted 
+by the mountainous terrain.  However, the cyclone should maintain 
+major hurricane status until the center reaches eastern Cuba.  
+After leaving Cuba, Melissa should encounter increasing 
+southwesterly vertical shear that should cause steady weakening, 
+although the cyclone should still be at hurricane strength when it 
+passes near Bermuda. Based on global model guidance, Melissa is 
+forecast to become a strong extratropical cyclone over the North 
+Atlantic by 96 h.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica: THIS IS AN EXTREMELY DANGEROUS AND LIFE-THREATENING 
+SITUATION! TAKE COVER NOW! Catastrophic winds with total 
+structural failure are liklely near the path of Melissa’s center. 
+Catstrophic flash flooding, landslides, and destructive winds are 
+expected across the remainder of the island causing widespread 
+infrastructure damage, power and communication outages, and isolated 
+communities.  Along the southern coast, life-threatening storm surge 
+and damaging waves are expected through the day.
+ 
+2. Haiti and the Dominican Republic: Catastrophic flash flooding
+and landslides are expected across southwestern Haiti and southern
+portions of the Dominican Republic through midweek. In Haiti,
+extensive damage and isolation of communities is likely. Tropical
+storm conditions are expected later today and Wednesday.
+ 
+3. Eastern Cuba: Heavy rainfall, flash flooding and landslides are
+expected soon. Life-threatening storm surge and damaging winds are
+likely to begin later today. Complete all preparations now.
+ 
+4. Southeastern and Central Bahamas and the Turks and Caicos:
+Hurricane conditions, life-threatening storm surge, and heavy
+rainfall are expected across portions of the southeastern and
+central Bahamas on Wednesday. Complete preparations by tonight and
+follow local official guidance. Tropical storm conditions, heavy
+rains, and significant storm surge are expected in the Turks and
+Caicos Islands on Wednesday.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  28/1500Z 17.9N  77.9W  160 KT 185 MPH
+ 12H  29/0000Z 19.0N  77.1W  130 KT 150 MPH
+ 24H  29/1200Z 21.0N  75.7W  100 KT 115 MPH...INLAND
+ 36H  30/0000Z 23.4N  74.1W   95 KT 110 MPH...OVER WATER
+ 48H  30/1200Z 26.6N  71.5W   90 KT 105 MPH
+ 60H  31/0000Z 30.8N  67.5W   85 KT 100 MPH
+ 72H  31/1200Z 35.9N  61.5W   75 KT  85 MPH
+ 96H  01/1200Z 45.9N  47.1W   60 KT  70 MPH...POST-TROP/EXTRATROP
+120H  02/1200Z 52.8N  30.3W   45 KT  50 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Beven
+ 
+NNNN

@@ -1,0 +1,120 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  21
+NWS National Hurricane Center Miami FL       AL132025
+1100 AM EDT Sun Oct 26 2025
+
+After rapidly intensifying over the past day or so, NOAA-P3 aircraft 
+data indicates that Melissa's intensity has leveled off this 
+morning. Melissa remains a very formidable hurricane on satellite 
+imagery, with a clearing eye quite evident on morning visible 
+imagery, and the eye temperature has warmed to +15-20C. Meanwhile 
+the eyewall convection continues to remain robust with cloud tops as 
+low as -75 to -80C encircling the core. With that said, the eye 
+presentation from the Kingston, Jamaica radar is not as pristine, 
+with the eyewall occasionally open on the east side, and some 
+evidence of concentric bands forming off and on. Zooming out a bit, 
+there still remains some evidence of light to moderate westerly 
+shear undercutting the expanding storm outflow, and Melissa’s 
+primarily rainbands are distributed mostly on the eastern side of 
+the circulation. NOAA-P3 aircraft data this morning had a peak 700- 
+mb flight level wind of 120 kt, and Tail Doppler Radar (TDR) wind 
+retrievals were up to 129 kt at 0.5 km, and 129 kt in the 500 m 
+average of a dropsonde launched in the north eyewall. While this 
+data would support a somewhat lower intensity, the subjective and 
+objective satellite based intensity estimates are mostly higher, 
+ranging from 115 to 140 kt. The initial intensity will be held at 
+120 kt, on the lower end of those estimates, and this value could be 
+a little generous based on the aircraft data.
+
+The major hurricane is moving westward this morning, from aircraft 
+fixes estimated at 270/3 kt. This motion is expected to continue for 
+the next 24-36 h as a narrow mid-level ridge to the north of Melissa 
+imparts the majority of the steering. Thereafter, a short-wave 
+trough moving into the southeastern United States is expected to 
+erode this ridge, allowing Melissa to turn sharply to the northeast, 
+with gradual acceleration. On the forecast track,  Melissa's core 
+is expected to be near the Jamaica coastline by Tuesday morning, 
+moving across the island and then approaching and moving over 
+eastern Cuba by Tuesday night. While the track guidance has become 
+tightly clustered over the first 24-48 hours, the along-track spread 
+starts to increase significantly after that time period, with Google 
+DeepMind ensemble solutions on Wednesday morning ranging from 
+between Jamaica and eastern Cuba in the Caribbean Sea, over eastern 
+Cuba, or in the Southwestern Atlantic near the Southeastern Bahamas 
+and Turks and Cacaos Islands. The latest NHC track forecast was 
+nudged just a little westward of the prior track, once again 
+blending the reliable track aids HFIP Corrected Consensus Approach 
+(HCCA), and Google DeepMind ensemble mean (GDMI). 
+
+It is unclear if the current pause in Melissa's intensification is 
+temporary. While there have not been obvious indications of a 
+secondary eyewall formation yet, there are some concentric 
+reflectivity bands appearing on both Jamaica and NOAA-P3 TDR data 
+occasionally, though the inner eyewall remains strong. Some of the 
+guidance this morning has actually increased from yesterday at this 
+time, and notably both the HAFS-A/B explicitly forecast a Category 5 
+hurricane shortly before they show landfall in Jamaica. The latest 
+NHC intensity forecast will continue to show a peak intensity of 140 
+kt. However, inner-core fluctuations like eyewall replacement cycles 
+could occur at any time. Regardless, Melissa is forecast to reach 
+Jamaica as an upper-end category 4 hurricane, which will only 
+exacerbate any damages caused by heavy rainfall and flooding over 
+the next 2 days. Melissa will likely weaken some as it traverses 
+over the higher terrain of Jamaica, but it is still forecast to be a 
+major hurricane when it subsequently moves over eastern Cuba in 
+60-72 hours. Thereafter, increasing southwesterly shear should 
+cause gradual weakening, but Melissa could still be near hurricane 
+intensity when it makes it closest approach to Bermuda in about 5 
+days. The latest NHC intensity forecast is on the high end of the 
+intensity guidance, but not far off the GDMI, and HAFS-A/B intensity 
+aids. 
+ 
+Key Messages:
+ 
+1. Jamaica:  Seek shelter now.  Damaging winds and heavy rainfall 
+today and Monday will cause catastrophic and life-threatening flash 
+flooding and numerous landslides before potentially devastating 
+winds arrive Monday night and Tuesday morning.  Extensive 
+infrastructural damage, long-duration power and communication 
+outages, and isolation of communities are expected. Life-threatening 
+storm surge is likely along portions of the southern coast Monday 
+night and Tuesday morning.
+ 
+2. Haiti:  Catastrophic and life-threatening flash flooding and 
+landslides are expected across southwestern Haiti through midweek, 
+likely causing extensive infrastructural damage and isolation of 
+communities. Although winds are temporarily decreasing on the 
+Tiburon peninsula, they could increase again across much of western 
+Haiti on Tuesday.
+ 
+3. Dominican Republic: Heavy rainfall through midweek could produce 
+catastrophic flash flooding and numerous landslides in southern 
+portions of the country.
+ 
+4. Eastern Cuba, Southeast Bahamas, and the Turks and Caicos: 
+Monitor Melissa closely.  There is an increasing risk of a 
+significant storm surge, damaging winds, and heavy rainfall Tuesday 
+and Wednesday.  In eastern Cuba, the risk of life-threatening flash 
+flooding and landslides is increasing. A Hurricane Watch is in 
+effect for portions of eastern Cuba.
+
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  26/1500Z 16.4N  76.6W  120 KT 140 MPH
+ 12H  27/0000Z 16.4N  77.1W  130 KT 150 MPH
+ 24H  27/1200Z 16.6N  77.8W  140 KT 160 MPH
+ 36H  28/0000Z 16.9N  78.0W  140 KT 160 MPH
+ 48H  28/1200Z 17.8N  77.7W  135 KT 155 MPH
+ 60H  29/0000Z 19.2N  76.6W  110 KT 125 MPH
+ 72H  29/1200Z 20.9N  75.1W   95 KT 110 MPH
+ 96H  30/1200Z 25.5N  71.0W   85 KT 100 MPH
+120H  31/1200Z 32.0N  65.5W   75 KT  85 MPH
+ 
+$$
+Forecaster Papin
+ 
+NNNN

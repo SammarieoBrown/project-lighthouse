@@ -1,0 +1,93 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  27
+NWS National Hurricane Center Miami FL       AL132025
+1100 PM EDT Mon Oct 27 2025
+ 
+Both Air Force and NOAA Hurricane Hunter aircraft have been
+investigating Melissa this evening.  They found that the system
+is maintaining category 5 intensity with the central pressure near
+903 mb and peak 700 mb flight-level and tail Doppler radar winds
+supporting 150 kt for the current intensity.  The hurricane
+continues to exhibit a well-defined eye about 10 n mi in diameter
+embedded within extremely cold cloud tops to near -90 deg C.
+Upper-level outflow remains well defined over the system.  Although
+such intense tropical cyclones typically undergo an eyewall
+replacement, radar observations from Jamaica do not show this
+occurring thus far.
+ 
+After remaining nearly stationary over the past few hours, Melissa 
+now appears to be moving slowly north-northeastward with an initial 
+motion estimate of around 020/02 kt.  During the next few days, a 
+mid-tropospheric trough is forecast to deepen near the southeastern 
+U.S. coast.  This should result in Melissa moving 
+north-northeastward to northeastward with increasing forward speed 
+through the forecast period.  The official forecast is similar to 
+the previous one and also close the tightly-clustered consensus and 
+Google DeepMind guidance.  The only significant difference in the 
+track forecast compared to earlier today is a slower motion during 
+the first couple of days, which delays the expected arrival of the 
+core of Melissa over Jamaica, eastern Cuba, and the southeastern or 
+Central Bahamas.
+ 
+Some fluctuations in intensity could still occur during the short
+period before Melissa reaches Jamaica.  The primary influence on
+the hurricane's intensity during the next 36 hours will be the
+interaction with land.  Some weakening is anticipated after the
+system moves over Jamaica and eastern Cuba.  More substantial
+weakening is likely after the system moves past Cuba and over the
+southwestern Atlantic, where the vertical wind shear is likely to
+increase significantly.  The official intensity forecast is close
+to the latest LGEM guidance.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica: Remain in your safe shelter. Catastrophic flash flooding
+and numerous landslides are expected through Tuesday. The eyewall’s
+destructive winds may cause total structural failure, particularly
+in higher elevations, leading to widespread infrastructural damage,
+prolonged power and communication outages, and isolated communities.
+Along the southern coast, life-threatening storm surge and damaging
+waves are anticipated through Tuesday. Failure to take immediate
+action may result in serious injury or significant loss of life.
+ 
+2. Haiti and the Dominican Republic:  Catastrophic flash flooding
+and landslides are expected across southwestern Haiti and southern
+portions of the Dominican Republic through midweek.  In Haiti,
+extensive infrastructural damage and isolation of communities is
+likely. Tropical storm conditions are expected late Tuesday and
+Wednesday.
+ 
+3. Eastern Cuba:  Heavy rainfall with life-threatening flash
+flooding and landslides is expected to begin shortly.
+Life-threatening storm surge and damaging winds are expected late
+Tuesday and Tuesday night.  Preparations should be rushed to
+completion.
+ 
+4. Southeast and Central Bahamas and the Turks and Caicos: Hurricane
+conditions, life-threatening storm surge, and heavy rainfall are
+expected across portions of the southeast and central Bahamas on
+Wednesday. Residents should follow advice given by local officials
+and be sure to have preparations complete by Tuesday night.
+Tropical storm conditions, heavy rains, and a significant storm
+surge is expected in the Turks and Caicos Islands on Wednesday.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  28/0300Z 16.6N  78.5W  150 KT 175 MPH
+ 12H  28/1200Z 17.5N  78.3W  150 KT 175 MPH
+ 24H  29/0000Z 18.8N  77.4W  120 KT 140 MPH
+ 36H  29/1200Z 20.7N  76.0W   90 KT 105 MPH...INLAND
+ 48H  30/0000Z 23.0N  74.3W   85 KT 100 MPH...OVER WATER
+ 60H  30/1200Z 25.8N  72.0W   80 KT  90 MPH
+ 72H  31/0000Z 29.8N  68.2W   75 KT  85 MPH
+ 96H  01/0000Z 38.9N  56.5W   60 KT  70 MPH
+120H  02/0000Z 47.5N  40.0W   50 KT  60 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Pasch
+ 
+NNNN

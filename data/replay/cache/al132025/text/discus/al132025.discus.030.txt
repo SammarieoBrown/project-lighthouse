@@ -1,0 +1,93 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  30
+NWS National Hurricane Center Miami FL       AL132025
+500 PM EDT Tue Oct 28 2025
+ 
+The eye of Melissa made landfall in western Jamaica near 17Z with
+maximum sustained winds estimated at 160 kt and a central pressure
+near 892 mb. Since that time, the hurricane has been weakening over
+the mountains of western Jamaica with the eye disappearing and some
+warming of the convective cloud tops. Based on these changes, the
+initial intensity has been reduced to a highly uncertain 125 kt.
+NOAA and Air Force Reserve Hurricane Hunter aircraft are scheduled
+to investigate Melissa this evening to provide better information
+on how much it has weakened. It should be noted that while
+Melissa's landfall intensity is among the strongest ever recorded
+in the Atlantic basin, it will take extensive post-analysis to
+determine exactly where it ranks among landfalling Atlantic
+hurricanes.
+ 
+The initial motion is now 025/7. A turn toward the northeast with
+an increase in forward speed is expected this evening, and this
+should bring the center near or over southeastern Cuba late tonight
+or early Wednesday. After that, an even faster motion toward the
+northeast should bring the center through the southeastern and
+central Bahamas on Wednesday and near Bermuda Thursday or Thursday
+night. After passing Bermuda, the cyclone should continue quickly
+northeastward into the north Atlantic. The track guidance envelope
+has shifted a little to the left (north and west) through 72 h
+since the last advisory, and the new forecast track during this
+time is also shifted a little to the north and west.
+ 
+While the center of Melissa is now emerging over water, it will 
+probably not re-intensify significantly before landfall in Cuba due 
+to the limited amount of time before landfall and an upper-level 
+wind environment that is becoming less favorable. Based on this, the
+intensity forecast calls for little change in strength before
+Melissa reaches Cuba.  After leaving Cuba, Melissa should encounter
+increasing southwesterly vertical shear that should cause gradual
+weakening, although the cyclone should still be at hurricane
+strength when it passes near Bermuda. Based on global model
+guidance, Melissa is forecast to become a strong extratropical
+cyclone over the North Atlantic by 96 h.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica: Remain in a safe shelter tonight. Damaging winds will
+continue over portions of Jamaica this evening. Catastrophic flash
+flooding, and landslides, are expected across the island tonight
+with widespread infrastructure damage, power and communication
+outages, and isolated communities.
+ 
+2. Haiti and the Dominican Republic: Catastrophic flash flooding
+and landslides are expected across southwestern Haiti and southern
+portions of the Dominican Republic during the next day or so. In
+Haiti, extensive damage and isolation of communities is likely.
+Tropical storm conditions are expected later today and Wednesday.
+ 
+3. Eastern Cuba: Heavy rainfall, flash flooding and landslides are
+expected soon. Life-threatening storm surge and damaging winds are
+likely to begin later today. Seek safe shelter.
+ 
+4. Southeastern and Central Bahamas and the Turks and Caicos:
+Hurricane conditions, life-threatening storm surge, and heavy
+rainfall are expected across portions of the southeastern and
+central Bahamas on Wednesday. Complete preparations by tonight and
+follow local official guidance. Tropical storm conditions, heavy
+rains, and significant storm surge are expected in the Turks and
+Caicos Islands on Wednesday.
+ 
+5. Bermuda: Hurricane conditions and heavy rainfall are possible in
+Bermuda beginning Thursday or Thursday night where a Hurricane
+Watch is now in effect.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  28/2100Z 18.5N  77.7W  125 KT 145 MPH
+ 12H  29/0600Z 19.9N  76.7W  120 KT 140 MPH
+ 24H  29/1800Z 22.2N  75.3W  100 KT 115 MPH
+ 36H  30/0600Z 25.0N  73.2W   95 KT 110 MPH
+ 48H  30/1800Z 28.9N  70.0W   90 KT 105 MPH
+ 60H  31/0600Z 33.8N  64.8W   85 KT 100 MPH
+ 72H  31/1800Z 39.0N  58.3W   70 KT  80 MPH
+ 96H  01/1800Z 48.4N  42.2W   50 KT  60 MPH...POST-TROP/EXTRATROP
+120H  02/1800Z 54.8N  25.1W   40 KT  45 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Beven
+ 
+NNNN

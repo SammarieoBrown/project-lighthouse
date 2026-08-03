@@ -1,0 +1,103 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Tropical Storm Melissa Discussion Number  13
+NWS National Hurricane Center Miami FL       AL132025
+1100 AM EDT Fri Oct 24 2025
+
+The Air Force Reserve reconnaissance that has been flying through 
+Melissa this morning found the center significantly further to 
+the east-southeast than what was observed last night. How much of 
+this position is related to a real motion, or a center reformation 
+is unclear at this time. The storm remains about the same on 
+satellite imagery this morning, with a large burst of 
+deep convection, primarily along its southeastern flank, with 
+evidence of northwesterly shear still undercutting the outflow. A 
+WSFM microwave pass shows very deep hot towers, but not with that 
+much structure beyond that. In addition, there hasn't been a 
+significant change to Melissa's intensity, with peak 850 mb flight 
+level winds of 49 kt, and these winds support maintaining 40 kt 
+intensity this advisory. 
+
+As has been stated for the last few days, the lack of persistent 
+steering currents, due to competing mid-level ridges to the 
+southeast and northwest of Melissa, is responsible for the storm's 
+very slow motion. This is likely to continue for the next day or so, 
+and much of the system's motion could be just as influenced by 
+center reformations during this time period. After 24 hours, the 
+mid-level ridge located to the northwest is expected to strengthen 
+to the north of Melissa, and the guidance is coming into better 
+agreement on a very slow westward motion through 72 hours. Beyond 
+that time frame, a strengthening mid-latitude trough expected to 
+move into the Southeastern U.S., should provide an avenue for 
+Melissa to escape the Caribbean Sea to the northeast by the end of 
+the forecast period. The track guidance overall has shifted south 
+over the first few days, but there is still substantial spread in 
+solutions at the end of the forecast period, related to when and 
+how fast Melissa turns to the northeast. The latest NHC track 
+forecast is a little south of the prior one early on, but is 
+shifted a little eastward in 4-5 days, roughly a blend of the latest 
+HCCA and GDMI model aid solutions. On the forecast track, Melissa 
+could potentially be near western Jamaica by day 4 and near or 
+over southeastern Cuba by day 5, though timing still remains more 
+uncertain than usual. 
+ 
+The GFS and ECMWF-based SHIPS shear guidance indicates the 
+deep-layer shear is lower than yesterday, between 14-17 kt, but 
+there still appears to be mid-level shear undercutting the outflow 
+layer. Until Melissa also become better aligned vertically, any 
+intensification is likely to be slow to occur over the next 12 h or 
+so. After that, once Melissa's structure improves, environmental 
+conditions still appear favorable for a period of rapid 
+intensification (RI). Every single Google DeepMind member shows the 
+system become a Category 4 hurricane or higher, and the uncertainty 
+is more related on the timing of when RI occurs. After 96 hours, 
+Melissa could weaken some due to the combined effects of land 
+interaction, and an increase in southwesterly vertical wind shear by 
+the end of the forecast period. The latest NHC intensity forecast is 
+on the higher end of the model solutions, but more or less in line 
+with the latest GDMI guidance.
+ 
+Key Messages:
+
+1. Jamaica:  Due to Melissa’s slow motion, the risk of a prolonged 
+multi-day period of potentially damaging winds, heavy rainfall 
+resulting in life-threatening flash flooding and numerous 
+landslides, and storm surge continues to increase for Jamaica. 
+Preparations to protect life and property should be rushed to 
+completion, since strong winds and flooding rains could begin in 
+Jamaica on Saturday or Sunday.
+ 
+2. Haiti:  Heavy rainfall will result in catastrophic flash flooding 
+and landslides across southwestern Haiti into early next week. 
+Extensive damage to roads and buildings is expected, potentially 
+isolating communities for an extended period of time. This is a 
+life-threatening situation and immediate preparations to protect 
+life and property should be taken.  Strong winds could also 
+potentially last for a day or more over the Tiburon peninsula of 
+Haiti.
+ 
+3. Remainder of Hispaniola and Eastern Cuba: Heavy rainfall could 
+also produce significant, life-threatening flash flooding and 
+numerous landslides in southern Dominican Republic. Interests in 
+Cuba should monitor the progress of Melissa since the risk of heavy 
+rainfall, damaging winds, and storm surge appears to be increasing.
+
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  24/1500Z 15.7N  74.6W   40 KT  45 MPH
+ 12H  25/0000Z 15.9N  74.5W   45 KT  50 MPH
+ 24H  25/1200Z 16.3N  74.6W   60 KT  70 MPH
+ 36H  26/0000Z 16.5N  75.3W   70 KT  80 MPH
+ 48H  26/1200Z 16.6N  76.0W   85 KT 100 MPH
+ 60H  27/0000Z 16.6N  76.8W  105 KT 120 MPH
+ 72H  27/1200Z 16.6N  77.5W  125 KT 145 MPH
+ 96H  28/1200Z 17.5N  78.3W  130 KT 150 MPH
+120H  29/1200Z 20.4N  76.7W  105 KT 120 MPH...INLAND
+ 
+$$
+Forecaster Papin
+ 
+NNNN

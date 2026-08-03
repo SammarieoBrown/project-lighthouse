@@ -1,0 +1,70 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  40
+NWS National Hurricane Center Miami FL       AL132025
+500 AM AST Fri Oct 31 2025
+ 
+Recent satellite images show Melissa is quickly losing tropical 
+characteristics. The estimated low-level center is displaced well to 
+the west of the weakening convection associated with the system. 
+Decreasing satellite intensity estimates and the latest global model 
+wind fields support lowering the intensity to 80 kt this morning. 
+Earlier ASCAT data showed an expanding wind field in the southern 
+semicircle of Melissa, with 50-kt winds that extended up to 140 n mi 
+from the center in the southeastern quadrant. Large swells from 
+Melissa are spreading over much of the western Atlantic, resulting 
+in hazardous marine conditions in this region.
+
+Melissa remains in a highly-sheared environment and will move over 
+rapidly cooling SSTs while completing extratropical transition 
+today. Based on current satellite trends and simulated satellite 
+imagery from the GFS and ECMWF, the updated NHC forecast now shows 
+Melissa becoming a hurricane-force extratropical cyclone in 12 h, 
+though this could occur as soon as later this morning. Gradual 
+weakening is forecast over the next few days, but Melissa will 
+remain a large and powerful extratropical cyclone as it moves over 
+the North Atlantic through early next week.
+
+Melissa is racing northeastward (040/36 kt) away from Bermuda and is 
+expected to continue this general motion for the next day or two 
+within the flow ahead of an upper-level trough. The tightly 
+clustered track guidance agrees that the center of post-tropical 
+Melissa will pass near, but to the south of, the Avalon Peninsula of 
+Newfoundland late tonight, bringing the potential for some gusty 
+winds and heavy rain. Later this weekend, Melissa is forecast to 
+turn east-northeastward while interacting with a higher-latitude, 
+upper-level low over the North Atlantic. The latest NHC track 
+prediction remains very similar to the previous forecast, generally 
+following a blend of the HCCA and GDMI aids.
+ 
+Key Messages:
+ 
+1. Bermuda: Gusty winds over Bermuda are expected to gradually 
+subside this morning.
+ 
+2. Post-storm safety:  Follow advice of local officials and avoid 
+areas of downed power lines and flooding. The flooding across Cuba, 
+Jamaica, and Hispaniola could persist for another day or two. Ensure 
+generators are properly ventilated and placed outside at least 20 
+feet away from dwellings and garages to avoid carbon monoxide 
+poisoning. During clean up, be careful when using chainsaws and 
+power tools. Drink plenty of water to avoid heat exhaustion.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  31/0900Z 35.9N  64.0W   80 KT  90 MPH
+ 12H  31/1800Z 40.4N  58.9W   70 KT  80 MPH...POST-TROP/EXTRATROP
+ 24H  01/0600Z 46.4N  51.8W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 36H  01/1800Z 51.3N  45.2W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 48H  02/0600Z 54.1N  39.2W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 60H  02/1800Z 55.6N  32.9W   50 KT  60 MPH...POST-TROP/EXTRATROP
+ 72H  03/0600Z 56.8N  26.7W   45 KT  50 MPH...POST-TROP/EXTRATROP
+ 96H  04/0600Z 60.0N  17.0W   40 KT  45 MPH...POST-TROP/EXTRATROP
+120H  05/0600Z...DISSIPATED
+ 
+$$
+Forecaster Reinhart
+ 
+NNNN

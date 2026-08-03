@@ -1,0 +1,109 @@
+ZCZC MIAPWSAT3 ALL                                                  
+TTAA00 KNHC DDHHMM                                                  
+                                                                    
+HURRICANE MELISSA WIND SPEED PROBABILITIES NUMBER  28               
+NWS NATIONAL HURRICANE CENTER MIAMI FL       AL132025               
+0900 UTC TUE OCT 28 2025                                            
+                                                                    
+AT 0900Z THE CENTER OF HURRICANE MELISSA WAS LOCATED NEAR LATITUDE  
+17.2 NORTH...LONGITUDE 78.3 WEST WITH MAXIMUM SUSTAINED WINDS NEAR  
+150 KTS...175 MPH...280 KM/H.                                       
+                                                                    
+Z INDICATES COORDINATED UNIVERSAL TIME (GREENWICH)                  
+   ATLANTIC STANDARD TIME (AST)...SUBTRACT 4 HOURS FROM Z TIME      
+   EASTERN  DAYLIGHT TIME (EDT)...SUBTRACT 4 HOURS FROM Z TIME      
+   CENTRAL  DAYLIGHT TIME (CDT)...SUBTRACT 5 HOURS FROM Z TIME      
+                                                                    
+WIND SPEED PROBABILITY TABLE FOR SPECIFIC LOCATIONS                 
+                                                                    
+CHANCES OF SUSTAINED (1-MINUTE AVERAGE) WIND SPEEDS OF AT LEAST     
+   ...34 KT (39 MPH... 63 KM/H)...                                  
+   ...50 KT (58 MPH... 93 KM/H)...                                  
+   ...64 KT (74 MPH...119 KM/H)...                                  
+FOR LOCATIONS AND TIME PERIODS DURING THE NEXT 5 DAYS               
+                                                                    
+PROBABILITIES FOR LOCATIONS ARE GIVEN AS OP(CP) WHERE               
+    OP  IS THE PROBABILITY OF THE EVENT BEGINNING DURING            
+        AN INDIVIDUAL TIME PERIOD (ONSET PROBABILITY)               
+   (CP) IS THE PROBABILITY OF THE EVENT OCCURRING BETWEEN           
+        06Z TUE AND THE FORECAST HOUR (CUMULATIVE PROBABILITY)      
+                                                                    
+PROBABILITIES ARE GIVEN IN PERCENT                                  
+X INDICATES PROBABILITIES LESS THAN 1 PERCENT                       
+PROBABILITIES FOR 34 KT AND 50 KT ARE SHOWN AT A GIVEN LOCATION WHEN
+THE 5-DAY CUMULATIVE PROBABILITY IS AT LEAST 3 PERCENT.             
+PROBABILITIES FOR 34...50...64 KT SHOWN WHEN THE 5-DAY              
+64-KT CUMULATIVE PROBABILITY IS AT LEAST 1 PERCENT.                 
+                                                                    
+                                                                    
+  - - - - WIND SPEED PROBABILITIES FOR SELECTED LOCATIONS - - - -   
+                                                                    
+               FROM    FROM    FROM    FROM    FROM    FROM    FROM 
+  TIME       06Z TUE 18Z TUE 06Z WED 18Z WED 06Z THU 06Z FRI 06Z SAT
+PERIODS         TO      TO      TO      TO      TO      TO      TO  
+             18Z TUE 06Z WED 18Z WED 06Z THU 06Z FRI 06Z SAT 06Z SUN
+                                                                    
+FORECAST HOUR    (12)   (24)    (36)    (48)    (72)    (96)   (120)
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+LOCATION       KT                                                   
+                                                                    
+HIBERNIA OILFD 34  X   X( X)   X( X)   X( X)   X( X)   4( 4)  23(27)
+HIBERNIA OILFD 50  X   X( X)   X( X)   X( X)   X( X)   1( 1)   7( 8)
+HIBERNIA OILFD 64  X   X( X)   X( X)   X( X)   X( X)   X( X)   2( 2)
+ 
+CAPE RACE NFLD 34  X   X( X)   X( X)   X( X)   X( X)   7( 7)   6(13)
+CAPE RACE NFLD 50  X   X( X)   X( X)   X( X)   X( X)   1( 1)   3( 4)
+ 
+ILE ST PIERRE  34  X   X( X)   X( X)   X( X)   X( X)   4( 4)   X( 4)
+ 
+SABLE ISLAND   34  X   X( X)   X( X)   X( X)   X( X)   4( 4)   X( 4)
+ 
+BERMUDA        34  X   X( X)   X( X)   X( X)  64(64)  11(75)   X(75)
+BERMUDA        50  X   X( X)   X( X)   X( X)  27(27)  10(37)   X(37)
+BERMUDA        64  X   X( X)   X( X)   X( X)   9( 9)   5(14)   X(14)
+ 
+NEW PROVIDENCE 34  X   X( X)   5( 5)   2( 7)   1( 8)   X( 8)   X( 8)
+ 
+ANDROS         34  X   2( 2)   4( 6)   3( 9)   1(10)   X(10)   X(10)
+ 
+GREAT EXUMA    34  X   4( 4)  35(39)  13(52)   X(52)   X(52)   X(52)
+GREAT EXUMA    50  X   X( X)   9( 9)  10(19)   X(19)   X(19)   X(19)
+GREAT EXUMA    64  X   X( X)   2( 2)   6( 8)   X( 8)   X( 8)   X( 8)
+ 
+SAN SALVADOR   34  X   2( 2)  30(32)  43(75)   1(76)   X(76)   X(76)
+SAN SALVADOR   50  X   X( X)   4( 4)  43(47)   X(47)   X(47)   X(47)
+SAN SALVADOR   64  X   X( X)   1( 1)  26(27)   X(27)   X(27)   X(27)
+ 
+MAYAGUANA      34  X   4( 4)  50(54)  27(81)   1(82)   X(82)   X(82)
+MAYAGUANA      50  X   X( X)   6( 6)  23(29)   X(29)   X(29)   X(29)
+MAYAGUANA      64  X   X( X)   1( 1)  10(11)   X(11)   X(11)   X(11)
+ 
+GRAND TURK     34  X   1( 1)   9(10)  14(24)   1(25)   X(25)   X(25)
+ 
+CIENFUEGOS     34  1   2( 3)   2( 5)   X( 5)   X( 5)   X( 5)   X( 5)
+ 
+CAMAGUEY       34  2   5( 7)   3(10)   1(11)   X(11)   X(11)   X(11)
+ 
+GUANTANAMO BAY 34  3  59(62)  12(74)   X(74)   X(74)   X(74)   X(74)
+GUANTANAMO BAY 50  X   5( 5)  10(15)   X(15)   X(15)   X(15)   X(15)
+GUANTANAMO BAY 64  X   1( 1)   5( 6)   X( 6)   X( 6)   X( 6)   X( 6)
+ 
+GRAND CAYMAN   34  1   2( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+MONTEGO BAY    34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+MONTEGO BAY    50 90   4(94)   X(94)   X(94)   X(94)   X(94)   X(94)
+MONTEGO BAY    64 60  13(73)   X(73)   X(73)   X(73)   X(73)   X(73)
+ 
+KINGSTON       34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+KINGSTON       50 26   9(35)   X(35)   X(35)   X(35)   X(35)   X(35)
+KINGSTON       64  7   2( 9)   X( 9)   X( 9)   X( 9)   X( 9)   X( 9)
+ 
+LES CAYES      34  1   4( 5)   2( 7)   X( 7)   X( 7)   X( 7)   X( 7)
+ 
+PORT-AU-PRINCE 34  X   4( 4)   5( 9)   1(10)   X(10)   X(10)   X(10)
+ 
+PUERTO PLATA   34  X   X( X)   4( 4)   3( 7)   X( 7)   X( 7)   X( 7)
+ 
+$$                                                                  
+FORECASTER REINHART                                                 
+NNNN                                                                

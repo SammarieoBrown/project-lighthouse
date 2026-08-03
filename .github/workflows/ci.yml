@@ -97,6 +97,20 @@ jobs:
             "${NEON_API}/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}" \
             -H "Authorization: Bearer ${NEON_API_KEY}" > /dev/null
 
+  replay:
+    name: Replay cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No network, no dependencies. This job exists to answer one question —
+      # is the committed Melissa cache still byte-for-byte what it was when we
+      # measured against it? A replay that quietly changed is not a replay, and
+      # the failure has to be loud on the day it happens rather than the week
+      # the demo numbers stop reproducing.
+      - name: Verify the Melissa advisory cache
+        run: python3 data/replay/fetch_advisories.py --verify
+
   console:
     name: Console build
     runs-on: ubuntu-latest

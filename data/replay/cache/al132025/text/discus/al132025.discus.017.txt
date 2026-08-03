@@ -1,0 +1,119 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Tropical Storm Melissa Discussion Number  17
+NWS National Hurricane Center Miami FL       AL132025
+1100 AM EDT Sat Oct 25 2025
+ 
+Melissa is very nearly a hurricane. Data from both the Air Force 
+Reserve Hurricane Hunters indicate the storm has become better 
+organized, with a 20 n mi eyewall that has been coming an going. 
+This structure has also been seen on radar images out of Kingston, 
+Jamaica. Compared to last night, Tail Doppler Radar (TDR) data
+indicates the tropical cyclone is much better aligned vertically, 
+though some residual eastward tilt with height exists in the 
+mid-levels. The peak flight level winds at 700 mb were up to 68 kt. 
+Using a standard 0.9 adjustment factor to surface winds yields an 
+intensity of 60 kt, but Melissa could become a hurricane at any 
+time, as other satellite intensity estimates already support a 
+higher value. 
+
+The initial motion is crawling along to the west-northwest,
+estimated between aircraft fixes to be 285/1 kt. Now that the
+tropical cyclone has become better aligned vertically, it should
+increasingly feel the deep-layer steering, which has a slight south 
+of due-west component from the latest ECMWF steering diagnostics. 
+The spread in the model solutions even in the next 12-36 hours is 
+higher than usual, with the AI models, Google DeepMind ensemble 
+mean (GDMI) and ECMWF-AI (AIFS) on the south and western end of the 
+guidance envelope showing a westward or even west-southwestward 
+motion in the short-term, while the traditional dynamical aids 
+(ECMWF, HAFS-A/B) show more of a west-northwestward drift 
+towards Jamaica over the next 24-36 hours. Still though, nearly all 
+of the reliable track guidance (discounting the GFS which has been 
+an eastward outlier since the storm formed) shows Melissa making 
+landfall in Jamaica sometime in the 60-72 hour time frame. During 
+this time, a digging mid-latitude trough in the southeastern United 
+States is expected to create a new weakness to the north of 
+Melissa, which should result in the cyclone taking a sharp turn to 
+the northeast. While the guidance is in good agreement on this 
+general turn with relatively small across-track spread, there 
+remains high along-track spread in the solutions, best highlighted 
+by the Google DeepMind ensemble which shows a spread in possible 
+locations in 96 h from still inland over Jamaica to northeast 
+of Cuba in the southwestern Atlantic. The NHC track forecast is a 
+touch south of the prior track for the first 24-48 hours, but 
+converges on the prior track forecast thereafter. This is a little 
+on the eastern side of the track guidance envelope, giving credence 
+to the AI model solutions (GDMI, ECAI) which to date are the best 
+preforming track guidance this hurricane season. 
+ 
+Melissa seems to be shaking off the negative effects of westerly 
+shear now that the storm is becoming better vertically aligned. 
+Thus, it appears likely that a period of rapid intensification 
+will occur as the storm moves slowly over very warm ocean waters 
+(30-31C sea-surface temperatures) which is also over the highest 
+oceanic heat content in the entire Atlantic basin, which will limit 
+initial ocean upwelling under the slow moving storm. Similar to the 
+previous cycles, roughly 40/50 Google DeepMind ensemble members show 
+Melissa becoming a Category 5. While I am not ready to forecast that 
+intensity yet given the track uncertainty, that remains a 
+possibility. After 48 h, inner core processes (such as eyewall 
+replacement cycles) could cause fluctuations in intensity, but 
+Melissa is still expected to make landfall in Jamaica as an 
+upper-end Category 4 hurricane, which could be the strongest direct 
+landfall for the island in since tropical cyclone record keeping has 
+been made in the Atlantic Basin. Weakening is expected as Melissa 
+moves over the high terrain of Jamaica and eastern Cuba, with 
+further weakening expected thereafter as southwesterly vertical wind 
+shear increases. The NHC intensity forecast remains on the high end 
+of the guidance, but closest too the Google DeepMind ensemble mean, 
+which has also been on of our best intensity guidance performers 
+this year.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica:  Melissa’s slow movement will bring a multi-day period
+of damaging winds and heavy rainfall beginning tonight, likely
+causing catastrophic flash flooding, numerous landslides, extensive
+infrastructural damage, long-duration power and communication
+outages, and potentially prolonged isolation of communities.  A
+life-threatening storm surge is also likely along portions of the
+southern coast early next week. All preparations should be completed
+today.
+
+2. Haiti:  Catastrophic and life-threatening flash flooding and
+landslides are expected across southwestern Haiti into early next
+week, likely causing extensive infrastructural damage and
+potentially prolonged isolation of communities.  Strong winds could
+also potentially last for a day or more over the Tiburon peninsula.
+ 
+3. Dominican Republic: Heavy rainfall could produce potentially
+catastrophic flash flooding and numerous landslides in southern
+regions.
+ 
+4. Eastern Cuba, Southeast Bahamas, and the Turks and Caicos:  
+Monitor Melissa closely.  There is an increasing risk of a 
+significant storm surge, damaging winds, and heavy rainfall by the 
+middle of next week. In eastern Cuba, the risk of life-threatening 
+flash flooding and landslides is increasing.
+
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  25/1500Z 16.5N  75.1W   60 KT  70 MPH
+ 12H  26/0000Z 16.4N  75.5W   80 KT  90 MPH
+ 24H  26/1200Z 16.5N  76.2W  100 KT 115 MPH
+ 36H  27/0000Z 16.6N  76.8W  120 KT 140 MPH
+ 48H  27/1200Z 16.7N  77.3W  135 KT 155 MPH
+ 60H  28/0000Z 17.2N  77.5W  130 KT 150 MPH
+ 72H  28/1200Z 17.9N  77.2W  115 KT 130 MPH...INLAND
+ 96H  29/1200Z 20.5N  75.1W   95 KT 110 MPH...INLAND
+120H  30/1200Z 25.0N  71.0W   75 KT  85 MPH...OVER WATER
+ 
+$$
+Forecaster Papin
+ 
+NNNN

@@ -1,0 +1,75 @@
+ZCZC MIAPWSAT3 ALL                                                  
+TTAA00 KNHC DDHHMM                                                  
+                                                                    
+HURRICANE MELISSA WIND SPEED PROBABILITIES NUMBER  38               
+NWS NATIONAL HURRICANE CENTER MIAMI FL       AL132025               
+2100 UTC THU OCT 30 2025                                            
+                                                                    
+AT 2100Z THE CENTER OF HURRICANE MELISSA WAS LOCATED NEAR LATITUDE  
+30.2 NORTH...LONGITUDE 69.7 WEST WITH MAXIMUM SUSTAINED WINDS NEAR  
+90 KTS...105 MPH...165 KM/H.                                        
+                                                                    
+Z INDICATES COORDINATED UNIVERSAL TIME (GREENWICH)                  
+   ATLANTIC STANDARD TIME (AST)...SUBTRACT 4 HOURS FROM Z TIME      
+   EASTERN  DAYLIGHT TIME (EDT)...SUBTRACT 4 HOURS FROM Z TIME      
+   CENTRAL  DAYLIGHT TIME (CDT)...SUBTRACT 5 HOURS FROM Z TIME      
+                                                                    
+WIND SPEED PROBABILITY TABLE FOR SPECIFIC LOCATIONS                 
+                                                                    
+CHANCES OF SUSTAINED (1-MINUTE AVERAGE) WIND SPEEDS OF AT LEAST     
+   ...34 KT (39 MPH... 63 KM/H)...                                  
+   ...50 KT (58 MPH... 93 KM/H)...                                  
+   ...64 KT (74 MPH...119 KM/H)...                                  
+FOR LOCATIONS AND TIME PERIODS DURING THE NEXT 5 DAYS               
+                                                                    
+PROBABILITIES FOR LOCATIONS ARE GIVEN AS OP(CP) WHERE               
+    OP  IS THE PROBABILITY OF THE EVENT BEGINNING DURING            
+        AN INDIVIDUAL TIME PERIOD (ONSET PROBABILITY)               
+   (CP) IS THE PROBABILITY OF THE EVENT OCCURRING BETWEEN           
+        18Z THU AND THE FORECAST HOUR (CUMULATIVE PROBABILITY)      
+                                                                    
+PROBABILITIES ARE GIVEN IN PERCENT                                  
+X INDICATES PROBABILITIES LESS THAN 1 PERCENT                       
+PROBABILITIES FOR 34 KT AND 50 KT ARE SHOWN AT A GIVEN LOCATION WHEN
+THE 5-DAY CUMULATIVE PROBABILITY IS AT LEAST 3 PERCENT.             
+PROBABILITIES FOR 34...50...64 KT SHOWN WHEN THE 5-DAY              
+64-KT CUMULATIVE PROBABILITY IS AT LEAST 1 PERCENT.                 
+                                                                    
+                                                                    
+  - - - - WIND SPEED PROBABILITIES FOR SELECTED LOCATIONS - - - -   
+                                                                    
+               FROM    FROM    FROM    FROM    FROM    FROM    FROM 
+  TIME       18Z THU 06Z FRI 18Z FRI 06Z SAT 18Z SAT 18Z SUN 18Z MON
+PERIODS         TO      TO      TO      TO      TO      TO      TO  
+             06Z FRI 18Z FRI 06Z SAT 18Z SAT 18Z SUN 18Z MON 18Z TUE
+                                                                    
+FORECAST HOUR    (12)   (24)    (36)    (48)    (72)    (96)   (120)
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+LOCATION       KT                                                   
+                                                                    
+HIBERNIA OILFD 34  X   X( X)  27(27)  48(75)   X(75)   X(75)   X(75)
+HIBERNIA OILFD 50  X   X( X)   1( 1)  22(23)   X(23)   X(23)   X(23)
+HIBERNIA OILFD 64  X   X( X)   X( X)   3( 3)   X( 3)   X( 3)   X( 3)
+ 
+CAPE RACE NFLD 34  X   X( X)  73(73)   2(75)   X(75)   X(75)   X(75)
+CAPE RACE NFLD 50  X   X( X)  31(31)   2(33)   X(33)   X(33)   X(33)
+CAPE RACE NFLD 64  X   X( X)   6( 6)   1( 7)   X( 7)   X( 7)   X( 7)
+ 
+ILE ST PIERRE  34  X   X( X)  20(20)   1(21)   X(21)   X(21)   X(21)
+ 
+BURGEO NFLD    34  X   X( X)   5( 5)   1( 6)   X( 6)   X( 6)   X( 6)
+ 
+PTX BASQUES    34  X   X( X)   3( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+EDDY POINT NS  34  X   1( 1)   2( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+SYDNEY NS      34  X   X( X)   4( 4)   X( 4)   X( 4)   X( 4)   X( 4)
+ 
+SABLE ISLAND   34  X   5( 5)   9(14)   X(14)   X(14)   X(14)   X(14)
+ 
+BERMUDA        34 89   X(89)   X(89)   X(89)   X(89)   X(89)   X(89)
+BERMUDA        50 17   X(17)   X(17)   X(17)   X(17)   X(17)   X(17)
+ 
+$$                                                                  
+FORECASTER HAGEN                                                    
+NNNN                                                                

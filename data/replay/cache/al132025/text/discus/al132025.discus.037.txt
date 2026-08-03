@@ -1,0 +1,73 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  37
+NWS National Hurricane Center Miami FL       AL132025
+1100 AM EDT Thu Oct 30 2025
+ 
+Air Force Reserve Reconnaissance recently investigated Melissa and
+found winds in the southeast quadrant that supported a 90-kt
+intensity.  The central pressure is about 965 mb, based on dropsonde
+data.  The wind radii have changed only slightly during the past 12
+hours.  The satellite presentation remains fairly impressive, with
+an eye feature emerging on GOES 19 imagery over the past couple of
+hours.  Some slight additional strengthening is possible for another
+few hours while Melissa remains over marginally warm sea-surface
+temperatures, but the water temperatures will rapidly decrease
+tonight while wind shear rapidly increases.  As a result, Melissa is
+expected to quickly lose tropical characteristics once it passes
+Bermuda, and it is forecast to become a strong post-tropical cyclone
+over the North Atlantic by Friday night.  The latest NHC intensity
+forecast remains towards the higher end of the guidance envelope,
+and more closely follows the global models during the extratropical
+phase.
+ 
+Melissa is accelerating toward the north-northeast, now moving 30
+degrees at 21 kt. A faster motion is expected during the next
+couple of days as Melissa moves within the flow between a
+mid-level trough over the eastern U.S. and a subtropical ridge
+over the central Atlantic.  The guidance is in excellent agreement
+through the next 48 hours, until after the system makes its closest
+approach to Atlantic Canada.  A Hurricane Warning remains in effect
+for Bermuda, and Melissa is likely to pass to the west and
+northwest of the island tonight.  Melissa should then pass near the
+southeastern tip of Newfoundland as a strong extratropical cyclone
+on Friday night before turning more towards the east-northeast, and
+moving across the North Atlantic this weekend.  No significant
+changes were made to the NHC track forecast through 48 hours, but
+the track was shifted a bit to the northeast of the previous
+forecast from day 3 onward.
+ 
+Key Messages:
+ 
+1. Bermuda: Hurricane conditions are expected in Bermuda tonight,
+with tropical storm conditions beginning late this afternoon.
+Preparations should be rushed to completion.
+ 
+2. Post-storm safety:  Follow advice of local officials as you may
+need to remain sheltered after the storm due to downed power lines
+and flooding. Any flooding across the Bahamas is expected to subside
+today. Flooding across Cuba, Jamaica, and Hispaniola could persist
+for another few days. Ensure generators are properly ventilated and
+placed outside at least 20 feet away from dwellings and garages to
+avoid carbon monoxide poisoning. During clean up, be careful when
+using chainsaws and power tools. Drink plenty of water to avoid heat
+exhaustion.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  30/1500Z 27.8N  71.7W   90 KT 105 MPH
+ 12H  31/0000Z 31.6N  68.4W   90 KT 105 MPH
+ 24H  31/1200Z 37.5N  62.5W   80 KT  90 MPH
+ 36H  01/0000Z 43.8N  55.8W   70 KT  80 MPH...POST-TROP/EXTRATROP
+ 48H  01/1200Z 49.5N  48.9W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 60H  02/0000Z 53.3N  43.2W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 72H  02/1200Z 54.7N  37.5W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 96H  03/1200Z 56.6N  26.8W   45 KT  50 MPH...POST-TROP/EXTRATROP
+120H  04/1200Z 61.0N  19.0W   40 KT  45 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Hagen
+ 
+NNNN

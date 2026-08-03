@@ -1,0 +1,98 @@
+ZCZC MIAPWSAT3 ALL                                                  
+TTAA00 KNHC DDHHMM                                                  
+                                                                    
+HURRICANE MELISSA WIND SPEED PROBABILITIES NUMBER  31               
+NWS NATIONAL HURRICANE CENTER MIAMI FL       AL132025               
+0300 UTC WED OCT 29 2025                                            
+                                                                    
+AT 0300Z THE CENTER OF HURRICANE MELISSA WAS LOCATED NEAR LATITUDE  
+19.3 NORTH...LONGITUDE 76.6 WEST WITH MAXIMUM SUSTAINED WINDS NEAR  
+115 KTS...130 MPH...215 KM/H.                                       
+                                                                    
+Z INDICATES COORDINATED UNIVERSAL TIME (GREENWICH)                  
+   ATLANTIC STANDARD TIME (AST)...SUBTRACT 4 HOURS FROM Z TIME      
+   EASTERN  DAYLIGHT TIME (EDT)...SUBTRACT 4 HOURS FROM Z TIME      
+   CENTRAL  DAYLIGHT TIME (CDT)...SUBTRACT 5 HOURS FROM Z TIME      
+                                                                    
+WIND SPEED PROBABILITY TABLE FOR SPECIFIC LOCATIONS                 
+                                                                    
+CHANCES OF SUSTAINED (1-MINUTE AVERAGE) WIND SPEEDS OF AT LEAST     
+   ...34 KT (39 MPH... 63 KM/H)...                                  
+   ...50 KT (58 MPH... 93 KM/H)...                                  
+   ...64 KT (74 MPH...119 KM/H)...                                  
+FOR LOCATIONS AND TIME PERIODS DURING THE NEXT 5 DAYS               
+                                                                    
+PROBABILITIES FOR LOCATIONS ARE GIVEN AS OP(CP) WHERE               
+    OP  IS THE PROBABILITY OF THE EVENT BEGINNING DURING            
+        AN INDIVIDUAL TIME PERIOD (ONSET PROBABILITY)               
+   (CP) IS THE PROBABILITY OF THE EVENT OCCURRING BETWEEN           
+        00Z WED AND THE FORECAST HOUR (CUMULATIVE PROBABILITY)      
+                                                                    
+PROBABILITIES ARE GIVEN IN PERCENT                                  
+X INDICATES PROBABILITIES LESS THAN 1 PERCENT                       
+PROBABILITIES FOR 34 KT AND 50 KT ARE SHOWN AT A GIVEN LOCATION WHEN
+THE 5-DAY CUMULATIVE PROBABILITY IS AT LEAST 3 PERCENT.             
+PROBABILITIES FOR 34...50...64 KT SHOWN WHEN THE 5-DAY              
+64-KT CUMULATIVE PROBABILITY IS AT LEAST 1 PERCENT.                 
+                                                                    
+                                                                    
+  - - - - WIND SPEED PROBABILITIES FOR SELECTED LOCATIONS - - - -   
+                                                                    
+               FROM    FROM    FROM    FROM    FROM    FROM    FROM 
+  TIME       00Z WED 12Z WED 00Z THU 12Z THU 00Z FRI 00Z SAT 00Z SUN
+PERIODS         TO      TO      TO      TO      TO      TO      TO  
+             12Z WED 00Z THU 12Z THU 00Z FRI 00Z SAT 00Z SUN 00Z MON
+                                                                    
+FORECAST HOUR    (12)   (24)    (36)    (48)    (72)    (96)   (120)
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+LOCATION       KT                                                   
+                                                                    
+HIBERNIA OILFD 34  X   X( X)   X( X)   X( X)   X( X)  41(41)   X(41)
+HIBERNIA OILFD 50  X   X( X)   X( X)   X( X)   X( X)   9( 9)   X( 9)
+HIBERNIA OILFD 64  X   X( X)   X( X)   X( X)   X( X)   1( 1)   X( 1)
+ 
+CAPE RACE NFLD 34  X   X( X)   X( X)   X( X)   5( 5)  14(19)   X(19)
+CAPE RACE NFLD 50  X   X( X)   X( X)   X( X)   X( X)   4( 4)   X( 4)
+ 
+ILE ST PIERRE  34  X   X( X)   X( X)   X( X)   3( 3)   2( 5)   X( 5)
+ 
+SABLE ISLAND   34  X   X( X)   X( X)   X( X)   5( 5)   X( 5)   X( 5)
+ 
+BERMUDA        34  X   X( X)   X( X)  36(36)  46(82)   X(82)   X(82)
+BERMUDA        50  X   X( X)   X( X)   4( 4)  31(35)   X(35)   X(35)
+BERMUDA        64  X   X( X)   X( X)   1( 1)  10(11)   X(11)   X(11)
+ 
+NEW PROVIDENCE 34  1   2( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+ANDROS         34  1   2( 3)   1( 4)   X( 4)   X( 4)   X( 4)   X( 4)
+ 
+GREAT EXUMA    34  2  41(43)   1(44)   X(44)   X(44)   X(44)   X(44)
+GREAT EXUMA    50  X   7( 7)   X( 7)   X( 7)   X( 7)   X( 7)   X( 7)
+GREAT EXUMA    64  X   2( 2)   X( 2)   X( 2)   X( 2)   X( 2)   X( 2)
+ 
+SAN SALVADOR   34  2  84(86)   2(88)   X(88)   X(88)   X(88)   X(88)
+SAN SALVADOR   50  X  41(41)  13(54)   X(54)   X(54)   X(54)   X(54)
+SAN SALVADOR   64  X  14(14)  11(25)   X(25)   X(25)   X(25)   X(25)
+ 
+MAYAGUANA      34  3  83(86)   1(87)   X(87)   X(87)   X(87)   X(87)
+MAYAGUANA      50  X  10(10)   1(11)   X(11)   X(11)   X(11)   X(11)
+MAYAGUANA      64  X   3( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+GRAND TURK     34  1   6( 7)   2( 9)   X( 9)   X( 9)   X( 9)   X( 9)
+ 
+CAMAGUEY       34  2   1( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+GUANTANAMO BAY 34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+GUANTANAMO BAY 50  6   X( 6)   X( 6)   X( 6)   X( 6)   X( 6)   X( 6)
+ 
+MONTEGO BAY    34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+ 
+KINGSTON       34 99   X(99)   X(99)   X(99)   X(99)   X(99)   X(99)
+ 
+PORT-AU-PRINCE 34  2   1( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+PUERTO PLATA   34  1   2( 3)   X( 3)   X( 3)   X( 3)   X( 3)   X( 3)
+ 
+$$                                                                  
+FORECASTER CANGIALOSI                                               
+NNNN                                                                

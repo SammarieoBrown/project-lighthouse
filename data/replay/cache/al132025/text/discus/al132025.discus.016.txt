@@ -1,0 +1,97 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Tropical Storm Melissa Discussion Number  16
+NWS National Hurricane Center Miami FL       AL132025
+500 AM EDT Sat Oct 25 2025
+ 
+During the last center fix of the Air Force Reserve mission into 
+Melissa several hours ago, a dropsonde measured a surface pressure 
+of 989 mb with winds of 27 kt, suggesting that the central pressure 
+has fallen to about 986 mb.  The plane did not measure stronger 
+winds, but it did not fly through the area due east of the center, 
+which is where a nearly coincident ASCAT pass suggested the 
+strongest winds would be located.  Some westerly shear is still 
+evident, but the center is now embedded far enough under the 
+Central Dense Overcast to yield Dvorak estimates of T4.0/65 kt from 
+TAFB and T3.5/55 kt from SAB.  The current intensity is estimated to 
+be 60 kt based on all these data.  It's also worth noting that an 
+eye feature has occasionally been apparent in radar images from 
+Jamaica.
+
+Melissa is currently moving slowly northwestward (310/3 kt).  
+Steering currents will remain weak for the next 3 days, and Melissa 
+is forecast to drift westward through Sunday night to the south of 
+Jamaica.  A sharp but still very slow turn toward the north is 
+expected Monday and Monday night.  Unfortunately, a large majority 
+of the latest reliable track models show Melissa making landfall on 
+Jamaica in about 72 hours.  What's most concerning here is that the 
+island is likely to experience a couple of days of heavy rainfall 
+and tropical-storm-force winds before the core--and strongest 
+winds--even reach the coast.  An increase in forward motion is 
+expected by days 4 and 5, with Melissa accelerating northeastward 
+across eastern Cuba, the southeastern Bahamas, and the Turks and 
+Caicos Islands.  Although there are some speed differences among 
+the models, for the most part the cross-track spread is generally 
+small.
+ 
+Although some westerly shear is likely to continue for the next few 
+days, high oceanic heat content and stronger upper-level 
+divergence should be able to support significant strengthening.  
+The dynamical model-based Rapid Intensification (RI) indices 
+(DTOPS) in particular are quite aggressive, showing a very high 
+probability of a 55-kt increase in intensity over the next 48 
+hours.  In addition, 41 of the 50 Google DeepMind ensemble members 
+show Melissa at category 4 or 5 strength by Monday afternoon (60 
+hours), which is the same time that the NHC forecast continues to 
+show a peak intensity of 135 kt.  Although some slight weakening is 
+possible after 60 hours, possibly due to the circulation 
+interacting with land and/or an eyewall replacement, Melissa still 
+has a significant possibility of making landfall on Jamaica as a 
+major hurricane.  Melissa could maintain major hurricane strength 
+when it reaches eastern Cuba, but increased shear should lead to 
+weakening below major hurricane strength by day 5.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica:  Melissa’s slow movement will bring a multi-day period
+of damaging winds and heavy rainfall beginning tonight, likely 
+causing catastrophic flash flooding and numerous landslides.  There 
+is an increasing risk of life-threatening storm surge early next 
+week. All preparations should be completed today.
+ 
+2. Haiti:  Catastrophic flash flooding and landslides are expected
+across southwestern Haiti into early next week, likely causing
+extensive infrastructural damage and potentially prolonged isolation
+of communities. Immediate preparations to protect life and property
+are urged. Strong winds could also potentially last for a day or
+more over the Tiburon peninsula.
+ 
+3. Dominican Republic: Heavy rainfall could produce potentially
+catastrophic flash flooding and numerous landslides in southern
+regions.
+ 
+4. Eastern Cuba, Bahamas, and the Turks and Caicos:  Monitor Melissa
+closely.  There is an increasing risk of a significant storm surge, 
+damaging winds, and heavy rainfall by the middle of next week. In 
+eastern Cuba, the risk of life-threatening flash flooding and 
+landslides is increasing.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  25/0900Z 16.3N  75.0W   60 KT  70 MPH
+ 12H  25/1800Z 16.5N  75.3W   75 KT  85 MPH
+ 24H  26/0600Z 16.7N  75.9W  100 KT 115 MPH
+ 36H  26/1800Z 16.8N  76.5W  115 KT 130 MPH
+ 48H  27/0600Z 16.9N  77.1W  125 KT 145 MPH
+ 60H  27/1800Z 17.2N  77.4W  135 KT 155 MPH
+ 72H  28/0600Z 17.8N  77.2W  125 KT 145 MPH...S COAST OF JAMAICA
+ 96H  29/0600Z 20.4N  75.3W  105 KT 120 MPH...SOUTHEASTERN CUBA
+120H  30/0600Z 24.8N  71.6W   90 KT 105 MPH...OVER WATER
+ 
+$$
+Forecaster Berg
+ 
+NNNN

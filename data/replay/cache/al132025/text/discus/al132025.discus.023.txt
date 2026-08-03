@@ -1,0 +1,89 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  23
+NWS National Hurricane Center Miami FL       AL132025
+1100 PM EDT Sun Oct 26 2025
+ 
+Melissa remains a very intense hurricane with a well-defined eye
+surrounded by extremely cold cloud tops, significantly colder than
+-80 deg C.  The cloud pattern is quite symmetrical on satellite
+imagery with strong upper-level outflow, especially over the
+northern semicircle.  A NOAA Hurricane Hunter aircraft has been
+investigating the system this evening and found that the central
+pressure had fallen to near 933 mb, and peak flight-level winds
+support an intensity of 125 kt.  It should be noted that
+satellite-based estimates, including subjective Dvorak analyses of 
+T7.0, suggest a higher intensity than found by the aircraft thus 
+far.
+
+Although the eye wobbled a bit to the south recently, this is 
+believed to be temporary and a more representative initial motion 
+estimate is about 270/4 kt.  The track forecast reasoning is 
+essentially unchanged from the previous advisory. The mid-level 
+ridge that had been steering Melissa westward is expected to weaken 
+by tomorrow.  This should allow the hurricane to turn to the north 
+and north-northeast during the next day or so.  Then, a developing 
+mid-level trough near the southeast U.S. coast is expected to 
+cause Melissa to move northeastward with increasing forward 
+speed.  The official track forecast is very similar to the 
+previous one and lies between the HFIP corrected consensus and 
+Google DeepMind ensemble mean predictions.
+
+Since the hurricane is expected to remain in a relatively low 
+vertical wind shear environment during the next day or two, it is 
+expected to strengthen some more until it interacts with the land 
+masses of Jamaica and eastern Cuba.  The global models show stronger 
+vertical shear north of Cuba so the system should gradually weaken 
+later in the period.  The official intensity forecast remains on 
+the high side of the model guidance.  
+  
+ 
+Key Messages:
+ 
+1. Jamaica:  Seek shelter now.  Damaging winds and heavy rainfall
+tonight and Monday will cause catastrophic and life-threatening
+flash flooding and numerous landslides before potentially
+devastating winds arrive Monday night and Tuesday morning.
+Extensive infrastructural damage, long-duration power and
+communication outages, and isolation of communities are expected.
+Life-threatening storm surge and damaging waves are expected along
+portions of the southern coast Monday night and Tuesday morning.
+ 
+2. Haiti and the Dominican Republic:  Catastrophic and
+life-threatening flash flooding and landslides are expected across
+southwestern Haiti and southern portions of the Dominican Republic
+through midweek.  In Haiti, extensive infrastructural damage and
+isolation of communities are likely. Although winds have temporarily
+decreased on the Tiburon peninsula, they are likely to increase
+again across much of western Haiti on Tuesday.
+ 
+3. Eastern Cuba:  Life-threatening storm surge is expected along
+portions of the southern coast of eastern Cuba late Tuesday and
+Tuesday night.  Damaging winds and heavy rainfall with
+life-threatening and potentially catastrophic flash flooding and
+landslides are also expected beginning on Monday.  Preparations
+should be rushed to completion.
+ 
+4. Southeast Bahamas and the Turks and Caicos: Monitor Melissa
+closely.  There is an increasing risk of a significant storm surge,
+damaging winds, and heavy rainfall Tuesday and Wednesday.  Watches
+will likely be required early Monday.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  27/0300Z 16.3N  77.5W  125 KT 145 MPH
+ 12H  27/1200Z 16.5N  78.0W  135 KT 155 MPH
+ 24H  28/0000Z 17.1N  78.2W  140 KT 160 MPH
+ 36H  28/1200Z 18.0N  77.8W  140 KT 160 MPH
+ 48H  29/0000Z 19.4N  76.7W  110 KT 125 MPH
+ 60H  29/1200Z 21.1N  75.2W   85 KT 100 MPH
+ 72H  30/0000Z 23.4N  73.2W   75 KT  85 MPH
+ 96H  31/0000Z 30.1N  67.0W   70 KT  80 MPH
+120H  01/0000Z 38.1N  56.7W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Pasch
+ 
+NNNN

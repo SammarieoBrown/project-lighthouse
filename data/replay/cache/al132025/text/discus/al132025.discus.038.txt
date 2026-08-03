@@ -1,0 +1,85 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  38
+NWS National Hurricane Center Miami FL       AL132025
+500 PM AST Thu Oct 30 2025
+ 
+A recent AMSR2 microwave pass over Melissa indicates that the
+center is tilted toward the northeast with height.  The 89 GHz 
+(mid-upper level) image shows a center at least 30 n mi northeast of 
+where the 37 GHz (low-level) image has the center.  This indicates 
+that strong west-southwesterly shear has begun.  Dropsonde and 
+flight-level wind data from a NOAA reconnaissance flight show that 
+the surface winds are much weaker than the winds aloft, and that the 
+standard 90 percent reduction factor should not be used.  Winds on 
+the east side of Melissa are quite strong between 1,500 ft and 
+10,000 ft, but drop off significantly near the surface.  The 
+strongest flight-level wind was 113 kt.  ASCAT showed vectors up to 
+70 kt around 15Z, which is consistent with lower-level 
+layer-averaged data from the dropsondes.  The latest subjective 
+Dvorak estimates are T5.0/90 kt from both TAFB and SAB.  The initial 
+intensity will be held at 90 kt, which is equivalent to 80 percent 
+of the maximum flight-level wind from the recent flight, but this 
+may be a bit generous.
+
+Melissa is accelerating northeastward, or 35 degrees at 27 kt.  
+Melissa is likely to speed up to a forward speed of 35 kt or more 
+over the next 12 hours, and the fast motion should continue into 
+Saturday as Melissa moves within the flow between a mid-level trough 
+over the eastern U.S. and a subtropical ridge over the central 
+Atlantic.  The guidance is in excellent agreement for the first 48 
+of the forecast, with the center expected to pass northwest of 
+Bermuda tonight, where a hurricane warning is in effect.  After 
+Melissa becomes extratropical in about 30 hours, the center should 
+pass very near the southeastern tip of the Avalon Peninsula of 
+Newfoundland, where some impacts from wind, rain and surf are 
+possible.  Little to no change has been made to the official track 
+forecast through 48 hours, which lies near the various consensus 
+aids.
+
+Melissa is now moving into progressively stronger west-southwesterly 
+wind shear and will reach sea-surface temperatures below 26C this 
+evening.  Therefore, Melissa should begin a weakening trend by early 
+Friday.  GFS and ECMWF simulated satellite imagery suggests that 
+Melissa should become post-tropical around Friday evening, prior to 
+making its closest approach to Newfoundland.  The NHC intensity 
+forecast is similar to the previous one, and lies within the upper 
+portion of the intensity guidance suite.  The NHC intensity and 
+radii forecasts after Melissa becomes post-tropical are largely 
+based on the global model solutions.
+
+ 
+Key Messages:
+ 
+1. Bermuda: Hurricane conditions are expected in Bermuda tonight,
+with tropical storm conditions beginning early this evening.
+Preparations should have been completed.
+ 
+2. Post-storm safety:  Follow advice of local officials as you may
+need to remain sheltered after the storm due to downed power lines
+and flooding. Any flooding across the Bahamas is expected to subside
+today. Flooding across Cuba, Jamaica, and Hispaniola could persist
+for another few days. Ensure generators are properly ventilated and
+placed outside at least 20 feet away from dwellings and garages to
+avoid carbon monoxide poisoning. During clean up, be careful when
+using chainsaws and power tools. Drink plenty of water to avoid heat
+exhaustion.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  30/2100Z 30.2N  69.7W   90 KT 105 MPH
+ 12H  31/0600Z 34.4N  65.6W   85 KT 100 MPH
+ 24H  31/1800Z 40.4N  59.3W   75 KT  85 MPH
+ 36H  01/0600Z 46.3N  52.3W   65 KT  75 MPH...POST-TROP/EXTRATROP
+ 48H  01/1800Z 51.3N  45.8W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 60H  02/0600Z 53.8N  40.0W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 72H  02/1800Z 55.1N  33.9W   55 KT  65 MPH...POST-TROP/EXTRATROP
+ 96H  03/1800Z 57.6N  23.0W   45 KT  50 MPH...POST-TROP/EXTRATROP
+120H  04/1800Z 61.7N  15.5W   35 KT  40 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Hagen
+ 
+NNNN

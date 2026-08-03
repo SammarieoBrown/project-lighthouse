@@ -1,0 +1,96 @@
+ZCZC MIATCDAT3 ALL
+TTAA00 KNHC DDHHMM
+ 
+Hurricane Melissa Discussion Number  24
+NWS National Hurricane Center Miami FL       AL132025
+500 AM EDT Mon Oct 27 2025
+ 
+An ongoing Air Force Reserve Hurricane Hunter aircraft has been 
+measuring progressively higher winds and lower central pressures 
+during each of its passes through Melissa's eye.  On the third and 
+final pass, the crew measured a peak flight-level wind of 154 kt and 
+a central pressure of 917 mb.  This flight-level wind reduces to 
+about 140 kt, making Melissa a category 5 hurricane.  The 
+hurricane's eye is 10 n mi wide with a temperature of 20 degrees 
+Celsius, while the surrounding convection has cloud top temperatures 
+as cold as -86 degrees Celsius.
+ 
+Melissa appears to be gaining some latitude again, but the 12-hour
+average motion is westward (275 degrees) at 3 kt.  A painstakingly
+slow turn toward the northwest and north is expected during the
+next 24 hours, and Melissa is forecast to make landfall on the
+south coast of Jamaica Tuesday morning and emerge off the north
+coast by Tuesday afternoon.  A trough moving across the
+southeastern United States is then expected to cause Melissa to
+turn northeastward and accelerate, crossing southeastern Cuba and
+the southeastern Bahamas Tuesday night and Wednesday, and then
+reaching the vicinity of Bermuda Thursday night.  The part of the
+forecast track while Melissa is over the western Atlantic has been
+adjusted a bit westward, following the latest Google DeepMind and
+European model solutions.
+ 
+Some additional strengthening is possible during the next 12 to 24
+hours while Melissa is south of Jamaica over waters of high oceanic
+heat content and in an environment of relatively low wind shear.
+Fluctuations in intensity are also possible during this period due
+to internal dynamics related to eyewall replacements, which are
+generally difficult to forecast.  There's really no practical
+difference in Melissa making landfall in Jamaica at category 4 or 5
+intensity, since both categories can produce catastrophic wind
+damage.  In addition, winds in the mountains of Jamaica are likely
+to be higher than the winds at sea level, and are likely to add to
+the seriousness of the situation.  Although interaction with
+Jamaica will lead to some weakening, Melissa is expected to reach
+southeastern Cuba as a major hurricane, and will also move across
+the southeastern Bahamas and be near Bermuda as a hurricane.  Some
+of the guidance shows a flatlining of the intensity while Melissa
+is moving over the southwestern Atlantic, and the NHC forecast has
+been bumped up during that time accordingly.
+ 
+ 
+Key Messages:
+ 
+1. Jamaica:  Do not venture out of your safe shelter. Catastrophic
+and life-threatening flash flooding and numerous landslides are
+likely today through Tuesday. Destructive winds, especially in the
+mountains, will begin by this evening, leading to extensive
+infrastructural damage, long-lasting power and communication
+outages, and isolated communities. Life-threatening storm surge and
+damaging waves are expected along the southern coast through
+Tuesday.
+ 
+2. Haiti and the Dominican Republic:  Catastrophic and
+life-threatening flash flooding and landslides are expected across
+southwestern Haiti and southern portions of the Dominican Republic
+through midweek.  In Haiti, extensive infrastructural damage and
+isolation of communities is likely. Tropical storm conditions are
+expected late Tuesday and Wednesday.
+ 
+3. Eastern Cuba:  Heavy rainfall with life-threatening and
+potentially catastrophic flash flooding and landslides is expected
+beginning today. Life-threatening storm surge and damaging winds are
+expected late Tuesday and Tuesday night.   Preparations should be
+rushed to completion.
+ 
+4. Southeast Bahamas and the Turks and Caicos: Hurricane conditions,
+life-threatening storm surge, and heavy rainfall are possible on
+Wednesday. Residents should follow advice given by local officials
+and be sure to have preparations complete by Tuesday night.
+ 
+ 
+FORECAST POSITIONS AND MAX WINDS
+ 
+INIT  27/0900Z 16.4N  77.8W  140 KT 160 MPH
+ 12H  27/1800Z 16.6N  78.1W  145 KT 165 MPH
+ 24H  28/0600Z 17.3N  78.1W  140 KT 160 MPH
+ 36H  28/1800Z 18.5N  77.3W  115 KT 130 MPH...NORTH COAST OF JAMAICA
+ 48H  29/0600Z 20.1N  76.0W  105 KT 120 MPH...OVER SE CUBA
+ 60H  29/1800Z 22.1N  74.4W   90 KT 105 MPH...NEAR SE BAHAMAS
+ 72H  30/0600Z 24.7N  72.3W   85 KT 100 MPH
+ 96H  31/0600Z 32.3N  65.1W   80 KT  90 MPH...NEAR BERMUDA
+120H  01/0600Z 41.4N  53.5W   60 KT  70 MPH...POST-TROP/EXTRATROP
+ 
+$$
+Forecaster Berg/Hagen
+ 
+NNNN
