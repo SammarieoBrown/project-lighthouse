@@ -31,25 +31,49 @@
  * mark a boundary between registers.
  */
 
+/* The masthead is a grid with two named rows, not a flex row that wraps.
+ *
+ * As flex it was indeterminate: five readings competed with the brand, the
+ * posture and a three-line sync block for one row, every reading label was
+ * squeezed to about 140px, three of them wrapped to three lines each, and the
+ * header took a quarter of the screen. Ordering tricks moved the problem
+ * around rather than removing it.
+ *
+ * Stated as areas it cannot drift. Row one is identity and status and is one
+ * line of type tall; row two is the readings, across the full width. */
 .chrome {
-  display: flex;
-  align-items: stretch;
-  gap: var(--lh-space-6);
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "brand posture sync"
+    "readings readings readings";
+  align-items: center;
+  column-gap: var(--lh-space-6);
   padding-right: var(--lh-space-5);
   border-bottom: 1px solid var(--lh-rule);
 }
 
 .brand {
+  grid-area: brand;
   display: flex;
   align-items: center;
   gap: var(--lh-space-3);
-  padding: var(--lh-space-4) var(--lh-space-5);
+  padding: var(--lh-space-3) var(--lh-space-5);
 }
 
 .brandText {
   display: flex;
   flex-direction: column;
   gap: var(--lh-space-1);
+}
+
+/* Storm and provenance on one line, because they are one statement: which
+ * hurricane, and what kind of claim it is. Stacked they made the brand three
+ * lines deep and set the height of the entire masthead row. */
+.stormLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--lh-space-2);
 }
 
 .brandName {
@@ -73,7 +97,8 @@
 /* The posture block is the largest thing on the screen on purpose. It is the
  * one value that changes what everybody in the room does next. */
 .posture {
-  padding: var(--lh-space-4) 0;
+  grid-area: posture;
+  padding: var(--lh-space-3) 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -102,18 +127,34 @@
 .postureValue[data-level="WATCH"] { color: var(--lh-watch); }
 .postureValue[data-level="QUIET"] { color: var(--lh-quiet); }
 
+/* The readings own a band, not a share of the masthead row.
+ *
+ * They sat inline with the brand, posture and sync block, which left each of
+ * five readings about 140px. Their labels carry the provenance prefix that
+ * makes them honest — "Forecast 64 kt chance · Montego Bay at 48 h" is long
+ * because every word in it is load-bearing — so three of them wrapped to three
+ * lines and the header grew to a quarter of the screen.
+ *
+ * Given the full width they wrap to two lines at most, and the header is a
+ * masthead again. Shortening the labels would have been the other fix, and the
+ * wrong one: the layout should bend, not the disclosure. */
 .readings {
   display: flex;
-  flex: 1;
+  grid-area: readings;
   align-items: stretch;
-  gap: var(--lh-space-7);
+  gap: var(--lh-space-5);
+  padding-left: var(--lh-space-5);
+  border-top: 1px solid var(--lh-rule);
 }
 
 .reading {
-  padding: var(--lh-space-4) 0;
+  padding: var(--lh-space-3) 0;
   display: flex;
+  flex: 1 1 0;
+  min-width: 0;
   flex-direction: column;
   justify-content: center;
+  gap: var(--lh-space-1);
 }
 
 .readingValue {
@@ -124,9 +165,17 @@
   line-height: 1;
 }
 
+/* The measure cap is what actually set this header's height, and it survived
+ * three attempts to fix the layout around it. At 21ch a label of 42 characters
+ * — "Forecast 64 kt chance · Montego Bay at 48 h" — cannot take fewer than
+ * three lines however much room the row is given, and five of those set the
+ * masthead to a quarter of the screen.
+ *
+ * 28ch holds the longest of them in two lines and still keeps a short measure,
+ * which is what the cap was for. */
 .readingLabel {
   font-size: var(--lh-text-micro);
-  max-width: 21ch;
+  max-width: 28ch;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lh-quiet);
@@ -144,18 +193,37 @@
   color: var(--lh-quiet);
 }
 
+/* One line, read left to right, separated by rules.
+ *
+ * Stacked it was three lines of small type in the top-right corner, and
+ * because the masthead row stretches to its tallest column it alone set the
+ * height of the brand and the posture beside it. It is status, not a table. */
 .stale {
-  margin-left: auto;
-  padding: var(--lh-space-4) 0;
-  text-align: right;
+  grid-area: sync;
+  justify-self: end;
+  padding: var(--lh-space-3) 0;
   font-family: var(--lh-font-data);
   font-size: var(--lh-text-micro);
   color: var(--lh-quiet);
   letter-spacing: 0.06em;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--lh-space-1);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--lh-space-3);
+}
+
+/* A hairline between status items rather than a bullet. The separator is the
+ * substrate's rule colour, so it reads as the same kind of division as every
+ * other rule on the screen. */
+.stale > * + *::before {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 0.9em;
+  margin-right: var(--lh-space-3);
+  vertical-align: -0.1em;
+  background: var(--lh-rule);
 }
 
 .connectivity {
@@ -857,16 +925,22 @@
 
 /* ---- Storm picker ----
  *
- * The console can now open more than one storm, so the header has to name
- * which one, and name what kind of claim it is. A hindcast projects the track
- * a storm actually took — perfect foresight, and a different thing from what
- * the National Hurricane Center published while it was happening.
+ * The console can open more than one storm, so the header names which one and
+ * what kind of claim it is. A hindcast projects the track a storm actually
+ * took — perfect foresight, and a different thing from what the National
+ * Hurricane Center published while it was happening.
  *
- * Native select on purpose. A custom listbox here would be new chrome carrying
- * no new meaning, and this is a control an operator uses once. */
+ * It sits in the brand block, replacing the static mode line. It went into the
+ * sync readout first, which was already three lines of status: a fourth and
+ * fifth line there doubled the height of the whole header, because .chrome
+ * stretches every column to the tallest one.
+ *
+ * Native select on purpose. A custom listbox would be new chrome carrying no
+ * new meaning, and this is a control used once per session. */
 .stormPick {
   display: inline-flex;
   align-items: center;
+  margin-left: calc(var(--lh-space-2) * -1);
 }
 
 .stormSelect {
@@ -875,13 +949,21 @@
   font-weight: 700;
   font-size: var(--lh-text-micro);
   letter-spacing: 0.06em;
+  line-height: 1;
   text-transform: uppercase;
   padding: var(--lh-space-1) var(--lh-space-2);
-  border: 1px solid var(--lh-rule);
+  border: 1px solid transparent;
   border-radius: var(--lh-radius);
   background: transparent;
   color: var(--lh-figure);
   cursor: pointer;
+}
+
+/* The border appears on approach rather than sitting there permanently. A
+ * boxed control in the masthead reads as a form field; this is a label that
+ * happens to be changeable. */
+.stormSelect:hover {
+  border-color: var(--lh-rule);
 }
 
 .stormSelect:focus-visible {
@@ -893,6 +975,10 @@
  * hidden, because it is the difference between a record and a reconstruction. */
 .provenance {
   color: var(--lh-quiet);
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 
 /* Label the select for a screen reader without spending header width on it. */

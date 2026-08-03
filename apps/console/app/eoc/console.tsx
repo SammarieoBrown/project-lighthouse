@@ -313,7 +313,35 @@ export function EocConsole() {
           <LighthouseMark size={24} title="Lighthouse" />
           <span className={styles.brandText}>
             <span className={styles.brandName}>Lighthouse</span>
-            <span className={styles.brandMode}>Emergency operations replay</span>
+            <span className={styles.stormLine}>
+            {library && library.storms.length > 1 ? (
+              <label className={styles.stormPick}>
+                <span className={styles.srOnly}>Storm</span>
+                <select
+                  className={styles.stormSelect}
+                  value={selected?.id ?? ""}
+                  onChange={(event) => setStormId(event.target.value)}
+                >
+                  {library.storms.map((storm) => (
+                    <option key={storm.id} value={storm.id}>
+                      {storm.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <span className={styles.brandMode}>Emergency operations replay</span>
+            )}
+            {selected ? (
+              /* What kind of claim this storm is, next to the storm's name.
+                 An advisory replay is what forecasters published at the time;
+                 a hindcast projects the track the storm actually took. */
+              <span className={styles.provenance}>
+                {selected.kind === "hindcast" ? "Hindcast" : "Advisory replay"}
+                {selected.sizeSource === "modelled" ? " · modelled extent" : ""}
+              </span>
+            ) : null}
+            </span>
           </span>
         </div>
 
@@ -374,31 +402,6 @@ export function EocConsole() {
         </div>
 
         <div className={styles.stale} aria-live="polite">
-          {library && library.storms.length > 1 ? (
-            <label className={styles.stormPick}>
-              <span className={styles.srOnly}>Storm</span>
-              <select
-                className={styles.stormSelect}
-                value={selected?.id ?? ""}
-                onChange={(event) => setStormId(event.target.value)}
-              >
-                {library.storms.map((storm) => (
-                  <option key={storm.id} value={storm.id}>
-                    {storm.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {selected ? (
-            /* What kind of claim this storm is, stated where the storm is
-               named. An advisory replay is what forecasters published at the
-               time; a hindcast projects the track the storm actually took. */
-            <span className={styles.provenance}>
-              {selected.kind === "hindcast" ? "Hindcast" : "Advisory replay"}
-              {selected.sizeSource === "modelled" ? " · modelled wind extent" : ""}
-            </span>
-          ) : null}
           <span>
             {frame ? `Advisory ${frame.n} · ${stamp(frame.at)}Z` : "No advisory"}
           </span>
