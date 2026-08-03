@@ -27,13 +27,33 @@ const MapView = dynamic(() => import("./MapView"), {
 export function MapPanel({ snapshot }: { snapshot: Snapshot }) {
   const [satellite, setSatellite] = useState(false);
   const [zoom, setZoom] = useState(7.4);
+  const [failed, setFailed] = useState<string | null>(null);
   const onZoomChange = useCallback((z: number) => setZoom(z), []);
+  const onFail = useCallback((reason: string) => setFailed(reason), []);
 
   const showingHomes = zoom >= ZOOM_SWITCH;
 
+  // Static, correct and readable beats interactive and blank. This is what a
+  // machine without WebGL2, or a clone that has not fetched the tiles, gets.
+  if (failed) {
+    return (
+      <div className={styles.wrap}>
+        <SynopticMap snapshot={snapshot} />
+        <div className={styles.controls}>
+          <span className={styles.scaleNote}>Static map · {failed}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.wrap}>
-      <MapView snapshot={snapshot} satellite={satellite} onZoomChange={onZoomChange} />
+      <MapView
+        snapshot={snapshot}
+        satellite={satellite}
+        onZoomChange={onZoomChange}
+        onFail={onFail}
+      />
 
       <div className={styles.controls}>
         {/* What the map is showing right now, in words. A map that silently

@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "predev": "npm run assets",
     "prebuild": "npm run assets",
-    "assets": "rm -rf public/tiles public/maplibre && mkdir -p public/tiles public/maplibre && cp -R ../../data/tiles/cache/caribbean-z13.pmtiles ../../data/tiles/cache/assets public/tiles/ && cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/maplibre/"
+    "assets": "node scripts/stage-assets.mjs"
   },
   "dependencies": {
     "@protomaps/basemaps": "^5.7.2",

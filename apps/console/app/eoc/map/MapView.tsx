@@ -79,9 +79,11 @@ export type MapViewProps = {
   snapshot: Snapshot;
   satellite: boolean;
   onZoomChange?: (zoom: number) => void;
+  /** Reported upward so the panel can fall back to the SVG map. */
+  onFail?: (reason: string) => void;
 };
 
-export default function MapView({ snapshot, satellite, onZoomChange }: MapViewProps) {
+export default function MapView({ snapshot, satellite, onZoomChange, onFail }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -144,7 +146,9 @@ export default function MapView({ snapshot, satellite, onZoomChange }: MapViewPr
       // WebGL2 is required by MapLibre 6. A machine without it is rare and
       // exactly the machine a demo will be run on, so say so rather than
       // rendering an empty box — the caller falls back to the SVG map.
-      setFailed(error instanceof Error ? error.message : "map failed to start");
+      const reason = error instanceof Error ? error.message : "map failed to start";
+      setFailed(reason);
+      onFail?.(reason);
       return;
     }
 
@@ -167,7 +171,9 @@ export default function MapView({ snapshot, satellite, onZoomChange }: MapViewPr
       const message = String(e?.error?.message ?? e?.error ?? "unknown");
       console.error("[map]", message, e?.error);
       if (message.includes(TILES) || message.includes("pmtiles")) {
-        setFailed("basemap tiles missing — run data/tiles/fetch_basemap.py");
+        const reason = "basemap tiles not staged — run data/tiles/fetch_basemap.py";
+        setFailed(reason);
+        onFail?.(reason);
       }
     });
 
@@ -182,7 +188,7 @@ export default function MapView({ snapshot, satellite, onZoomChange }: MapViewPr
       instance.remove();
       map.current = null;
     };
-  }, [snapshot, onZoomChange]);
+  }, [snapshot, onZoomChange, onFail]);
 
   // Satellite toggles as a layer, not a restyle: rebuilding the style would
   // drop the data layers and the current viewport with them.
@@ -217,15 +223,15 @@ export default function MapView({ snapshot, satellite, onZoomChange }: MapViewPr
     else instance.once("load", apply);
   }, [satellite]);
 
-  if (failed) {
-    return (
-      <div role="status" style={{ padding: "var(--lh-space-5)", color: "var(--lh-quiet)" }}>
-        {failed}
-      </div>
-    );
-  }
-
-  return <div ref={container} style={{ width: "100%", height: "100%" }} />;
+  // The panel renders the SVG fallback once it hears about this; keeping the
+  // container mounted meanwhile avoids tearing down a map that may recover.
+  return (
+    <div
+      ref={container}
+      aria-hidden={failed ? true : undefined}
+      style={{ width: "100%", height: "100%", display: failed ? "none" : undefined }}
+    />
+  );
 }
 
 export { ZOOM_SWITCH };
