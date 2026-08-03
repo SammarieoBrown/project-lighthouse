@@ -1,0 +1,19 @@
+# The replay cache is bytes, not text.
+#
+# Git normalises line endings on files it thinks are text, which rewrites them
+# between the working tree and the object store. For ordinary source that is
+# invisible and helpful. For this directory it is a silent corruption: the whole
+# point of manifest.sha256 is that these files are byte-identical everywhere, and
+# OCHA's population CSV ships with CRLF endings that git helpfully converted to
+# LF on commit — changing the file's hash and failing CI on a clone that had
+# never been touched by a human.
+#
+# Marking the cache as not-text stops git from having an opinion about its
+# contents. Caught by the manifest doing exactly its job, which is the only
+# reason this was a red build and not a demo that quietly stopped reproducing.
+data/replay/cache/** -text -diff
+
+# Committed binaries elsewhere.
+*.pptx binary
+*.pdf binary
+*.png binary
