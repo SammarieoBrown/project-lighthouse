@@ -54,6 +54,22 @@ OUT = REPO / "data" / "tiles" / "cache" / "structures-z15.pmtiles"
 #: produce, and the first tippecanoe invocation died on a bad flag and took the
 #: whole thing with it. Regenerate by deleting it.
 GEOJSON = REPO / "data" / "buildings" / "cache" / "structures.geojsonl"
+#: Centroids of the same buildings, same properties.
+#:
+#: A polygon cannot be seen at wide zoom and no styling fixes that: at z10 a
+#: 47 m² footprint is four hundredths of a pixel, and a fill layer has no
+#: minimum size. The tiles contain it, the screen shows nothing, and the view
+#: reads as "no buildings here" rather than "too small to draw".
+#:
+#: A circle layer does have a minimum size. So the wide view is points at a
+#: fixed radius — which is what made the damage viewer legible, where every
+#: building was a 2×2 block — and the close view is the real footprints.
+POINTS = REPO / "data" / "buildings" / "cache" / "structure-points.geojsonl"
+
+#: Where points hand over to footprints. Below this a building is sub-pixel;
+#: above it the shape is worth the bytes. They overlap by a level so the
+#: handover has no gap.
+POINT_MAX_ZOOM, POLY_MIN_ZOOM = 14, 13
 
 ADMIN3 = "jam_admin3"
 BANDS = (64, 50, 34)
@@ -173,6 +189,38 @@ def write_geojson(path: Path) -> int:
     return n
 
 
+def write_points(polygons: Path, out: Path) -> int:
+    """Centroid per building, from the polygon file rather than the database.
+
+    The expensive half — placing 1.8M footprints and walking 41 advisories over
+    them — is already done and cached. Re-deriving points from that file costs
+    one pass; re-running DuckDB costs ten minutes for the same answer.
+    """
+    n = 0
+    with polygons.open() as src, out.open("w") as dst:
+        for line in src:
+            feature = json.loads(line)
+            rings = feature["geometry"]["coordinates"]
+            ring = rings[0][0] if feature["geometry"]["type"] == "MultiPolygon" else rings[0]
+            # Mean of the ring, which for a building-sized quadrilateral is the
+            # centroid to well within the metre this is drawn at.
+            lon = sum(c[0] for c in ring) / len(ring)
+            lat = sum(c[1] for c in ring) / len(ring)
+            dst.write(
+                json.dumps(
+                    {
+                        "type": "Feature",
+                        "properties": feature["properties"],
+                        "geometry": {"type": "Point", "coordinates": [round(lon, 6), round(lat, 6)]},
+                    },
+                    separators=(",", ":"),
+                )
+                + "\n"
+            )
+            n += 1
+    return n
+
+
 def build() -> None:
     _require("tippecanoe", "pmtiles")
     started = time.monotonic()
@@ -184,13 +232,28 @@ def build() -> None:
         n = write_geojson(GEOJSON)
         print(f"  {n:,} features, {GEOJSON.stat().st_size / 1e6:.0f} MB of GeoJSON")
 
+    if not POINTS.exists():
+        print("deriving centroids …", flush=True)
+        n = write_points(GEOJSON, POINTS)
+        print(f"  {n:,} points, {POINTS.stat().st_size / 1e6:.0f} MB")
+
     with tempfile.TemporaryDirectory() as tmp:
-        geojson = GEOJSON
         mbtiles = Path(tmp) / "structures.mbtiles"
         subprocess.run(
             [
-                "tippecanoe", "-o", str(mbtiles), "-l", "structures",
+                "tippecanoe", "-o", str(mbtiles),
                 "-Z", str(MIN_ZOOM), "-z", str(MAX_ZOOM),
+                # Two layers, two geometries, one archive. The console picks by
+                # zoom: circles where a footprint would be invisible, footprints
+                # where the shape is legible.
+                "-L", json.dumps({
+                    "file": str(POINTS), "layer": "structure_points",
+                    "minzoom": MIN_ZOOM, "maxzoom": POINT_MAX_ZOOM,
+                }),
+                "-L", json.dumps({
+                    "file": str(GEOJSON), "layer": "structures",
+                    "minzoom": POLY_MIN_ZOOM, "maxzoom": MAX_ZOOM,
+                }),
                 # Keep every building. Tippecanoe's default thinning is built
                 # for label legibility, and it takes the density texture with
                 # it — a town stops looking like a town, which is the one thing
@@ -204,7 +267,6 @@ def build() -> None:
                 # flag, tippecanoe printed its usage, and --quiet swallowed it
                 # — leaving an exit code and no reason.
                 "--force",
-                str(geojson),
             ],
             check=True,
         )

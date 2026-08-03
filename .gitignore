@@ -55,3 +55,4 @@ data/buildings/cache/*.parquet
 
 # Intermediate for the structures tileset — 625 MB, regenerable.
 data/buildings/cache/*.geojsonl
+data/buildings/cache/structure-points.geojsonl

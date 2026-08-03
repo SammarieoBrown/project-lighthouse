@@ -410,20 +410,47 @@ export default function MapView({
           attribution: "Buildings © Google, Microsoft, OpenStreetMap",
         });
       }
-      if (!instance.getLayer("lh-structures")) {
-        // Beneath the hazard bands so the forecast still reads over the top,
-        // and beneath the storm centre so the eye is never hidden by a town.
+      if (!instance.getLayer("lh-structure-points")) {
+        /* Circles below z14, footprints above, and the split is not cosmetic.
+         *
+         * At z10 a 47 m² building is four hundredths of a pixel. The tiles hold
+         * it, a fill layer draws nothing, and the wide view reads as "no
+         * buildings here" rather than "too small to see". A circle layer has a
+         * minimum radius, so the settlement pattern survives — which is the
+         * whole reason to zoom out.
+         *
+         * Both are added beneath the hazard bands, so the forecast still reads
+         * over the top and the storm centre is never hidden by a town. */
+        instance.addLayer(
+          {
+            id: "lh-structure-points",
+            type: "circle",
+            source: "lh-structures",
+            "source-layer": "structure_points",
+            maxzoom: 14,
+            paint: {
+              // Just big enough to register, growing only as the eye gets
+              // close enough to want individual buildings.
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 1, 12, 1.6, 14, 3],
+              "circle-color": paint() as never,
+              "circle-opacity": 0.9,
+            },
+          },
+          "lh-cone-fill",
+        );
         instance.addLayer(
           {
             id: "lh-structures",
             type: "fill",
             source: "lh-structures",
             "source-layer": "structures",
+            minzoom: 14,
             paint: { "fill-color": paint() as never, "fill-opacity": 0.95 },
           },
           "lh-cone-fill",
         );
       } else {
+        instance.setPaintProperty("lh-structure-points", "circle-color", paint() as never);
         instance.setPaintProperty("lh-structures", "fill-color", paint() as never);
       }
     };
@@ -437,11 +464,10 @@ export default function MapView({
   useEffect(() => {
     const instance = map.current;
     if (!instance?.getLayer("lh-structures")) return;
-    instance.setLayoutProperty(
-      "lh-structures",
-      "visibility",
-      base === "structures" ? "visible" : "none",
-    );
+    const visibility = base === "structures" ? "visible" : "none";
+    for (const id of ["lh-structure-points", "lh-structures"]) {
+      instance.setLayoutProperty(id, "visibility", visibility);
+    }
   }, [base]);
 
   // Satellite toggles as a layer, not a restyle: rebuilding the style would
@@ -474,7 +500,12 @@ export default function MapView({
       }
     };
 
-    if (instance.isStyleLoaded()) apply();
+    /* ready.current, never isStyleLoaded(). That method also returns false
+     * while tiles are still arriving, long after `load` has fired — so a
+     * satellite toggle during tile load registered a `once("load")` for an
+     * event already past, and the raster was never removed. Switching from
+     * Satellite to Structures left the imagery sitting on top of everything. */
+    if (ready.current) apply();
     else instance.once("load", apply);
   }, [base]);
 
