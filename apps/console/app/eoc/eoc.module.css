@@ -9,6 +9,7 @@
 .screen {
   height: 100vh;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--lh-ground);
   /* Re-stated, and not redundant. `color` inherits as a computed value, so a
@@ -45,6 +46,12 @@
   padding: var(--lh-space-4) var(--lh-space-5);
 }
 
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lh-space-1);
+}
+
 .brandName {
   font-family: var(--lh-font-display);
   font-weight: 700;
@@ -53,6 +60,14 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
   line-height: 1;
+}
+
+.brandMode {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 /* The posture block is the largest thing on the screen on purpose. It is the
@@ -143,6 +158,15 @@
   gap: var(--lh-space-1);
 }
 
+.connectivity {
+  text-underline-offset: var(--lh-space-2);
+}
+
+.connectivity[data-state="offline"] {
+  color: var(--lh-figure);
+  text-decoration: underline;
+}
+
 /* ---------- body ---------- */
 
 .body {
@@ -180,6 +204,14 @@
   font-weight: var(--lh-body-weight-strong);
 }
 
+.panelTitle {
+  color: inherit;
+  flex: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
 .mapCanvas {
   min-height: 0;
   min-width: 0;
@@ -209,6 +241,18 @@
   align-items: center;
   gap: var(--lh-space-2);
   color: var(--lh-quiet);
+}
+
+.legendItem b,
+.provenance b {
+  color: var(--lh-figure);
+  font-weight: var(--lh-body-weight-strong);
+}
+
+.provenance {
+  flex-basis: 100%;
+  color: var(--lh-quiet);
+  line-height: var(--lh-leading-base);
 }
 
 .legendDot {
@@ -267,6 +311,13 @@
   margin-bottom: var(--lh-space-4);
 }
 
+.replayLimit {
+  color: var(--lh-figure);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+  margin-bottom: var(--lh-space-4);
+}
+
 .gateActions {
   display: flex;
   gap: var(--lh-space-3);
@@ -293,23 +344,81 @@
   border-color: var(--lh-rule);
 }
 
-/* Trigger 2 of the motion budget: a gate that is open and unactioned. It is
- * the only animation in the product, which is what makes it mean anything. */
-.gatePending {
-  animation: gate-waiting 2s var(--lh-ease) infinite;
+.gateButton:disabled {
+  background: transparent;
+  border-color: var(--lh-rule);
+  color: var(--lh-quiet);
+  cursor: not-allowed;
 }
 
-@keyframes gate-waiting {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+.reviewList {
+  border-top: 1px solid var(--lh-rule);
+  margin-top: var(--lh-space-4);
+  max-height: calc(var(--lh-space-8) * 5);
+  overflow-y: auto;
+  padding-top: var(--lh-space-3);
+  scrollbar-gutter: stable;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .gatePending {
-    animation: none;
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
+.reviewHead,
+.reviewRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 8ch;
+  gap: var(--lh-space-3);
+  width: 100%;
+}
+
+.reviewHead {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  padding: var(--lh-space-2) var(--lh-space-2) var(--lh-space-3);
+  text-transform: uppercase;
+}
+
+.reviewHead span:first-child {
+  grid-column: 1 / 3;
+}
+
+.reviewRow {
+  align-items: baseline;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--lh-text-fine);
+  padding: var(--lh-space-2);
+  text-align: left;
+}
+
+.reviewRow[data-unlocated="true"],
+.countRow[data-unlocated="true"] {
+  cursor: default;
+}
+
+.reviewRow:not([data-unlocated="true"]):hover,
+.reviewRow[data-selected="true"],
+.countRow:not(.head):not([data-unlocated="true"]):hover,
+.countRow[data-selected="true"] {
+  background: var(--lh-panel);
+}
+
+.reviewRow[data-selected="true"],
+.countRow[data-selected="true"] {
+  outline: 1px solid var(--lh-figure);
+  outline-offset: -1px;
+}
+
+.reviewParish {
+  color: var(--lh-quiet);
+  min-width: 0;
+}
+
+.reviewEmpty {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+  padding: var(--lh-space-3) var(--lh-space-2);
 }
 
 /* A ruled row per line turned this column into a spreadsheet. Rules belong to
@@ -327,7 +436,15 @@
   padding: var(--lh-space-2) var(--lh-space-5);
   font-size: var(--lh-text-fine);
   align-items: baseline;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
 }
+
+.countRow:not(.head):not([data-unlocated="true"]) { cursor: pointer; }
 
 .countRow.head {
   color: var(--lh-quiet);
@@ -467,11 +584,16 @@
   gap: 1px;
   height: var(--lh-space-8);
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  touch-action: pan-x;
 }
 
 .tick {
-  flex: 1;
-  min-width: 0;
+  /* One advisory is one pointer target. Twenty-four pixels is the interaction
+   * floor; the timeline scrolls rather than shrinking 41 controls below it. */
+  flex: 1 0 var(--lh-space-6);
+  min-width: var(--lh-space-6);
   display: flex;
   flex-direction: column-reverse;
   height: 100%;
@@ -479,7 +601,7 @@
   background: none;
   border: 0;
   padding: 0;
-  outline-offset: 2px;
+  outline-offset: calc(-1 * var(--lh-space-1));
 }
 
 .tick[data-current="true"] {
@@ -518,4 +640,217 @@
   font-size: var(--lh-text-micro);
   color: var(--lh-quiet);
   letter-spacing: 0.04em;
+}
+
+/* Header values wrap into their own register before they become cramped. */
+/* The unwrapped chrome needs roughly 1,600px once all five evidence readings
+ * and the replay/network provenance are present. Switch before its min-content
+ * width can make the entire console horizontally scroll at common 1280–1440px
+ * laptop/projector sizes. */
+@media (max-width: 100em) {
+  .chrome {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 0 var(--lh-space-6);
+    padding: var(--lh-space-3) var(--lh-space-5);
+  }
+
+  .brand,
+  .posture,
+  .stale,
+  .reading {
+    padding: var(--lh-space-2) 0;
+  }
+
+  .brand { grid-column: 1; }
+  .posture { grid-column: 2; }
+  .stale { grid-column: 3; }
+
+  .readings {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--lh-space-5);
+  }
+
+  .body {
+    grid-template-columns: minmax(0, 1fr) 44ch;
+  }
+}
+
+/* A fixed-height side rail cannot keep three independent grid rows visible
+ * once the district review opens: at laptop widths/heights, the gate and
+ * ranked counts consume the available track space and collapse the activity
+ * feed to zero. Let the rail become the one vertical scroll container in that
+ * constrained fixed-frame layout. The review keeps its shorter, local scroll
+ * so opening 100+ districts does not turn the gate itself into the whole page. */
+@media (max-width: 68em), (max-height: 48em) {
+  .side {
+    display: block;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .feed {
+    overflow: visible;
+  }
+}
+
+/* Below this width the console becomes a document-sized operations view. The
+ * page scroll is intentional: every panel remains reachable, and map/feed
+ * internals no longer compete for a fixed viewport. */
+@media (max-width: 56em) {
+  .screen {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--lh-space-3) var(--lh-space-5);
+  }
+
+  .brand { grid-column: 1; }
+  .posture { grid-column: 2; min-width: 0; }
+
+  .stale {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .stale span + span::before {
+    content: "·";
+    margin-inline: var(--lh-space-2);
+  }
+
+  .readings {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--lh-space-3) var(--lh-space-5);
+  }
+
+  .body {
+    display: block;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .mapPanel {
+    border-bottom: 1px solid var(--lh-rule);
+    border-right: 0;
+    overflow: visible;
+    scroll-margin-top: var(--lh-space-3);
+  }
+
+  .mapCanvas {
+    height: 62dvh;
+    max-height: calc(var(--lh-space-8) * 11);
+    min-height: calc(var(--lh-space-8) * 7);
+  }
+
+  .side {
+    display: block;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .feed { overflow: visible; }
+
+  .reviewList {
+    max-height: calc(var(--lh-space-8) * 7);
+  }
+
+  .controller {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    position: static;
+  }
+
+  .transport { grid-column: 1; grid-row: 1; }
+  .clock { grid-column: 2; grid-row: 1; text-align: right; }
+
+  .timeline {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: var(--lh-space-8);
+  }
+}
+
+@media (max-width: 34em) {
+  .chrome,
+  .controller {
+    padding-inline: var(--lh-space-4);
+  }
+
+  .brandMode { max-width: 18ch; }
+  .postureValue { font-size: var(--lh-text-title); }
+
+  .panelHead {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--lh-space-2);
+    padding-inline: var(--lh-space-4);
+  }
+
+  .mapCanvas { padding: var(--lh-space-3); }
+
+  .legend {
+    gap: var(--lh-space-3) var(--lh-space-4);
+    padding-inline: var(--lh-space-4);
+  }
+
+  .gate { padding: var(--lh-space-4); }
+
+  .gateActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .gateButton { width: 100%; }
+
+  .countRow {
+    gap: var(--lh-space-2);
+    grid-template-columns: minmax(0, 1fr) 6ch 6ch;
+    padding-inline: var(--lh-space-4);
+  }
+
+  .countRow:not(.head) { padding-block: var(--lh-space-3); }
+
+  .tline { padding-inline: var(--lh-space-4); }
+
+  .controller {
+    grid-template-columns: 1fr;
+    gap: var(--lh-space-3);
+  }
+
+  .transport {
+    display: grid;
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .transportButton,
+  .rate {
+    min-width: 0;
+  }
+
+  .clock {
+    grid-column: 1;
+    grid-row: 2;
+    text-align: left;
+  }
+
+  .timeline {
+    grid-column: 1;
+    grid-row: 3;
+  }
 }

@@ -24,6 +24,7 @@ export type Tokens = {
   rule: string;
   quiet: string;
   figure: string;
+  structure: string;
 };
 
 /** Read the design tokens off the document, so there is one source of truth. */
@@ -31,12 +32,16 @@ export function readTokens(el: HTMLElement = document.documentElement): Tokens {
   const style = getComputedStyle(el);
   const get = (name: string, fallback: string) =>
     style.getPropertyValue(name).trim() || fallback;
+  const figure = get("--lh-figure", "#e9eae4");
   return {
     ground: get("--lh-ground", "#101413"),
     panel: get("--lh-panel", "#191e1c"),
     rule: get("--lh-rule", "#2e3532"),
     quiet: get("--lh-quiet", "#7f8b85"),
-    figure: get("--lh-figure", "#e9eae4"),
+    figure,
+    // The locked map-inventory token is mandatory in tokens.css. Figure is a
+    // conservative no-new-hue fallback for an incomplete host stylesheet.
+    structure: get("--lh-structure", figure),
   };
 }
 
@@ -66,19 +71,15 @@ function mix(a: string, b: string, amount: number): string {
  * Roads are all one quiet value. A basemap that ranks motorways above lanes is
  * answering a driving question; the question here is which settlement a
  * household sits in, so the road network is texture, not hierarchy. */
-/* The two weights a building is drawn at, from the same land tone the flavor
- * derives so the pair cannot drift apart when the palette moves.
+/* The two weights a building is drawn at.
  *
  * `quiet` is the default: buildings as context, barely there, because a
  * footprint competing with a wind band is a map arguing with itself. `subject`
- * is the structures view, where the buildings are the only thing left on screen
- * and the hazard has stepped back to being their backdrop.
- *
- * Same hue, different distance from the ground. A separate colour would be a
- * second meaning, and there is only one thing here — a building. */
+ * is the dedicated structure semantic: saturated cyan so mapped inventory is
+ * distinct from both grey land and the muted forecast-blue ramp. */
 export function buildingWeights(t: Tokens): { quiet: string; subject: string } {
   const land = mix(t.panel, t.figure, 0.26);
-  return { quiet: mix(land, t.figure, 0.12), subject: mix(land, t.figure, 0.62) };
+  return { quiet: mix(land, t.figure, 0.12), subject: t.structure };
 }
 
 export function lighthouseFlavor(t: Tokens): Flavor {
@@ -172,15 +173,31 @@ export function pruneLayers<T extends { id: string }>(layers: T[]): T[] {
  * island, and the handover happens at a zoom where Jamaica fills the frame
  * anyway.
  */
-export function retarget<T extends { id: string; source?: string }>(
+export function retarget<
+  T extends { id: string; source?: string; minzoom?: number; maxzoom?: number },
+>(
   layers: T[],
   source: string,
   gate: { minzoom?: number; maxzoom?: number },
 ): T[] {
-  return layers.map((layer) => ({
-    ...layer,
-    id: `${source}-${layer.id}`,
-    ...(layer.source ? { source } : {}),
-    ...gate,
-  }));
+  return layers.map((layer) => {
+    /* A source handover narrows a generated layer's own visibility window; it
+     * never broadens it. Overwriting `minzoom` with 10.5 made street labels and
+     * other high-detail island layers appear several zooms before their style
+     * intended, crowding the national view. */
+    const minzoom = gate.minzoom === undefined
+      ? layer.minzoom
+      : Math.max(layer.minzoom ?? gate.minzoom, gate.minzoom);
+    const maxzoom = gate.maxzoom === undefined
+      ? layer.maxzoom
+      : Math.min(layer.maxzoom ?? gate.maxzoom, gate.maxzoom);
+
+    return {
+      ...layer,
+      id: `${source}-${layer.id}`,
+      ...(layer.source ? { source } : {}),
+      ...(minzoom === undefined ? {} : { minzoom }),
+      ...(maxzoom === undefined ? {} : { maxzoom }),
+    };
+  });
 }

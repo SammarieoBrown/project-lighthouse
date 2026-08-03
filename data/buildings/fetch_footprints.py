@@ -20,10 +20,9 @@ OSM, already deduplicated against each other, published per country as one
 GeoParquet. Google supplies 87.9%, OSM 7.7%, Microsoft 4.5%. ODbL, inherited
 from OSM.
 
-**Fetch-only, never committed.** 232 MB is far past what belongs in git, and
-unlike the storm advisories this is not something a replay has to reproduce
-byte-for-byte on a demo laptop — it is loaded into Postgres once and queried
-from there.
+**Fetch-only, never committed.** 232 MB is far past what belongs in git. The raw
+footprints remain in the local pinned cache; DuckDB aggregates them by place and
+event advisory, and only those compact results are stored in Postgres.
 
 Standard library only, so a clean clone can fetch without the API environment.
 """
@@ -75,24 +74,42 @@ def fetch(force: bool = False) -> Path:
 
     if TARGET.exists() and not force:
         size = TARGET.stat().st_size
-        if size == EXPECTED_BYTES:
-            print(f"{TARGET.name} already cached ({size:,} bytes)")
-            return TARGET
-        print(f"{TARGET.name} is {size:,} bytes, expected {EXPECTED_BYTES:,} — refetching")
+        try:
+            expected = manifest.pinned_digest(CACHE, TARGET)
+        except ValueError as exc:
+            sys.exit(f"invalid {manifest.manifest_path(CACHE)}: {exc}")
+        if expected is None:
+            sys.exit(
+                f"{TARGET.name} exists but is not pinned by manifest.sha256; "
+                "refusing to certify unknown bytes. Use --force to deliberately refetch."
+            )
+        actual = manifest.sha256_file(TARGET)
+        if actual != expected:
+            sys.exit(
+                f"{TARGET.name} sha256 {actual} != committed {expected}; refusing to "
+                "rewrite the manifest over corrupted or changed bytes. Use --force only "
+                "after deciding to replace and repin the source."
+            )
+        print(f"{TARGET.name} already cached and verified ({size:,} bytes)")
+        return TARGET
 
     request = urllib.request.Request(SOURCE, headers={"User-Agent": USER_AGENT})
     # Straight to a temp name so an interrupted download cannot be mistaken for
     # a complete one on the next run.
     partial = TARGET.with_suffix(".partial")
+    partial.unlink(missing_ok=True)
+    reported_total = 0
     try:
         with urllib.request.urlopen(request, timeout=300, context=_SSL) as response:
-            total = int(response.headers.get("content-length") or 0)
-            print(f"fetching {total / 1e6:.0f} MB from source.coop …")
+            reported_total = int(response.headers.get("content-length") or 0)
+            print(f"fetching {reported_total / 1e6:.0f} MB from source.coop …")
             with partial.open("wb") as fh:
                 shutil.copyfileobj(response, fh, length=1 << 20)
     except urllib.error.HTTPError as exc:
+        partial.unlink(missing_ok=True)
         sys.exit(f"source.coop returned {exc.code} for {SOURCE}")
     except OSError as exc:
+        partial.unlink(missing_ok=True)
         reason = getattr(exc, "reason", exc)
         if isinstance(reason, ssl.SSLCertVerificationError):
             sys.exit(
@@ -102,12 +119,32 @@ def fetch(force: bool = False) -> Path:
         sys.exit(f"download failed: {exc}")
 
     size = partial.stat().st_size
+    if reported_total and size != reported_total:
+        partial.unlink(missing_ok=True)
+        sys.exit(
+            f"download ended at {size:,} bytes, but source.coop declared "
+            f"{reported_total:,}; incomplete source was not promoted"
+        )
     if size != EXPECTED_BYTES:
         print(
             f"warning: got {size:,} bytes, expected {EXPECTED_BYTES:,}. "
             "Upstream may have republished — check before trusting the counts.",
             file=sys.stderr,
         )
+    if not force:
+        try:
+            expected = manifest.pinned_digest(CACHE, TARGET)
+        except ValueError as exc:
+            partial.unlink(missing_ok=True)
+            sys.exit(f"invalid {manifest.manifest_path(CACHE)}: {exc}")
+        actual = manifest.sha256_file(partial)
+        if expected is not None and actual != expected:
+            partial.unlink(missing_ok=True)
+            sys.exit(
+                f"downloaded {TARGET.name} sha256 {actual} != committed {expected}; "
+                "the source may have changed. Use --force only after reviewing and "
+                "accepting a new source build."
+            )
     partial.replace(TARGET)
     print(f"wrote {TARGET.relative_to(Path.cwd()) if TARGET.is_relative_to(Path.cwd()) else TARGET} ({size:,} bytes)")
     return TARGET

@@ -31,7 +31,7 @@ per call and took 147 seconds to do it.
 ``household_bands[i]`` to ``households[i]``. Nothing carries a key, because 2,000
 keys per frame across 41 frames is megabytes of repeated identifiers. The
 lengths are asserted before anything is written: a silent off-by-one here
-mislabels real homes.
+mislabels synthetic household records.
 
 **The best track is not a frame.** It is what happened, not what was forecast,
 and folding it into the timeline would let the console claim foresight it did
@@ -54,6 +54,16 @@ from sqlalchemy.orm import Session, defer
 
 from app.config import REPO_ROOT
 from app.models import Advisory, HazardEvent
+from app.registry.buildings import (
+    BuildingInventoryError,
+    INVENTORY_RECIPE_VERSION,
+    advisory_fingerprint as exposure_advisory_fingerprint,
+    exposure_rows_sha256,
+    inventory_fingerprint,
+    stored_event_exposure_rows,
+    stored_structure_rows,
+    structure_rows_sha256,
+)
 from app.registry.geography import community_districts, load_parishes, parish_names
 from app.replay.posture import SIMPLIFY_DEG, arrival_hours, posture_from, warning_codes_here
 
@@ -290,14 +300,14 @@ def _districts(households: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], 
 
 
 def _structures(session: Session) -> dict[tuple[str, str], int]:
-    """Real structures per district, from the footprint inventory.
+    """Mapped source footprints per district.
 
     The counts beside these are synthetic: 2,000 households dropped inside
     community polygons by a seeded generator, each sitting where nothing
-    necessarily stands. These are 1,844,379 measured footprints. Where both
-    exist the map should size itself on the measured one, because "413 of our
-    500 synthetic homes" describes our random seed and "42,264 structures in
-    Black River" describes Jamaica.
+    necessarily stands. These are 1,844,379 mapped source footprints. Where
+    both exist the map should size itself on the mapped inventory, because
+    "413 of our 500 synthetic homes" describes our random seed while "42,264
+    mapped structures in Black River" describes the reference dataset.
     """
     rows = session.execute(
         text(
@@ -308,7 +318,9 @@ def _structures(session: Session) -> dict[tuple[str, str], int]:
     return {(parish, district): n for parish, district, n in rows}
 
 
-def _exposure(session: Session) -> dict[UUID, dict[tuple[str, str], list[int]]]:
+def _exposure(
+    session: Session, event: HazardEvent
+) -> dict[UUID, dict[tuple[str, str], list[int]]]:
     """Structures per district inside each wind band, per advisory.
 
     ``[n64, n50, n34]``, mutually exclusive — a structure is counted once, at
@@ -316,22 +328,325 @@ def _exposure(session: Session) -> dict[UUID, dict[tuple[str, str], list[int]]]:
     independently would report the same building three times and inflate
     exposure by the width of the storm.
 
-    Empty when the inventory has not been built. That is a legitimate state on
-    a clone that has not run app.registry.buildings, so it degrades to absent
-    keys rather than failing the export.
+    Only the selected event is read. Completion is established separately by
+    ``_building_data`` because this table deliberately contains no zero rows.
     """
     out: dict[UUID, dict[tuple[str, str], list[int]]] = {}
     rows = session.execute(
         text(
-            "SELECT advisory_id, parish, district, band, sum(structures)::int "
-            "FROM place_exposure GROUP BY 1, 2, 3, 4"
-        )
+            "SELECT e.advisory_id, e.parish, e.district, e.band, "
+            "       sum(e.structures)::int "
+            "FROM place_exposure e "
+            "JOIN advisory a ON a.id = e.advisory_id "
+            "WHERE a.hazard_event_id = :event AND a.observed = false "
+            "GROUP BY 1, 2, 3, 4"
+        ),
+        {"event": event.id},
     ).all()
     for advisory_id, parish, district, band, n in rows:
         slot = {64: 0, 50: 1, 34: 2}[band]
         entry = out.setdefault(advisory_id, {}).setdefault((parish, district), [0, 0, 0])
         entry[slot] = n
     return out
+
+
+# A marker-less database can prove very little. This one narrow compatibility
+# case is defensible because the historical builder processed the full Melissa
+# advisory set and replaced all exposure rows in one transaction. It lets the
+# already-built database express its ten legitimate zero advisories once after
+# migration; any other marker-less shape remains unavailable.
+_LEGACY_COMPLETE_EVENT = "al132025"
+_LEGACY_COMPLETE_ADVISORIES = tuple(str(number) for number in range(1, 42))
+_LEGACY_PLACED_STRUCTURES = 1_842_165
+_LEGACY_PLACE_ROWS = 775
+_LEGACY_EXPOSED_ADVISORIES = tuple(str(number) for number in range(1, 32))
+
+
+def _building_marker_tables(session: Session) -> tuple[bool, bool, bool]:
+    row = session.execute(
+        text(
+            "SELECT EXISTS ("
+            "         SELECT 1 FROM information_schema.tables "
+            "         WHERE table_schema = current_schema() "
+            "           AND table_name = 'place_structure_build'"
+            "       ), "
+            "       EXISTS ("
+            "         SELECT 1 FROM information_schema.tables "
+            "         WHERE table_schema = current_schema() "
+            "           AND table_name = 'place_exposure_build'"
+            "       ), "
+            "       EXISTS ("
+            "         SELECT 1 FROM information_schema.columns "
+            "         WHERE table_schema = current_schema() "
+            "           AND table_name = 'place_structure_build' "
+            "           AND column_name = 'structure_rows_sha256'"
+            "       ), "
+            "       EXISTS ("
+            "         SELECT 1 FROM information_schema.columns "
+            "         WHERE table_schema = current_schema() "
+            "           AND table_name = 'place_exposure_build' "
+            "           AND column_name = 'structure_rows_sha256'"
+            "       ), "
+            "       EXISTS ("
+            "         SELECT 1 FROM information_schema.columns "
+            "         WHERE table_schema = current_schema() "
+            "           AND table_name = 'place_exposure_build' "
+            "           AND column_name = 'exposure_rows_sha256'"
+            "       )"
+        )
+    ).one()
+    return bool(row[0]), bool(row[1]), all(bool(value) for value in row[2:])
+
+
+def _lock_building_snapshot(session: Session) -> tuple[bool, bool, bool]:
+    """Hold a stable building/advisory snapshot through the export transaction.
+
+    PostgreSQL READ COMMITTED gives each SELECT a fresh snapshot. The inventory
+    builder replaces sparse exposure and the global denominator atomically, but
+    without these compatible read locks it could commit between our marker and
+    aggregate reads. SHARE blocks that write transaction while allowing other
+    exports to proceed.
+    """
+    structure_marker, exposure_marker, digest_schema = _building_marker_tables(session)
+    tables = ["advisory", "place_exposure"]
+    if exposure_marker:
+        tables.append("place_exposure_build")
+    tables.append("place_structures")
+    if structure_marker:
+        tables.append("place_structure_build")
+    session.execute(text(f"LOCK TABLE {', '.join(tables)} IN SHARE MODE"))
+    return structure_marker, exposure_marker, digest_schema
+
+
+def _exposure_advisory_rows(session: Session, event: HazardEvent) -> list[tuple]:
+    rows = session.execute(
+        text(
+            "SELECT id, advisory_number, "
+            "       ST_AsText(wind_field_34::geometry), "
+            "       ST_AsText(wind_field_50::geometry), "
+            "       ST_AsText(wind_field_64::geometry) "
+            "FROM advisory "
+            "WHERE hazard_event_id = :event AND observed = false"
+        ),
+        {"event": event.id},
+    ).all()
+    return sorted(rows, key=lambda row: advisory_key(row[1]))
+
+
+def _building_data(
+    session: Session,
+    event: HazardEvent,
+    advisories: list[Advisory],
+    *,
+    marker_tables: tuple[bool, bool, bool] | None = None,
+) -> tuple[
+    dict[tuple[str, str], int] | None,
+    dict[UUID, dict[tuple[str, str], list[int]]] | None,
+]:
+    """Return independently validated mapped inventory and event exposure.
+
+    Sparse exposure rows alone cannot distinguish a valid zero from an
+    unfinished build. A current inventory marker validates the denominator;
+    the selected event marker then validates advisory identity and sparse-row
+    totals. Any mismatch omits exposure instead of manufacturing zeros.
+    """
+    if marker_tables is None:
+        marker_tables = _lock_building_snapshot(session)
+
+    inventory_stats = session.execute(
+        text(
+            "SELECT count(*)::int, coalesce(sum(structures), 0)::bigint "
+            "FROM place_structures"
+        )
+    ).one()
+    try:
+        inventory_rows_digest = structure_rows_sha256(stored_structure_rows(session))
+    except BuildingInventoryError:
+        # PostgreSQL float8 can represent NaN/Infinity. A corrupted aggregate is
+        # unavailable mapped data, not grounds to take down the historical replay.
+        return None, None
+    structure_marker_table, exposure_marker_table, digest_schema = marker_tables
+    if not structure_marker_table and not exposure_marker_table:
+        legacy_candidate = True
+    elif not (structure_marker_table and exposure_marker_table and digest_schema):
+        # One marker table without the other, or a pre-digest copy of 0004, is a
+        # partial migration. Fail closed before selecting columns that do not
+        # exist; legacy inference is only for no marker tables or current empty
+        # marker tables.
+        return None, None
+    else:
+        marker_rows = session.execute(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM place_structure_build), "
+                "       EXISTS (SELECT 1 FROM place_exposure_build)"
+            )
+        ).one()
+        # 0004 deliberately cannot manufacture provenance for existing rows.
+        # Immediately after upgrading a legacy database both new tables are
+        # empty, so the same exact one-time Melissa inference remains valid.
+        # Once either marker table has any row, only marker-backed validation
+        # below may expose data.
+        legacy_candidate = not any(marker_rows)
+
+    if legacy_candidate:
+        event_exposure_stats = session.execute(
+            text(
+                "SELECT count(*)::int, coalesce(sum(e.structures), 0)::bigint, "
+                "       count(DISTINCT e.advisory_id)::int "
+                "FROM place_exposure e "
+                "JOIN advisory a ON a.id = e.advisory_id "
+                "WHERE a.hazard_event_id = :event AND a.observed = false"
+            ),
+            {"event": event.id},
+        ).one()
+        exposure_event_count = session.scalar(
+            text(
+                "SELECT count(DISTINCT a.hazard_event_id)::int "
+                "FROM place_exposure e JOIN advisory a ON a.id = e.advisory_id "
+                "WHERE a.observed = false"
+            )
+        )
+        exposed_advisory_numbers = tuple(
+            sorted(
+                session.execute(
+                    text(
+                        "SELECT DISTINCT a.advisory_number "
+                        "FROM place_exposure e "
+                        "JOIN advisory a ON a.id = e.advisory_id "
+                        "WHERE a.hazard_event_id = :event AND a.observed = false"
+                    ),
+                    {"event": event.id},
+                ).scalars(),
+                key=advisory_key,
+            )
+        )
+        observed_exposure_count = session.scalar(
+            text(
+                "SELECT count(*)::int FROM place_exposure e "
+                "JOIN advisory a ON a.id = e.advisory_id "
+                "WHERE a.observed = true"
+            )
+        )
+        legacy_complete = (
+            event.external_ref == _LEGACY_COMPLETE_EVENT
+            and tuple(advisory.advisory_number for advisory in advisories)
+            == _LEGACY_COMPLETE_ADVISORIES
+            and inventory_stats[0] == _LEGACY_PLACE_ROWS
+            and inventory_stats[1] == _LEGACY_PLACED_STRUCTURES
+            and event_exposure_stats[0] > 0
+            and event_exposure_stats[1] > 0
+            and event_exposure_stats[2] == len(_LEGACY_EXPOSED_ADVISORIES)
+            and exposed_advisory_numbers == _LEGACY_EXPOSED_ADVISORIES
+            and exposure_event_count == 1
+            and observed_exposure_count == 0
+        )
+        if not legacy_complete:
+            return None, None
+        structures = _structures(session)
+        exposure = _exposure(session, event)
+        for advisory in advisories:
+            exposure.setdefault(advisory.id, {})
+        return structures, exposure
+
+    inventory_marker = session.execute(
+        text(
+            "SELECT inventory_fingerprint, source_sha256, boundaries_sha256, "
+            "       recipe_version, structure_count, place_count, "
+            "       structure_rows_sha256 "
+            "FROM place_structure_build WHERE singleton = true"
+        )
+    ).one_or_none()
+
+    if inventory_marker is None:
+        return None, None
+
+    (
+        marker_fingerprint,
+        marker_source,
+        marker_boundaries,
+        marker_recipe,
+        marker_structures,
+        marker_places,
+        marker_structure_rows,
+    ) = inventory_marker
+    inventory_valid = (
+        marker_recipe == INVENTORY_RECIPE_VERSION
+        and marker_fingerprint
+        == inventory_fingerprint(
+            source_sha256=marker_source,
+            boundaries_sha256=marker_boundaries,
+            recipe_version=marker_recipe,
+        )
+        and inventory_stats[0] == marker_places
+        and inventory_stats[1] == marker_structures
+        and inventory_rows_digest == marker_structure_rows
+    )
+    if not inventory_valid:
+        return None, None
+
+    structures = _structures(session)
+    exposure_marker = session.execute(
+        text(
+            "SELECT inventory_fingerprint, structure_rows_sha256, "
+            "       advisory_fingerprint, advisory_count, "
+            "       exposure_row_count, exposed_structure_count, "
+            "       exposure_rows_sha256 "
+            "FROM place_exposure_build WHERE hazard_event_id = :event"
+        ),
+        {"event": event.id},
+    ).one_or_none()
+    if exposure_marker is None:
+        return structures, None
+
+    (
+        exposure_inventory,
+        exposure_structure_rows,
+        marker_advisories,
+        marker_advisory_count,
+        marker_rows,
+        marker_exposed,
+        marker_exposure_rows,
+    ) = exposure_marker
+    current_advisory_rows = _exposure_advisory_rows(session, event)
+    event_exposure_rows = stored_event_exposure_rows(session, event.id)
+    exposure_stats = (len(event_exposure_rows), sum(row[5] for row in event_exposure_rows))
+    try:
+        event_exposure_rows_digest = exposure_rows_sha256(event.id, event_exposure_rows)
+    except BuildingInventoryError:
+        return structures, None
+    observed_event_exposure_count = session.scalar(
+        text(
+            "SELECT count(*)::int FROM place_exposure e "
+            "JOIN advisory a ON a.id = e.advisory_id "
+            "WHERE a.hazard_event_id = :event AND a.observed = true"
+        ),
+        {"event": event.id},
+    )
+    exposure_valid = (
+        exposure_inventory == marker_fingerprint
+        and exposure_structure_rows == marker_structure_rows
+        and marker_advisory_count == len(advisories)
+        and len(current_advisory_rows) == len(advisories)
+        and marker_advisories
+        == exposure_advisory_fingerprint(current_advisory_rows)
+        and exposure_stats[0] == marker_rows
+        and exposure_stats[1] == marker_exposed
+        and observed_event_exposure_count == 0
+        and event_exposure_rows_digest == marker_exposure_rows
+    )
+    if not exposure_valid:
+        return structures, None
+
+    exposure = _exposure(session, event)
+    if any(
+        district not in structures or sum(bands) > structures[district]
+        for advisory_exposure in exposure.values()
+        for district, bands in advisory_exposure.items()
+    ):
+        return structures, None
+    for advisory in advisories:
+        exposure.setdefault(advisory.id, {})
+    return structures, exposure
 
 
 # --------------------------------------------------------------------------
@@ -500,7 +815,7 @@ def _frame(
         raise ExportError(
             f"advisory {advisory.advisory_number}: {len(bands)} household bands "
             f"against {len(district_index)} households. The two are a positional "
-            "join, so a mismatch mislabels real homes."
+            "join, so a mismatch mislabels synthetic household records."
         )
 
     slot = {char: i for i, char in enumerate(BAND_ORDER)}
@@ -523,9 +838,8 @@ def _frame(
     frame["totals"] = dict(zip(BAND_NAMES, totals, strict=True))
     frame["district_counts"] = counts
     frame["household_bands"] = bands
-    # Absent, not zeroed, when the inventory has not been built — a clone that
-    # has not run app.registry.buildings has no measurement, and zero would be
-    # a claim that nothing is exposed.
+    # Absent, not zeroed, without a completed mapped-exposure build. Zero would
+    # otherwise claim that nothing is exposed when the analysis is unavailable.
     if exposed is not None:
         frame["district_exposed"] = exposed
     return frame
@@ -564,6 +878,7 @@ def build_replay(
     districts, district_index = _districts(households)
     with_registry = {h["parish"] for h in households if h.get("parish")}
 
+    building_marker_tables = _lock_building_snapshot(session)
     advisories = _advisories(session, event)
     if not advisories:
         raise ExportError(f"hazard event {external_ref!r} has no forecast advisories")
@@ -571,15 +886,30 @@ def build_replay(
     geometry = _geometry(session, event)
     bands = _bands(session, event)
 
-    # Measured structures beside the synthetic households. Absent on a clone
-    # that has not built the inventory, which the frames express by omitting the
-    # key rather than by reporting zeros.
-    structures = _structures(session)
-    exposure = _exposure(session)
-    for entry in districts:
-        n = structures.get((entry["parish"], entry["district"]))
-        if n is not None:
-            entry["structures"] = n
+    # Mapped source footprints beside the synthetic households. Inventory and
+    # exposure validate independently: a current inventory may still be shown
+    # when this event has no completed exposure build, but sparse exposure rows
+    # never become zero arrays without a matching completion marker.
+    structures, exposure = _building_data(
+        session,
+        event,
+        advisories,
+        marker_tables=building_marker_tables,
+    )
+    if structures is not None:
+        missing_inventory = [
+            (entry["parish"], entry["district"])
+            for entry in districts
+            if (entry["parish"], entry["district"]) not in structures
+        ]
+        if missing_inventory:
+            structures = None
+            exposure = None
+        else:
+            for entry in districts:
+                entry["structures"] = structures[
+                    (entry["parish"], entry["district"])
+                ]
 
     missing = [a.advisory_number for a in advisories if a.id not in bands]
     if missing:
@@ -602,7 +932,7 @@ def build_replay(
                     exposure[advisory.id].get((d["parish"], d["district"]), [0, 0, 0])
                     for d in districts
                 ]
-                if advisory.id in exposure
+                if exposure is not None
                 else None
             ),
         )

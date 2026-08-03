@@ -1,101 +1,130 @@
 # Lighthouse: the map stack
 
-How the console draws a map with no internet, and the four traps that cost most of a day.
+How the EOC console keeps its map useful, truthful and recoverable on an unreliable network.
 
-Read the traps before touching `apps/console/app/eoc/map/`. Every one of them fails **silently** — the map builds, the canvas sizes, the controls draw, and the thing is simply wrong in a way that survives all the way to a demo.
+Read this before changing `apps/console/app/eoc/map/`. Most failures in this stack do not throw a visible exception: the canvas and controls can appear while the evidence is missing or means something different from the legend.
 
----
+## The evidence contract
+
+The selected replay frame contains three different kinds of information, and the map keeps them visually and verbally separate:
+
+- **Observed:** the advisory's storm position and intensity readings.
+- **Forecast:** the cone, track, 34 kt, 50 kt and 64 kt wind fields, plus published location probabilities.
+- **Modelled:** expected damage for the synthetic household registry. This is aggregated to real parish geometry; synthetic household and district coordinates are never drawn as observed homes.
+
+The structures archive is neutral reference inventory. A footprint or aggregate says only that mapped structure data from public datasets exists there. The selected forecast polygons are drawn above it; no advisory, damage band or cumulative "first hit" value is baked into a building tile.
+
+The interactive MapLibre view and the SVG fallback both derive parish impact through `parishImpacts()` in `apps/console/app/eoc/map.tsx`. Losing WebGL or a basemap therefore changes navigation and detail, not the evidence being claimed.
 
 ## The stack
 
-| Piece | What | Why |
+| Piece | Role | Boundary |
 |---|---|---|
-| **MapLibre GL JS 6** | Renderer | Named in the build spec. WebGL2 only. |
-| **PMTiles** | Tile format | One file, read over HTTP range requests. Opening a 98 MB archive costs kilobytes. |
-| **Protomaps** | Tile source + style | Daily planet build; `pmtiles extract` pulls our region without downloading 137 GB. |
-| **`@protomaps/basemaps`** | Style generator | A Flavor is a plain colour object, so the basemap wears our tokens. |
+| MapLibre GL JS 6 | Interactive renderer | WebGL2; rotation and pitch are disabled |
+| PMTiles | Range-addressed vector archives | Never cache partial responses as whole files |
+| Protomaps + `@protomaps/basemaps` | Basemap data and token-driven style | Context, not hazard or impact evidence |
+| Replay GeoJSON | Forecast, storm position and parish impact | One selected advisory at a time |
+| SVG synoptic map | Evidence-equivalent fallback | Static; no basemap or structure-detail claim |
 
-No `react-map-gl`. One map, a static snapshot, and a design system that wants every layer — a hundred lines of init beats a dependency whose main offer is JSX sugar.
+There is no `react-map-gl` wrapper. The map is constructed once, and replay steps call `setData` on the existing GeoJSON sources so the viewport, tile caches and controls survive a scrub.
 
-### Two archives, switched by zoom
+## Archives and zoom contracts
 
-One archive cannot be both seamless and detailed at a sane size.
+| Archive | Content | Native zoom |
+|---|---|---|
+| `caribbean-z11.pmtiles` | Caribbean context | z0–11 |
+| `jamaica-z15.pmtiles` | Jamaica detail | z0–15 |
+| `structures-z15.pmtiles` | Weighted structure aggregates, then mapped source-footprint features | z9–15 |
 
-| Archive | Extent | Zoom | Size |
-|---|---|---|---|
-| `caribbean-z11.pmtiles` | Trinidad → Yucatán → Bahamas | z0–11 | 98 MB |
-| `jamaica-z15.pmtiles` | Jamaica | z0–15 | 40 MB |
+The regional and island basemaps hand over at z10.5. The viewport is fenced to their covered region so an operator cannot pan into a blank area that looks like failed data.
 
-They hand over at **z10.5**, where Jamaica fills the frame and nobody sees the seam. The basin at working zoom would be 442 MB, almost all of it street geometry for countries we hold no registry in.
+The structures archive has two deliberately different layers:
 
-The viewport is **fenced** to the covered region (`maxBounds`, `minZoom`). A map that ends mid-pan reads as broken, and an operator who can scroll into blank ocean has been given a control that only does the wrong thing. Constrain the viewport; do not chase the bounding box outward forever.
+- `structure_points`, z9–13: one deterministic 0.005-degree grid aggregate per occupied cell. Property `w` is the exact number of mapped source footprints represented; the build asserts that `sum(w)` equals the footprint inventory.
+- `structures`, z14–15: one vector-tile feature per mapped source footprint, carrying only compact district/community geography properties `d` and `c`. Tile geometry is quantized and simplified for display; the source inventory remains authoritative.
 
-### Rebuilding
+The panel names the active representation. It never says "every building" while grouped aggregates are on screen.
+
+## Local, hosted and offline behavior
+
+With no `NEXT_PUBLIC_TILES_URL`, archives are staged into `apps/console/.tiles` and served by `app/map/[file]/route.ts`. That route allowlists the three filenames, supports GET and HEAD byte ranges, streams through a cancellable Web stream, and requires revalidation because the filenames are stable across rebuilds.
+
+With `NEXT_PUBLIC_TILES_URL`, production reads the same archive and asset tree from the public tile host. The host must support CORS and HTTP 206 range responses. Glyphs and sprites are required for a labelled basemap and live beside the archives in both modes.
+
+The production service worker caches the console shell, deterministic replay and hashed application chunks after a successful visit. It intentionally bypasses every request carrying a `Range` header: the Cache API cannot safely key partial PMTiles responses, and returning the wrong 206 is worse than showing the static map. Consequently:
+
+- a previously visited console and replay can reload offline;
+- interactive PMTiles are available only while their local or hosted range source is reachable; and
+- a range failure degrades to the replay-backed SVG forecast/parish-impact map.
+
+This is a warm-cache guarantee, not a claim that a device can open the console offline before its first successful visit.
+
+`Reference imagery` is Esri World Imagery used live with attribution. It is online-only, is not cached by Lighthouse, and is explicitly labelled as general context—not storm-dated or post-event damage evidence. Failure of that optional raster leaves the standard basemap in place.
+
+## Build and publication
 
 ```bash
-brew install pmtiles
+brew install pmtiles tippecanoe
 python3 data/tiles/fetch_basemap.py
+cd apps/api && uv run python -m app.registry.building_tiles
 ```
 
-Archives are **fetched, not committed** — 138 MB, rebuildable in under a minute from a pinned upstream build. Their checksums live in `data/tiles/cache/manifest.sha256`, which *is* committed: the point of the manifest is that your copy matches, not that git carries it.
+Fetched basemap bytes are pinned by `data/tiles/cache/manifest.sha256`. The derived structures archive is pinned separately by `data/tiles/structures.manifest.json`, which records source hashes, the aggregation/tiling recipes, tool versions, intermediate hashes, counts, final byte size and final SHA-256. A basemap fetch must never certify whichever derived archive happens to be present.
 
-Glyphs and sprites **are** committed. They are about a megabyte, and without them the map renders and silently loses every place name — see trap 4.
+Before publication, verify the local artifact and its layer contract:
 
----
-
-## The four traps
-
-### 1. Turbopack drops MapLibre's worker
-
-**Symptom.** The map builds. The canvas sizes correctly. Navigation controls draw. The scale bar reports a sensible distance. `map.getStyle().sources` lists everything. And not one tile ever loads — every source stays `isSourceLoaded() === false`, `queryRenderedFeatures()` returns nothing, and the screen renders as a map of the open sea. No errors.
-
-**Cause.** MapLibre parses every source in a web worker. Turbopack does not bundle its inline worker, so the worker never starts and every source stalls forever.
-
-**Fix.** Serve the worker yourself and call `setWorkerUrl()` once per document:
-
-```js
-setWorkerUrl(`${window.location.origin}/maplibre/maplibre-gl-worker.mjs`);
+```bash
+pmtiles verify data/tiles/cache/structures-z15.pmtiles
+pmtiles show --metadata data/tiles/cache/structures-z15.pmtiles
 ```
 
-**The part that bites twice:** `maplibre-gl-worker.mjs` imports `maplibre-gl-shared.mjs` from *its own directory*. Ship the worker without its sibling and it fails on its first import — the same silent blank map, one step further along. `scripts/stage-assets.mjs` copies both, and treats a missing worker as fatal because a broken install should stop the build.
+`python3 data/tiles/upload_basemap.py --verify` is a read-only audit of what is
+already public; it is expected to fail before a changed local artifact has been
+published. The publisher compares full SHA-256 content, not only
+`Content-Length`, and separately verifies that each PMTiles object answers a
+header range with HTTP 206 and a revalidating cache policy. Run it without
+`--verify` only when publishing reviewed local artifacts is intended.
 
-### 2. Byte-range serving cannot be assumed
+## Failure boundaries
 
-**Symptom.** The map works, but feels slow and occasionally throws
-`Server returned no content-length header or content-length exceeding request`.
+- **Regional or island basemap failure:** render the SVG map with the same selected forecast and parish impact.
+- **Structures archive failure:** keep the healthy standard basemap, hide only the optional inventory layers, and report inventory unavailable.
+- **Reference imagery failure:** keep the standard basemap and forecast/impact overlays.
+- **Missing replay:** keep the console shell, disable replay controls, and state that replay data is unavailable.
+- **Invalid replay:** fail closed before drawing plausible-looking bad geography or counts.
 
-**Cause.** Next's static handler answered the **first** request for a large file in `public/` with a **200 and the entire body**, ignoring the `Range` header it was sent and omitting `Content-Range`. Every *subsequent* request was a correct 206. The pmtiles client notices, complains, retries, and recovers — so the map works, having first downloaded **98 MB to read 16 KB of header**.
+## Traps that fail silently
 
-This is the worst kind of bug: it is not a failure, it is a success with a hidden cost, and it only hurts on the network you cannot control.
+### MapLibre's worker and shared module
 
-**Fix.** Archives live outside `public/` and are served by `app/map/[file]/route.ts`, which implements Range properly — both open-ended forms (`bytes=100-`, `bytes=-100`), 416 where required, filename allowlisted and the resolved path re-checked.
+Turbopack does not reliably bundle MapLibre's inline worker. `scripts/stage-assets.mjs` copies both `maplibre-gl-worker.mjs` and its sibling `maplibre-gl-shared.mjs`; `setWorkerUrl()` points MapLibre at the staged worker. Missing either file can leave a correctly sized blank map with no useful browser exception.
 
-**Measured:** 11 requests and 199 KB to draw the map, against 98 MB before.
+### Range handling
 
-### 3. `force-static` reintroduces trap 2
+Do not move PMTiles into `public/` and trust the framework's static handler. A first request has previously returned the entire archive with HTTP 200. Do not mark the route `force-static`: prerendering discards the request Range header and recreates the same bug.
 
-The fix for trap 2 shipped with `export const dynamic = "force-static"`, which lets Next prerender the route and cache the response — **discarding the `Range` header** and serving the whole archive with a 200.
+### Stable filenames are not immutable
 
-The fix failed the same way as the thing it fixed. A range handler must be `force-dynamic`, and there is no version of this that is cacheable at the route level.
+The archive names stay stable while their bytes can change. `immutable` caching serves old map data after a rebuild. The local route uses validators with `max-age=0, must-revalidate`; the active PMTiles client still caches the ranges it has already read.
 
-### 4. Tokens inherit from the wrong element
+### Theme tokens must be read inside the themed subtree
 
-`readTokens()` read from `document.documentElement`, but the console sets `data-theme="dark"` on its `<main>`. The basemap resolved the **light** palette and painted near-white on a machine set to light mode.
+The console applies `data-theme="dark"` to its `<main>`. Read CSS tokens from the map container, not `document.documentElement`, or a browser in light mode can generate a light basemap inside the dark console.
 
-The same bug bit earlier at the CSS level: `color` inherits as a *computed* value, so scoping `data-theme` to an element redefines the tokens for its subtree while text colour resolved higher up keeps inheriting down. Every reading and the whole counts table came out near-black on near-black.
+### Optional sources must stay optional
 
-**Rule.** Read tokens from an element **inside** the themed subtree, and restate `color` wherever you restate ground.
+Do not classify every error containing the word `pmtiles` as a basemap failure. Identify the actual source or archive. Otherwise one unavailable structures tile can tear down a healthy regional/island map.
 
----
+### Archive properties are a contract
 
-## Debugging a blank map
+Inspect `vector_layers` and `strategies` after every structures build. The wide layer may expose only `w`; footprints may expose only `d` and `c`. Forecast/advisory fields, unexpected zoom ranges, or millions of low-zoom polygon drops mean the archive is wrong even when it renders.
 
-A blank map is the default failure of this stack, so start by making it talk.
+## Debugging checklist
 
-1. **Log every map error.** `map.on("error", …)` is where MapLibre puts style failures, and a handler that filters for one message swallows the rest. That is how trap 1 hid behind a sprite-URL error for an hour.
-2. **Check `isStyleLoaded()` and `isSourceLoaded()`.** Style loaded but no source caches means the worker (trap 1).
-3. **Check whether GeoJSON sources load.** They need no protocol and no network. If *those* stall, it is the worker, not the tiles.
-4. **Count the bytes.** `performance.getEntriesByType("resource")` filtered to `.pmtiles`. Healthy is ~11 requests and ~200 KB. Anything near the archive size is trap 2.
-5. **A dev handle helps.** `window.lhMap` is set outside production; a map that renders nothing is very hard to debug from the outside.
-
-And restart the dev server after changing map code. Half an hour went into an error that was a stale server holding old module state.
+1. Log every MapLibre error; do not filter the event stream down to one expected message.
+2. Inspect `isStyleLoaded()`, `isSourceLoaded()` and `queryRenderedFeatures()` through `window.lhMap` in development.
+3. Verify the worker and shared module return 200 before blaming tile data.
+4. Inspect PMTiles network requests: healthy reads are repeated small 206 responses, not one archive-sized 200.
+5. Test Forecast + impact, Reference imagery and Structures independently; an optional-mode failure must not remove another mode.
+6. Force the basemap unavailable and compare the SVG fallback's advisory, wind fields, parish bands and counts.
+7. Restart a stale development server before treating HMR state as runtime evidence.

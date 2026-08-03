@@ -28,7 +28,9 @@
   z-index: 2;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--lh-space-3);
+  max-width: calc(100% - (2 * var(--lh-space-4)));
 }
 
 /* Says what a mark currently means. A map that silently changes the meaning of
@@ -57,6 +59,11 @@
   background: color-mix(in srgb, var(--lh-ground) 82%, transparent);
   color: var(--lh-quiet);
   cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: var(--lh-space-1) solid var(--lh-figure);
+  outline-offset: var(--lh-space-1);
 }
 
 .toggle[aria-pressed="true"],
@@ -95,6 +102,86 @@
   border-left-color: var(--lh-figure);
 }
 
+/* A decoded key, not a decorative legend. Every swatch is the exact token and
+ * threshold used by the paint expression in layers.ts. */
+.key {
+  position: absolute;
+  left: var(--lh-space-4);
+  bottom: var(--lh-space-7);
+  z-index: 2;
+  max-width: calc(100% - (2 * var(--lh-space-4)));
+  padding: var(--lh-space-3);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  color: var(--lh-quiet);
+  background: color-mix(in srgb, var(--lh-ground) 88%, transparent);
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.keyTitle {
+  display: block;
+  margin-bottom: var(--lh-space-2);
+  color: var(--lh-figure);
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.keyGrid {
+  display: grid;
+  grid-template-columns: var(--lh-space-5) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--lh-space-3);
+  row-gap: var(--lh-space-1);
+}
+
+.keyMark {
+  width: var(--lh-space-5);
+  height: var(--lh-space-3);
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.wind34 { color: var(--lh-hazard-34); }
+.wind50 { color: var(--lh-hazard-50); }
+.wind64 { color: var(--lh-hazard-64); }
+.impactMajor { color: var(--lh-elevated); }
+.impactDestroyed { color: var(--lh-critical); }
+
+.track {
+  height: 0;
+  border: 0;
+  border-top: 1px dashed var(--lh-figure);
+  background: none;
+}
+
+.structure {
+  color: var(--lh-structure);
+  background: color-mix(in srgb, var(--lh-structure) 80%, transparent);
+}
+
+.keyNote {
+  display: block;
+  margin-top: var(--lh-space-2);
+  border-top: 1px solid var(--lh-rule);
+  padding-top: var(--lh-space-2);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- MapLibre's own controls, brought into the system ---- */
 
 .wrap :global(.maplibregl-ctrl-group) {
@@ -113,6 +200,23 @@
   opacity: 0.7;
 }
 
+.wrap :global(.lh-map-reset button) {
+  width: auto;
+  min-width: calc(var(--lh-space-8) + var(--lh-space-4));
+  padding-inline: var(--lh-space-3);
+  color: var(--lh-figure);
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-micro);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wrap :global(.maplibregl-ctrl-group button:focus-visible) {
+  outline: var(--lh-space-1) solid var(--lh-figure);
+  outline-offset: var(--lh-space-1);
+}
+
 .wrap :global(.maplibregl-ctrl-scale) {
   background: transparent;
   border: 1px solid var(--lh-rule);
@@ -122,7 +226,8 @@
   font-size: var(--lh-text-micro);
 }
 
-/* Attribution is a legal requirement for OpenStreetMap and NOAA, so it stays —
+/* Source attribution is a legal requirement. OpenStreetMap is always present;
+ * Esri appears only when its reference-imagery source is selected. It stays
  * quiet, but never hidden. */
 .wrap :global(.maplibregl-ctrl-attrib) {
   background: color-mix(in srgb, var(--lh-ground) 70%, transparent);
@@ -133,4 +238,57 @@
 
 .wrap :global(.maplibregl-ctrl-attrib a) {
   color: var(--lh-quiet);
+}
+
+/* Long, explicit mode names are part of the evidence contract. On a phone they
+ * wrap inside equal columns instead of extending past the clipped map canvas. */
+@media (max-width: 34em) {
+  .controls {
+    align-items: stretch;
+    width: calc(100% - (2 * var(--lh-space-4)));
+  }
+
+  .scaleNote {
+    width: 100%;
+  }
+
+  .bases {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .bases .toggle {
+    min-width: 0;
+    padding-inline: var(--lh-space-2);
+    line-height: var(--lh-leading-tight);
+    white-space: normal;
+  }
+
+  /* The closed responsive attribution control is a 24px info button above a
+   * 10px MapLibre margin. Reserve a real gap so it never sits on the key note;
+   * the temporary expanded legal copy may overlay the map by design. */
+  .key {
+    bottom: calc(var(--lh-space-7) + var(--lh-space-4));
+  }
+
+  /* MapLibre expands compact attribution upward from the bottom edge. During
+   * that explicit/open state, pack the navigation and key into the otherwise
+   * unused band below the selector so the legal copy never covers the key.
+   * The closed state keeps the more relaxed map spacing. */
+  .wrap:has(:global(.maplibregl-ctrl-attrib.maplibregl-compact-show)) .key {
+    bottom: calc(var(--lh-space-8) + var(--lh-space-7));
+  }
+
+  /* The mode selector owns the full top width on a phone. Put MapLibre's
+   * navigation stack in the clear band between that selector and the key;
+   * leaving it at top-right covers Reference imagery and Structures. */
+  .wrap :global(.maplibregl-ctrl-top-right) {
+    top: calc((2 * var(--lh-space-8)) + var(--lh-space-7));
+  }
+
+  .wrap:has(:global(.maplibregl-ctrl-attrib.maplibregl-compact-show))
+    :global(.maplibregl-ctrl-top-right) {
+    top: calc(var(--lh-space-8) + var(--lh-space-7) + var(--lh-space-5));
+  }
 }

@@ -80,6 +80,13 @@ Ranked roughly by how strongly each one reads as machine-generated. Anything her
 29. **shadcn/ui or a Tailwind component library used unmodified.** Using the primitives is fine — using them with default tokens is the leading tell in the corpus. If we adopt any component library, its theme layer is fully overwritten before the second component lands. As of Aug 2 there is no Tailwind and no component library: the substrate is plain custom properties, which is the version of this rule with nothing to get wrong. Adopting Tailwind later is allowed only with `--color-*` reset and our tokens mapped in.
 30. **A ground nobody chose.** Both grounds are decided and each has a reason: the console is dark because an EOC is read in a dim room during a storm, often with the lights down and a projector running; the portal is light because it is read in daylight, on a phone, by a donor or an auditor who is not in a crisis. Different rooms, different grounds. What is banned is a mode that appears because a framework shipped one — and a theme toggle on an operational screen, which asks the user to decide something the product already knows.
 
+One narrow colour exception is committed for Register I: `--lh-structure` is a
+cyan-blue mark only in the explicit **Structures** map view and its key. It is
+not a product accent. It encodes mapped public-source inventory that was
+illegible as grey-on-grey; the warm meaning hues already encode impact, while
+the muted blue outlines encode forecast wind thresholds. It carries no glow,
+chrome, status, or action affordance and must not leave that map layer.
+
 ---
 
 ## Part 2 — The positive direction

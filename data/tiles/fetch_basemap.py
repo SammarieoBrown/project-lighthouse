@@ -7,7 +7,8 @@ quieter dependencies people forget: glyphs, sprites, and the style itself. A
 basemap that renders but shows no place names, because the font ranges are
 fetched from a CDN at draw time, is not an offline basemap.
 
-So everything lands here and is pinned by the same manifest as the storm cache.
+So everything lands here and is pinned by this tile cache's own committed
+manifest, independently of the storm replay cache.
 
     python3 data/tiles/fetch_basemap.py            # fetch what is missing
     python3 data/tiles/fetch_basemap.py --force    # refetch everything
@@ -90,6 +91,46 @@ def ssl_context() -> ssl.SSLContext:
 _SSL = ssl_context()
 
 
+def _pinned_digest(target: Path) -> str | None:
+    try:
+        return manifest.pinned_digest(CACHE, target)
+    except ValueError as exc:
+        raise RuntimeError(f"invalid {manifest.manifest_path(CACHE)}: {exc}") from exc
+
+
+def _reuse_verified(target: Path, *, force: bool) -> bool:
+    """Reuse an existing cache file only when its committed digest matches."""
+    if force or not target.exists():
+        return False
+    expected = _pinned_digest(target)
+    if expected is None:
+        raise RuntimeError(
+            f"{target.relative_to(CACHE)} exists but is not pinned by manifest.sha256; "
+            "refusing to certify unknown bytes. Use --force to deliberately replace it."
+        )
+    actual = manifest.sha256_file(target)
+    if actual != expected:
+        raise RuntimeError(
+            f"{target.relative_to(CACHE)} sha256 {actual} != committed {expected}; "
+            "refusing to rewrite the manifest over corrupted or changed bytes. "
+            "Use --force only after deciding to replace and repin it."
+        )
+    return True
+
+
+def _accept_partial(partial: Path, target: Path, *, force: bool) -> None:
+    """Promote a complete partial only if it still matches a non-force pin."""
+    if not force:
+        expected = _pinned_digest(target)
+        actual = manifest.sha256_file(partial)
+        if expected is not None and actual != expected:
+            raise RuntimeError(
+                f"downloaded {target.relative_to(CACHE)} sha256 {actual} != committed "
+                f"{expected}; upstream may have changed. Use --force only after review."
+            )
+    partial.replace(target)
+
+
 def fetch(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
@@ -123,8 +164,11 @@ def extract_tiles(*, force: bool) -> list[Path]:
     for name, spec in ARCHIVES.items():
         target = CACHE / name
         out.append(target)
-        if target.exists() and not force:
-            print(f"  {name} already cached ({target.stat().st_size / 1e6:.0f} MB)")
+        if _reuse_verified(target, force=force):
+            print(
+                f"  {name} already cached and verified "
+                f"({target.stat().st_size / 1e6:.0f} MB)"
+            )
             continue
 
         if shutil.which("pmtiles") is None:
@@ -133,13 +177,21 @@ def extract_tiles(*, force: bool) -> list[Path]:
         build = build or latest_build()
         print(f"  extracting {name} — {spec['bbox']} to z{spec['maxzoom']} from {build}")
         target.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            [
-                "pmtiles", "extract", f"{BUILD_BASE}/{build}", str(target),
-                f"--bbox={spec['bbox']}", f"--maxzoom={spec['maxzoom']}",
-            ],
-            check=True,
-        )
+        partial = target.with_name(f"{target.stem}.partial{target.suffix}")
+        partial.unlink(missing_ok=True)
+        try:
+            subprocess.run(
+                [
+                    "pmtiles", "extract", f"{BUILD_BASE}/{build}", str(partial),
+                    f"--bbox={spec['bbox']}", f"--maxzoom={spec['maxzoom']}",
+                ],
+                check=True,
+            )
+            subprocess.run(["pmtiles", "verify", str(partial)], check=True)
+            _accept_partial(partial, target, force=force)
+        except (OSError, RuntimeError, subprocess.CalledProcessError):
+            partial.unlink(missing_ok=True)
+            raise
     return out
 
 
@@ -150,19 +202,35 @@ def fetch_assets(*, force: bool) -> int:
     for stack in FONTSTACKS:
         for rng in GLYPH_RANGES:
             target = ASSETS / "fonts" / stack / f"{rng}.pbf"
-            if target.exists() and not force:
+            if _reuse_verified(target, force=force):
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             quoted = stack.replace(" ", "%20")
-            target.write_bytes(fetch(f"{ASSET_BASE}/fonts/{quoted}/{rng}.pbf"))
+            partial = target.with_name(f"{target.stem}.partial{target.suffix}")
+            partial.unlink(missing_ok=True)
+            try:
+                partial.write_bytes(fetch(f"{ASSET_BASE}/fonts/{quoted}/{rng}.pbf"))
+                _accept_partial(partial, target, force=force)
+            except (OSError, RuntimeError):
+                partial.unlink(missing_ok=True)
+                raise
             fetched += 1
 
     for name in SPRITES:
         target = ASSETS / "sprites" / name
-        if target.exists() and not force:
+        if _reuse_verified(target, force=force):
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(fetch(f"{ASSET_BASE}/sprites/v4/{name.replace('@', '%40')}"))
+        partial = target.with_name(f"{target.stem}.partial{target.suffix}")
+        partial.unlink(missing_ok=True)
+        try:
+            partial.write_bytes(
+                fetch(f"{ASSET_BASE}/sprites/v4/{name.replace('@', '%40')}")
+            )
+            _accept_partial(partial, target, force=force)
+        except (OSError, RuntimeError):
+            partial.unlink(missing_ok=True)
+            raise
         fetched += 1
 
     return fetched

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo, IBM_Plex_Mono, Public_Sans } from "next/font/google";
 
+import { ServiceWorkerRegister } from "./service-worker-register";
 import "./tokens.css";
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export const metadata: Metadata = {
   title: "Lighthouse — design substrate",
   description:
     "The committed token system for the Lighthouse EOC console and public transparency portal.",
+  applicationName: "Lighthouse",
 };
 
 export default function RootLayout({
@@ -45,7 +47,10 @@ export default function RootLayout({
       lang="en"
       className={`${display.variable} ${body.variable} ${data.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }

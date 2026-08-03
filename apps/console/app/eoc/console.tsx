@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 
 import { LighthouseMark } from "../logo";
 import { MapPanel } from "./map/MapPanel";
@@ -17,6 +18,7 @@ import {
   worstHit,
   type Replay,
 } from "./replay";
+import type { District } from "./map";
 import styles from "./eoc.module.css";
 
 /* EOC console — Act 1.
@@ -27,9 +29,9 @@ import styles from "./eoc.module.css";
  * count of advisories, not the clock. If it reads like a measurement it was
  * measured, and if there is no measurement it reads as a dash.
  *
- * The approval gate is still inert — approving a cascade writes to a ledger
- * that does not exist yet. Its text follows the advisory; its buttons do
- * nothing, and that is stated here rather than discovered by a judge.
+ * This is a historical replay, not an operational write surface. The proposed
+ * cascade can be inspected, but approval is visibly unavailable until a real
+ * ledger and delivery path are connected.
  *
  * Reviewed against docs/design/lighthouse-design-rules.md.
  */
@@ -46,6 +48,7 @@ const DEFAULT_RATE = 21600;
  * floor, a replay with two advisories minutes apart would flicker through them
  * and the screen would report a state nobody saw. */
 const MIN_FRAME_MS = 60;
+const NO_FRAMES: Replay["frames"] = [];
 
 const POSTURE_RANK: Record<string, number> = { QUIET: 0, WATCH: 1, READY: 2, ACT: 3 };
 
@@ -65,14 +68,53 @@ function openingFrame(replay: Replay): number {
   return best;
 }
 
+type Connectivity = "checking" | "online" | "offline";
+
+function useConnectivity(): Connectivity {
+  const [connectivity, setConnectivity] = useState<Connectivity>("checking");
+
+  useEffect(() => {
+    const update = () => setConnectivity(navigator.onLine ? "online" : "offline");
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  return connectivity;
+}
+
+type SelectedDistrict = {
+  districtKey: string;
+  key: string;
+  lon: number;
+  lat: number;
+  parish: string;
+};
+
+type LocatedDistrict = District & { lon: number; lat: number };
+
+function isLocatedDistrict(district: District): district is LocatedDistrict {
+  return Number.isFinite(district.lon) && Number.isFinite(district.lat);
+}
+
 export function EocConsole() {
   const state = useReplay();
   const replay = state.status === "ready" ? state.replay : null;
+  const connectivity = useConnectivity();
 
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(DEFAULT_RATE);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [selectedDistrict, setSelectedDistrict] = useState<SelectedDistrict | null>(null);
   const opened = useRef(false);
+  const focusRequest = useRef(0);
+  const mapSection = useRef<HTMLElement>(null);
+  const timeline = useRef<HTMLDivElement>(null);
 
   // Once, when the file lands. Re-running this on every render would drag the
   // scrubber back under the operator's hand.
@@ -82,7 +124,7 @@ export function EocConsole() {
     setIndex(openingFrame(replay));
   }, [replay]);
 
-  const frames = replay?.frames ?? [];
+  const frames = replay?.frames ?? NO_FRAMES;
   const last = frames.length - 1;
   const frame = frames[index] ?? null;
 
@@ -121,6 +163,47 @@ export function EocConsole() {
     setRate((r) => RATES[(RATES.indexOf(r) + 1) % RATES.length]);
   }, []);
 
+  const onTimelineKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    const focused = event.target instanceof HTMLButtonElement
+      ? Number(event.target.dataset.frameIndex)
+      : Number.NaN;
+    if (!Number.isInteger(focused) || frames.length === 0) return;
+
+    let next = focused;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      next = (focused + 1) % frames.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      next = (focused - 1 + frames.length) % frames.length;
+    } else if (event.key === "Home") {
+      next = 0;
+    } else if (event.key === "End") {
+      next = frames.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    setPlaying(false);
+    setIndex(next);
+    const target = timeline.current
+      ?.querySelector<HTMLButtonElement>(`button[data-frame-index="${next}"]`);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [frames.length]);
+
+  const onDistrictFocus = useCallback((district: LocatedDistrict) => {
+    focusRequest.current += 1;
+    const districtKey = `${district.parish}/${district.district}`;
+    setSelectedDistrict({
+      districtKey,
+      key: `${districtKey}/${focusRequest.current}`,
+      lon: district.lon,
+      lat: district.lat,
+      parish: district.parish,
+    });
+    mapSection.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+
   /* Joined once per advisory, and memoised so the map sees a new object only
    * when the advisory actually changed — the map updates its sources by
    * identity and a fresh object every render would push 2,000 features per
@@ -130,37 +213,42 @@ export function EocConsole() {
     [replay, frame],
   );
   const snapshot = useMemo(
-    () => (replay && frame ? snapshotAt(replay, frame) : null),
-    [replay, frame],
+    () => (replay && frame ? snapshotAt(replay, frame, districts) : null),
+    [replay, frame, districts],
   );
   const feed = useMemo(() => (replay ? feedUpto(replay, index) : []), [replay, index]);
 
-  const homes = useMemo(
-    () => (replay ? replay.districts.reduce((a, d) => a + d.n, 0) : 0),
-    [replay],
-  );
-  const maxDistrict = useMemo(
-    () => (replay ? Math.max(...replay.districts.map((d) => d.n), 1) : 1),
-    [replay],
-  );
+  const replaySummary = useMemo(() => {
+    if (!replay) return { homes: 0, structures: null as number | null };
+    let structures = 0;
+    let completeInventory = replay.districts.length > 0;
+    for (const district of replay.districts) {
+      if (district.structures === undefined) completeInventory = false;
+      else structures += district.structures;
+    }
+    return {
+      homes: replay.households.length,
+      structures: completeInventory ? structures : null,
+    };
+  }, [replay]);
+  const { homes, structures } = replaySummary;
 
-  /* Measured, unlike everything derived from the registry above. `structures`
+  /* Mapped from public-source footprints, unlike everything derived from the registry above. `structures`
    * is the island's building footprints; `exposed` is how many of them sit
    * inside the forecast wind field for this advisory. Null rather than zero
-   * when the inventory has not been built, because "not measured" and "none"
+   * when the inventory has not been built, because "not available" and "none"
    * are different statements and only one of them is ours to make. */
-  const structures = useMemo(
-    () => (replay ? replay.districts.reduce((a, d) => a + (d.structures ?? 0), 0) : 0),
-    [replay],
-  );
   /* The 64 kt band only. The 34 kt field is the union across every forecast
    * hour out to five days, and for a storm this size it swallows the whole
    * island — at advisory 15 it reported 1,842,165 of 1,842,165, which is true,
    * useless, and reads as a broken counter. Hurricane-force wind is the number
    * somebody acts on. */
   const exposed = useMemo(
-    () => frame?.district_exposed?.reduce((a, band) => a + band[0], 0) ?? null,
-    [frame],
+    () =>
+      structures === null
+        ? null
+        : frame?.district_exposed?.reduce((a, band) => a + band[0], 0) ?? null,
+    [frame, structures],
   );
 
   const totals = frame?.totals ?? { destroyed: 0, major: 0, minor: 0, none: 0 };
@@ -170,11 +258,16 @@ export function EocConsole() {
    * zero here would state that the chance is nil, which is a different and
    * false claim. */
   const montego = frame?.probabilities?.["MONTEGO BAY"]?.["48"];
+  const rankedDistricts = useMemo(
+    () => worstHit(districts, districts.length),
+    [districts],
+  );
+  const worstDistricts = rankedDistricts.slice(0, 5);
 
   /* Sync state, rule C4. This is a recorded storm being replayed, so it says
    * so — a console that reads "live" over October 2025 advisories is asserting
    * something the data flatly contradicts. */
-  const sync =
+  const replayStatus =
     state.status === "loading"
       ? "Reading replay"
       : state.status === "absent"
@@ -182,6 +275,14 @@ export function EocConsole() {
         : index < last
           ? `Replay · next advisory ${hhmm(frames[index + 1].at)}Z`
           : "Replay · last advisory";
+  const connectionStatus =
+    connectivity === "checking"
+      ? "Browser network · checking"
+      : connectivity === "offline"
+        ? replay
+          ? "Browser network · offline · cached replay available"
+          : "Browser network · offline · replay unavailable"
+        : "Browser network · online · historical replay";
 
   const missing = state.status === "absent";
 
@@ -192,7 +293,10 @@ export function EocConsole() {
       <header className={styles.chrome}>
         <div className={styles.brand}>
           <LighthouseMark size={24} title="Lighthouse" />
-          <span className={styles.brandName}>Lighthouse</span>
+          <span className={styles.brandText}>
+            <span className={styles.brandName}>Lighthouse</span>
+            <span className={styles.brandMode}>Emergency operations replay</span>
+          </span>
         </div>
 
         <div className={styles.posture}>
@@ -208,28 +312,38 @@ export function EocConsole() {
 
         <div className={styles.readings}>
           <div className={styles.reading}>
-            <span className={styles.readingValue} data-empty={frame ? undefined : "true"}>
-              {frame ? `${frame.position.max_wind_kt} kt` : "—"}
+            <span
+              className={styles.readingValue}
+              data-empty={frame?.position.max_wind_kt === undefined ? "true" : undefined}
+            >
+              {frame?.position.max_wind_kt === undefined
+                ? "—"
+                : `${frame.position.max_wind_kt} kt`}
             </span>
-            <span className={styles.readingLabel}>Sustained wind</span>
+            <span className={styles.readingLabel}>Observed sustained wind</span>
           </div>
           <div className={styles.reading}>
-            <span className={styles.readingValue} data-empty={frame ? undefined : "true"}>
-              {frame ? `${frame.position.pressure_mb} mb` : "—"}
+            <span
+              className={styles.readingValue}
+              data-empty={frame?.position.pressure_mb === undefined ? "true" : undefined}
+            >
+              {frame?.position.pressure_mb === undefined
+                ? "—"
+                : `${frame.position.pressure_mb} mb`}
             </span>
-            <span className={styles.readingLabel}>Central pressure</span>
+            <span className={styles.readingLabel}>Observed central pressure</span>
           </div>
           <div className={styles.reading}>
             <span className={styles.readingValue} data-empty={montego === undefined ? "true" : undefined}>
               {montego === undefined ? "—" : `${montego}%`}
             </span>
-            <span className={styles.readingLabel}>Hurricane wind at Montego Bay</span>
+            <span className={styles.readingLabel}>Forecast 64 kt chance · Montego Bay at 48 h</span>
           </div>
           <div className={styles.reading}>
             <span className={styles.readingValue} data-empty={frame ? undefined : "true"}>
               {frame ? nf.format(atRisk) : "—"}
             </span>
-            <span className={styles.readingLabel}>Homes at major risk or worse</span>
+            <span className={styles.readingLabel}>Modelled households · major or worse</span>
           </div>
           <div className={styles.reading}>
             {/* Not zero. Nothing has been delivered, and a zero would measure
@@ -237,30 +351,33 @@ export function EocConsole() {
             <span className={styles.readingValue} data-empty="true">
               —
             </span>
-            <span className={styles.readingLabel}>Time to relief · none yet</span>
+            <span className={styles.readingLabel}>Observed relief delivery · unavailable</span>
           </div>
         </div>
 
-        <div className={styles.stale}>
+        <div className={styles.stale} aria-live="polite">
           <span>
             {frame ? `Advisory ${frame.n} · ${stamp(frame.at)}Z` : "No advisory"}
           </span>
-          <span>{sync}</span>
+          <span>{replayStatus}</span>
+          <span className={styles.connectivity} data-state={connectivity}>
+            {connectionStatus}
+          </span>
         </div>
       </header>
 
       <div className={styles.body}>
-        <section className={styles.mapPanel}>
+        <section className={styles.mapPanel} ref={mapSection}>
           <div className={styles.panelHead}>
-            <span>Forecast wind and expected damage</span>
+            <h1 className={styles.panelTitle}>Selected forecast and mapped structure exposure</h1>
             <span>
               {replay ? (
                 <>
-                  <b>{nf.format(homes)}</b> homes registered across all{" "}
+                  <b>{nf.format(homes)}</b> synthetic households modelled across{" "}
                   {replay.parishes.length} parishes
                 </>
               ) : missing ? (
-                "No replay data · /replay/replay.json"
+                "Replay unavailable · check /replay/replay.json"
               ) : (
                 "Reading replay"
               )}
@@ -269,10 +386,13 @@ export function EocConsole() {
 
           <div className={styles.mapCanvas}>
             {/* Mounted once the outcome of the fetch is known, so the map is
-                built exactly once. Its district scale is fixed at construction
-                and a second build would refetch the basemap. */}
+                built exactly once. Advisory changes update its data sources;
+                rebuilding would refetch the basemap and drop the viewport. */}
             {state.status === "loading" ? null : (
-              <MapPanel snapshot={snapshot} maxDistrict={maxDistrict} advisoryIndex={index} />
+              <MapPanel
+                snapshot={snapshot}
+                focus={selectedDistrict}
+              />
             )}
           </div>
 
@@ -280,84 +400,159 @@ export function EocConsole() {
               The damage counts moved to the panel with the marks they belonged
               to: they are modelled outcomes for a synthetic registry, and a key
               beside a coastline reads as a key to the coastline. */}
-          <div className={styles.legend}>
-            <span className={styles.legendItem} style={{ color: "var(--lh-hazard-50)" }}>
-              Blue bands · wind reaching 34, 50 and 64 knots
-            </span>
-            {exposed === null ? null : (
-              <span className={styles.legendItem}>
-                <b>{nf.format(exposed)}</b> structures in hurricane-force wind
-              </span>
-            )}
+          <div className={styles.legend} aria-label="Map counts and data provenance">
             <span className={styles.legendItem}>
-              {nf.format(structures)} on the island · measured footprints
+              {exposed === null ? (
+                "Forecast exposure inventory unavailable"
+              ) : (
+                <><b>{nf.format(exposed)}</b> mapped footprints in the selected 64 kt forecast</>
+              )}
             </span>
+            <span className={styles.legendItem}>
+              {structures === null
+                ? "Mapped building inventory unavailable"
+                : `${nf.format(structures)} mapped building footprints from public datasets`}
+            </span>
+            <p className={styles.provenance}>
+              <b>Historical replay, not live.</b> Storm position and intensity are advisory
+              observations. Wind areas and probabilities are forecasts. Building footprints
+              are mapped public-source inventory; household locations and damage counts are synthetic model output.
+            </p>
           </div>
         </section>
 
         <aside className={styles.side}>
-          {/* The one open gate, and the only thing on screen allowed to move. */}
           {frame ? (
             <div className={styles.gate}>
-              {/* Trigger 2 of the motion budget is a gate that is open and
-                  unactioned. With nothing to cascade there is no gate open, so
-                  the label holds still — a pulse over an empty proposal is
-                  exactly the decoration that makes a real alert ignorable. */}
-              <span
-                className={`${styles.gateRole} ${atRisk > 0 ? styles.gatePending : ""}`}
-              >
-                Director · awaiting approval
-              </span>
+              <span className={styles.gateRole}>Replay proposal · action unavailable</span>
               <h2 className={styles.gateAsk}>
-                Send alert cascade to {nf.format(atRisk)} homes
+                Alert cascade for {nf.format(atRisk)} modelled households
               </h2>
               <p className={styles.gateDetail}>
                 {warning ? `${warning} in effect. ` : ""}Patois and English, WhatsApp
                 with SMS fallback. Proposed from advisory {frame.n}.
               </p>
+              <p className={styles.replayLimit} id="replay-action-limit">
+                Historical replay only. Approval, messaging and ledger writes are not
+                connected, so this screen cannot send an alert.
+              </p>
               <div className={styles.gateActions}>
-                {/* STILL INERT. Approving a cascade writes an approved_by row to
-                    a ledger that does not exist yet, and a button that fakes
-                    the write would fake the one guarantee this product makes.
-                    Both are wired when the API lands. */}
-                <button type="button" className={styles.gateButton}>
-                  Approve cascade
+                <button
+                  type="button"
+                  className={styles.gateButton}
+                  disabled
+                  aria-describedby="replay-action-limit"
+                >
+                  Approval unavailable
                 </button>
-                <button type="button" className={`${styles.gateButton} ${styles.secondary}`}>
-                  Review list
+                <button
+                  type="button"
+                  className={`${styles.gateButton} ${styles.secondary}`}
+                  aria-expanded={reviewOpen}
+                  aria-controls="affected-districts"
+                  onClick={() => setReviewOpen((open) => !open)}
+                >
+                  {reviewOpen ? "Close review" : "Review districts"}
                 </button>
               </div>
+              {reviewOpen ? (
+                <div className={styles.reviewList} id="affected-districts">
+                  <div className={styles.reviewHead}>
+                    <span>Affected districts</span>
+                    <span>Modelled major+</span>
+                  </div>
+                  {rankedDistricts.length > 0 ? (
+                    rankedDistricts.map((district) => {
+                      const key = `${district.parish}/${district.district}`;
+                      const row = (
+                        <>
+                          <span>{district.district}</span>
+                          <span className={styles.reviewParish}>
+                            {district.parish.replace("Saint ", "St ")}
+                            {isLocatedDistrict(district) ? " · centre map" : " · map location unavailable"}
+                          </span>
+                          <span className={styles.countValue}>
+                            {nf.format(district.destroyed + district.major)}
+                          </span>
+                        </>
+                      );
+                      return isLocatedDistrict(district) ? (
+                        <button
+                          type="button"
+                          className={styles.reviewRow}
+                          data-selected={selectedDistrict?.districtKey === key}
+                          aria-current={selectedDistrict?.districtKey === key ? "location" : undefined}
+                          key={key}
+                          onClick={() => onDistrictFocus(district)}
+                          aria-label={`Centre map on ${district.district}, ${district.parish}; ${district.destroyed + district.major} synthetic households modelled major or worse`}
+                        >
+                          {row}
+                        </button>
+                      ) : (
+                        <div className={styles.reviewRow} data-unlocated="true" key={key}>
+                          {row}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className={styles.reviewEmpty}>No modelled major damage in this frame.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
           <div className={styles.counts}>
             <div className={`${styles.countRow} ${styles.head}`}>
-              <span>Worst hit right now</span>
+              <span>Highest modelled impact · synthetic</span>
               <span className={styles.countValue}>Destr.</span>
               <span className={styles.countValue}>Major</span>
             </div>
-            {worstHit(districts).map((d) => (
-              <div className={styles.countRow} key={`${d.parish}-${d.district}`}>
-                <span className={styles.countPlace}>
-                  {d.district}
-                  <span className={styles.countParish}>{d.parish.replace("Saint ", "St ")}</span>
-                </span>
-                <span className={styles.countValue} style={{ color: "var(--lh-critical)" }}>
-                  {d.destroyed || "—"}
-                </span>
-                <span className={styles.countValue} style={{ color: "var(--lh-elevated)" }}>
-                  {d.major || "—"}
-                </span>
-              </div>
-            ))}
+            {worstDistricts.map((d) => {
+              const key = `${d.parish}/${d.district}`;
+              const row = (
+                <>
+                  <span className={styles.countPlace}>
+                    {d.district}
+                    <span className={styles.countParish}>
+                      {d.parish.replace("Saint ", "St ")}
+                      {isLocatedDistrict(d) ? " · centre map" : " · map location unavailable"}
+                    </span>
+                  </span>
+                  <span className={styles.countValue} style={{ color: "var(--lh-critical)" }}>
+                    {d.destroyed || "—"}
+                  </span>
+                  <span className={styles.countValue} style={{ color: "var(--lh-elevated)" }}>
+                    {d.major || "—"}
+                  </span>
+                </>
+              );
+              return isLocatedDistrict(d) ? (
+                <button
+                  type="button"
+                  className={styles.countRow}
+                  data-selected={selectedDistrict?.districtKey === key}
+                  aria-current={selectedDistrict?.districtKey === key ? "location" : undefined}
+                  key={key}
+                  onClick={() => onDistrictFocus(d)}
+                  aria-label={`Centre map on ${d.district}, ${d.parish}; ${d.destroyed} synthetic households modelled destroyed and ${d.major} modelled major damage`}
+                >
+                  {row}
+                </button>
+              ) : (
+                <div className={styles.countRow} data-unlocated="true" key={key}>
+                  {row}
+                </div>
+              );
+            })}
           </div>
 
           <div className={styles.feed}>
             <div className={styles.panelHead}>
-              <span>What happened, and who decided it</span>
+              <span>Replay activity · modelled state changes</span>
             </div>
-            {feed.map((row, i) => (
-              <div className={styles.tline} key={i}>
+            {feed.map((row) => (
+              <div className={styles.tline} key={`${row.at}/${row.who}/${row.what}`}>
                 <span className={styles.tlineEvent}>
                   {row.what}
                   {/* Only when a person decided. Everything else is automatic,
@@ -385,7 +580,7 @@ export function EocConsole() {
             disabled={!replay}
             onClick={onPlay}
           >
-            Play
+            {playing ? "Pause" : index >= last ? "Replay" : "Play"}
           </button>
           {/* Not a toggle, so no pressed state to report. It had one. */}
           <button
@@ -407,21 +602,30 @@ export function EocConsole() {
           </button>
         </div>
 
-        {/* The scrub bar is the story: homes by expected damage per advisory,
-            left to right, so the shape of the escalation is the control. */}
+        {/* The scrub bar is the story: synthetic households by modelled damage
+            per advisory, left to right, so the escalation is the control. */}
         {replay ? (
-          <div className={styles.timeline} role="group" aria-label="Replay timeline">
+          <div
+            ref={timeline}
+            className={styles.timeline}
+            role="radiogroup"
+            aria-label="Historical replay timeline with modelled household damage"
+            onKeyDown={onTimelineKeyDown}
+          >
             {frames.map((x, i) => {
               const t = x.totals;
               const total = t.destroyed + t.major + t.minor + t.none || 1;
               return (
                 <button
                   type="button"
+                  role="radio"
                   key={x.n}
                   className={styles.tick}
                   data-current={i === index}
-                  aria-current={i === index ? "true" : undefined}
-                  aria-label={`Advisory ${x.n}: ${t.destroyed} destroyed, ${t.major} major`}
+                  data-frame-index={i}
+                  aria-checked={i === index}
+                  aria-label={`Frame ${i + 1} of ${frames.length}, advisory ${x.n}: ${t.destroyed} synthetic households modelled destroyed, ${t.major} modelled major`}
+                  tabIndex={i === index ? 0 : -1}
                   title={`Advisory ${x.n}`}
                   onClick={() => {
                     setPlaying(false);
@@ -440,12 +644,11 @@ export function EocConsole() {
             })}
           </div>
         ) : (
-          /* States what happened and what to do, rather than an empty bar that
-             looks like a storm with no history. A generated file missing on a
-             fresh clone is a normal state, like the basemap archives. */
+          /* States what happened and what to check, rather than an empty bar
+             that looks like a storm with no history. */
           <p className={styles.absent}>
             {missing
-              ? "No replay to scrub. Generate public/replay/replay.json — see docs/engineering/replay-export-contract.md"
+              ? `No replay to scrub. ${state.reason} Check public/replay/replay.json.`
               : "Reading the replay."}
           </p>
         )}
@@ -454,7 +657,7 @@ export function EocConsole() {
           {frame ? `${hhmm(frame.at)}Z` : "—"}
           <span className={styles.clockLabel}>
             {frame
-              ? `Storm time · advisory ${frame.n} of ${frames.length}`
+              ? `Storm time · advisory ${frame.n} · frame ${index + 1} of ${frames.length}`
               : "Storm time · no advisory"}
           </span>
         </div>

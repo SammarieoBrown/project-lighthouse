@@ -1,0 +1,3 @@
+# Derived tile-build intermediates have their own content-addressed build state.
+# This manifest pins only the fetched VIDA source archive.
+*.geojsonl

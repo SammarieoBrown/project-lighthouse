@@ -1,0 +1,5 @@
+# The structures archive is derived from the building inventory and is pinned by
+# data/tiles/structures.manifest.json. Never let a basemap fetch certify it.
+structures-z15.pmtiles
+structures-z15.partial.pmtiles
+structures-build.mbtiles*

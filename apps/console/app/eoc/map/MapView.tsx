@@ -11,16 +11,22 @@ import {
   addProtocol,
   setWorkerUrl,
 } from "maplibre-gl";
-import type { MapMouseEvent } from "maplibre-gl";
+import type { IControl, MapSourceDataEvent } from "maplibre-gl";
 import { Protocol } from "pmtiles";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { Snapshot } from "../map";
+import type { MapFocus, Snapshot } from "../map";
 import { buildingWeights, lighthouseFlavor, pruneLayers, readTokens, retarget } from "./flavor";
 import {
-  applyFrame, dataLayers, dataSources, readMapColours, ZOOM_SWITCH, type BaseView,
+  applyFrame,
+  dataLayers,
+  dataSources,
+  readMapColours,
+  STRUCTURE_FOOTPRINT_ZOOM,
+  STRUCTURES_MIN_ZOOM,
+  type BaseView,
 } from "./layers";
 
 /* MapLibre, wired by hand.
@@ -30,15 +36,16 @@ import {
  * hundred lines of init beats a dependency whose main offer is JSX sugar for
  * markers we would restyle anyway.
  *
- * Everything it needs is local: tiles, glyphs, sprites. The console has to draw
- * a map in a building that has lost power and its internet with it, and a
- * basemap that silently fetches font ranges at draw time is not offline — it
- * just looks offline until the day it matters.
+ * The core basemap, glyphs and sprites are locally stageable. Reference imagery
+ * is explicitly online-only and optional. The console has to preserve forecast
+ * and impact evidence when a venue loses its internet, and a basemap that
+ * silently fetches font ranges at draw time is not offline — it just looks
+ * offline until the day it matters.
  */
 
 /* Where the basemap comes from, and it is two places.
  *
- * The archives are 138 MB of fetched-not-committed build output, so a deploy
+ * The basemap archives are fetched-not-committed build output, so a deploy
  * has no way to produce them and production served 404s for every tile and
  * every sprite — silently, because the panel falls back to the SVG map and a
  * static but correct map does not look like a failure. They are published to a
@@ -50,8 +57,8 @@ import {
  * would be, again, a map of the open sea.
  *
  * Unset means local: the archives come from app/map/[file]/route.ts rather than
- * public/, because Next's static handler answers the first Range request with
- * the whole 98 MB body. That route stays, and offline development with it.
+ * public/, because Next's static handler can answer the first Range request
+ * with the whole archive body. That route stays, and offline development with it.
  *
  * Trimmed before use, and that is not defensive padding. Setting this with
  * `echo | vercel env add` stores the trailing newline, and the pmtiles protocol
@@ -62,9 +69,10 @@ const TILES_BASE = (process.env.NEXT_PUBLIC_TILES_URL ?? "").trim().replace(/\/+
 
 const REGION_ARCHIVE = "caribbean-z11.pmtiles";
 const ISLAND_ARCHIVE = "jamaica-z15.pmtiles";
-/* Ours, not Protomaps'. Every building on the island carrying the advisory at
- * which it first enters each wind band — the only way to colour a footprint by
- * the storm, since a basemap building has no attribute to join on. */
+/* Ours, not Protomaps'. It is a mapped inventory of building geometry. Any
+ * old forecast-entry attributes in the archive are intentionally ignored: the
+ * selected advisory's current polygons already carry hazard, while a building
+ * footprint carries only the neutral meaning "a mapped structure is here". */
 const STRUCTURES_ARCHIVE = "structures-z15.pmtiles";
 
 /* Where the region hands over to the island. Jamaica fills the frame by here,
@@ -79,11 +87,11 @@ const COVERED: [[number, number], [number, number]] = [
   [-92.0, 7.0],
   [-57.0, 28.0],
 ];
-/* Glyphs and sprites live beside the archives. The fontstack directories have
+/* Glyphs and sprites live beside the archives locally, and a configured public
+ * tile host must publish the same asset tree. The fontstack directories have
  * spaces in their names ("Noto Sans Regular") — the templates are handed to
  * MapLibre intact and it encodes them, so nothing here builds those URLs by
- * hand. Committed locally: about a megabyte, and without them the map renders
- * and silently loses every place name. */
+ * hand. Without these assets the map silently loses every place name. */
 const ASSETS = "assets/fonts/{fontstack}/{range}.pbf";
 
 // MapLibre 6 rejects a relative sprite URL outright, so both arms are absolute.
@@ -104,12 +112,17 @@ function assetUrls(origin: string) {
   };
 }
 
-// Esri is the online-only satellite fallback: their licence permits live tile
-// use with attribution but prohibits caching outside ArcGIS, so it can never be
-// part of the offline bundle. NOAA's post-storm imagery is the primary and is
-// cached; this is what you get when that has not been fetched.
+// Esri reference imagery is online-only: its licence permits live tile use with
+// attribution but prohibits caching outside ArcGIS. It is context imagery and
+// is never represented as post-event damage evidence.
 const ESRI_IMAGERY =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const PROTOMAPS_ATTRIBUTION =
+  '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
+const MAPLIBRE_ATTRIBUTION =
+  '<a href="https://maplibre.org/" target="_blank">MapLibre</a>';
+const VIDA_ATTRIBUTION =
+  '<a href="https://source.coop/vida/google-microsoft-osm-open-buildings">VIDA combined buildings</a> · Google Open Buildings, Microsoft GlobalML, OpenStreetMap · ODbL';
 
 /* MapLibre's worker, served by us.
  *
@@ -126,6 +139,42 @@ const ESRI_IMAGERY =
  */
 const WORKER = "/maplibre/maplibre-gl-worker.mjs";
 
+const JAMAICA_CENTER: [number, number] = [-77.3, 17.9];
+const JAMAICA_ZOOM = 7.4;
+
+class ResetJamaicaControl implements IControl {
+  private map?: MapLibreMap;
+  private container?: HTMLDivElement;
+
+  onAdd(map: MapLibreMap): HTMLElement {
+    this.map = map;
+    const container = document.createElement("div");
+    container.className = "maplibregl-ctrl maplibregl-ctrl-group lh-map-reset";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Jamaica";
+    button.title = "Reset map to Jamaica";
+    button.setAttribute("aria-label", "Reset map to Jamaica");
+    button.addEventListener("click", this.reset);
+    container.append(button);
+    this.container = container;
+    return container;
+  }
+
+  onRemove(): void {
+    this.container?.querySelector("button")?.removeEventListener("click", this.reset);
+    this.container?.remove();
+    this.container = undefined;
+    this.map = undefined;
+  }
+
+  private reset = () => {
+    // A reset is a state correction, not an animation. jumpTo also guarantees
+    // that pitch and bearing cannot survive a browser gesture.
+    this.map?.jumpTo({ center: JAMAICA_CENTER, zoom: JAMAICA_ZOOM, bearing: 0, pitch: 0 });
+  };
+}
+
 // Both are global and throw if repeated, so they happen once per document
 // rather than once per mount.
 let configured = false;
@@ -137,31 +186,84 @@ function configureMapLibre() {
   configured = true;
 }
 
+function applyFocus(
+  map: MapLibreMap,
+  focus: MapFocus | null,
+  move = true,
+) {
+  if (map.getLayer("lh-focused-parish")) {
+    const parish = focus?.parish?.replace(/^St\.?\s+/, "Saint ") ?? "";
+    map.setFilter("lh-focused-parish", ["==", ["get", "name"], parish]);
+  }
+  if (focus && move) {
+    map.jumpTo({
+      center: [focus.lon, focus.lat],
+      zoom: Math.max(map.getZoom(), 11),
+      bearing: 0,
+      pitch: 0,
+    });
+  }
+}
+
 export type MapViewProps = {
   /** The current advisory. Changes on every step of the replay. */
   snapshot: Snapshot | null;
-  /** Homes in the largest district. The circle scale is a share of it, and it
-   *  is static across the storm — so it belongs to the map's construction and
-   *  not to the frame. Passed as a number so the init effect has a primitive
-   *  dependency that does not change when the advisory does. */
-  maxDistrict: number;
   base: BaseView;
-  /** Index of the selected advisory. The structures layer colours a building
-   *  by comparing its first-entry index against this, so it is a number and
-   *  not the frame — one paint expression per step, never a per-feature
-   *  update across 1.8 million buildings. */
-  advisoryIndex: number;
+  /** A list selection may centre the map on its district reference point. The
+   *  point itself is never drawn; the real parish geometry is highlighted. */
+  focus?: MapFocus | null;
   onZoomChange?: (zoom: number) => void;
   /** Reported upward so the panel can fall back to the SVG map. */
   onFail?: (reason: string) => void;
+  /** A structures-only failure leaves the basemap healthy and is reported as a
+   *  local availability state rather than a failure of the whole map. */
+  onStructuresStatus?: (
+    status: "idle" | "loading" | "ready" | "unavailable",
+    reason?: string,
+  ) => void;
+  /** Reference imagery is optional. Its status lets the panel distinguish a
+   *  loaded raster from the standard basemap that remains underneath it. */
+  onImageryStatus?: (
+    status: "idle" | "loading" | "ready" | "unavailable",
+    reason?: string,
+  ) => void;
 };
 
 export default function MapView({
-  snapshot, maxDistrict, base, advisoryIndex, onZoomChange, onFail,
+  snapshot,
+  base,
+  focus = null,
+  onZoomChange,
+  onFail,
+  onStructuresStatus,
+  onImageryStatus,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  const [structuresStatus, setStructuresStatus] = useState<
+    "idle" | "loading" | "ready" | "unavailable"
+  >("idle");
+  const structuresStatusRef = useRef(structuresStatus);
+  structuresStatusRef.current = structuresStatus;
+  const imageryStatusRef = useRef<"idle" | "loading" | "ready" | "unavailable">("idle");
+
+  const reportStructures = useCallback((
+    status: "idle" | "loading" | "ready" | "unavailable",
+    reason?: string,
+  ) => {
+    setStructuresStatus(status);
+    onStructuresStatus?.(status, reason);
+  }, [onStructuresStatus]);
+
+  const reportImagery = useCallback((
+    status: "idle" | "loading" | "ready" | "unavailable",
+    reason?: string,
+  ) => {
+    if (imageryStatusRef.current === status) return;
+    imageryStatusRef.current = status;
+    onImageryStatus?.(status, reason);
+  }, [onImageryStatus]);
 
   /* The frame the map was built with, read once at init and never a dependency
    * of it. Scrubbing must not rebuild the map: a new MapLibreMap per advisory
@@ -169,6 +271,8 @@ export default function MapView({
    * every step. Frames arrive through setData in the effect below. */
   const latest = useRef(snapshot);
   latest.current = snapshot;
+  const latestFocus = useRef(focus);
+  latestFocus.current = focus;
 
   /* Our own load flag rather than isStyleLoaded(). That method also returns
    * false while tiles are still arriving, long after the `load` event has
@@ -197,12 +301,18 @@ export default function MapView({
         // Jamaica and the water the storm is crossing. The storm centre sits
         // south of the island, so a frame tight on the coast loses the thing
         // bearing down on it.
-        center: [-77.3, 17.9],
-        zoom: 7.4,
+        center: JAMAICA_CENTER,
+        zoom: JAMAICA_ZOOM,
         maxZoom: 17,
         // Far enough out to see the whole basin and no further.
         minZoom: 5.2,
         maxBounds: COVERED,
+        bearing: 0,
+        pitch: 0,
+        maxPitch: 0,
+        dragRotate: false,
+        pitchWithRotate: false,
+        touchPitch: false,
         attributionControl: false,
         style: {
           version: 8,
@@ -218,7 +328,7 @@ export default function MapView({
               minzoom: 0,
               maxzoom: 11,
               bounds: [-92.0, 7.0, -57.0, 28.0],
-              attribution: "© OpenStreetMap",
+              attribution: PROTOMAPS_ATTRIBUTION,
             },
             island: {
               type: "vector",
@@ -226,7 +336,7 @@ export default function MapView({
               minzoom: 0,
               maxzoom: 15,
               bounds: [-78.6, 17.6, -75.9, 18.7],
-              attribution: "© OpenStreetMap",
+              attribution: PROTOMAPS_ATTRIBUTION,
             },
             ...dataSources(latest.current),
           },
@@ -241,7 +351,7 @@ export default function MapView({
               "island",
               { minzoom: BASEMAP_SWITCH },
             ),
-            ...dataLayers(colours, maxDistrict),
+            ...dataLayers(colours),
           ],
         },
       });
@@ -255,12 +365,15 @@ export default function MapView({
       return;
     }
 
+    instance.keyboard.disableRotation();
+    instance.touchZoomRotate.disableRotation();
     instance.addControl(new NavigationControl({ showCompass: false }), "top-right");
+    instance.addControl(new ResetJamaicaControl(), "top-right");
     instance.addControl(
-      new AttributionControl({
-        compact: false,
-        customAttribution: "© OpenStreetMap · Imagery © NOAA / Esri",
-      }),
+      // Each source supplies its own attribution. Leave `compact` unset so
+      // MapLibre can collapse this control when the map is narrower than the
+      // legal copy, while keeping it expanded whenever it comfortably fits.
+      new AttributionControl({ customAttribution: MAPLIBRE_ATTRIBUTION }),
       "bottom-right",
     );
     instance.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
@@ -271,6 +384,7 @@ export default function MapView({
       // Whatever advisory is selected by now, not the one this map was built
       // with. The replay can be scrubbed while the basemap is still coming up.
       applyFrame(instance, latest.current);
+      applyFocus(instance, latestFocus.current, true);
     });
     instance.on("error", (e) => {
       // Every map error gets logged. MapLibre swallows style failures into this
@@ -279,7 +393,35 @@ export default function MapView({
       // demo. A blank map must never be silent.
       const message = String(e?.error?.message ?? e?.error ?? "unknown");
       console.error("[map]", message, e?.error);
-      if (message.includes("pmtiles")) {
+      const sourceId = (e as unknown as { sourceId?: string }).sourceId;
+      const structuresError = sourceId === "lh-structures" || message.includes(STRUCTURES_ARCHIVE);
+      if (structuresError) {
+        for (const id of ["lh-structure-points", "lh-structures"]) {
+          if (instance.getLayer(id)) instance.setLayoutProperty(id, "visibility", "none");
+        }
+        reportStructures("unavailable", "structure inventory could not be read");
+        return;
+      }
+
+      const imageryError = sourceId === "lh-satellite"
+        || message.includes("server.arcgisonline.com")
+        || message.includes("World_Imagery");
+      if (imageryError) {
+        // A partially loaded raster can look authoritative even after the
+        // source has failed. Remove it as a visual claim and reveal the local,
+        // standard basemap that has remained underneath throughout.
+        if (instance.getLayer("lh-satellite")) {
+          instance.setLayoutProperty("lh-satellite", "visibility", "none");
+        }
+        reportImagery("unavailable", "reference imagery could not be read");
+        return;
+      }
+
+      const basemapError = sourceId === "region"
+        || sourceId === "island"
+        || message.includes(REGION_ARCHIVE)
+        || message.includes(ISLAND_ARCHIVE);
+      if (basemapError) {
         // Names the source that is actually configured. Telling somebody on a
         // deploy to run a local fetch script is a wrong instruction, which is
         // worse than none.
@@ -303,7 +445,7 @@ export default function MapView({
       instance.remove();
       map.current = null;
     };
-  }, [maxDistrict, onZoomChange, onFail]);
+  }, [onZoomChange, onFail, reportImagery, reportStructures]);
 
   /* Every step of the replay lands here: setData on sources that already exist.
    * No transition and no easing — a playing timeline is a state change, not a
@@ -313,6 +455,15 @@ export default function MapView({
     if (!instance || !ready.current) return;
     applyFrame(instance, snapshot);
   }, [snapshot]);
+
+  /* A ranked-list selection changes the viewport and strengthens the matching
+   * real parish outline. The supplied district coordinate is used only as a
+   * camera target; it is never rendered as if it were an observed location. */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !ready.current) return;
+    applyFocus(instance, focus);
+  }, [focus?.key, focus?.lat, focus?.lon, focus?.parish]);
 
   /* Structures adds a layer; it does not take the map away.
    *
@@ -331,7 +482,7 @@ export default function MapView({
     const apply = () => {
       const style = instance.getStyle();
       if (!style?.layers) return;
-      const structures = base === "structures";
+      const structures = base === "structures" && structuresStatus === "ready";
 
       for (const layer of style.layers) {
         if (layer.id.startsWith("lh-")) continue;
@@ -350,7 +501,7 @@ export default function MapView({
 
     if (ready.current) apply();
     else instance.once("load", apply);
-  }, [base]);
+  }, [base, structuresStatus]);
 
   /* Our own building tileset, added only when asked for.
    *
@@ -359,58 +510,91 @@ export default function MapView({
    * rather than at init. Left in place afterwards — a second visit should not
    * refetch what is already in the browser.
    *
-   * The colour is a paint expression over each building's first-entry index,
-   * so a step of the replay costs one setPaintProperty rather than a feature
-   * state per building. Absent keys mean the storm never reached it, and
-   * `has` keeps that distinct from "reached it at advisory 0". */
+   * It is deliberately neutral. Forecast extent comes from the current
+   * advisory's polygons above it; old first-entry attributes in a cached archive
+   * do not colour a structure and cannot turn a forecast into cumulative fact. */
   useEffect(() => {
     const instance = map.current;
     if (!instance || base !== "structures") return;
 
-    const paint = (): unknown => {
-      const c = readMapColours(container.current ?? undefined);
-      const reached = (key: string) => ["all", ["has", key], ["<=", ["get", key], advisoryIndex]];
-      return [
-        "case",
-        reached("f64"), c.hazard64,
-        reached("f50"), c.hazard50,
-        reached("f34"), c.hazard34,
-        buildingWeights(readTokens(container.current ?? undefined)).subject,
-      ];
-    };
+    // The aggregate archive begins at z9. Selecting the mode should show its
+    // subject immediately, not open an empty view with a repair instruction.
+    if (instance.getZoom() < STRUCTURES_MIN_ZOOM) {
+      instance.jumpTo({ zoom: STRUCTURES_MIN_ZOOM, bearing: 0, pitch: 0 });
+    }
 
-    const apply = () => {
-      if (!instance.getSource("lh-structures")) {
+    let cancelled = false;
+    const controller = new AbortController();
+    const archive = assetUrls(window.location.origin).structures;
+
+    const apply = async () => {
+      const retrying = structuresStatusRef.current === "unavailable";
+      if (retrying) {
+        // A tile-level failure happens after the source and layers exist. Clear
+        // that failed cache on the next explicit selection so a transient
+        // archive/network error can recover without reloading the whole page.
+        for (const id of ["lh-structure-points", "lh-structures"]) {
+          if (instance.getLayer(id)) instance.removeLayer(id);
+        }
+        if (instance.getSource("lh-structures")) instance.removeSource("lh-structures");
+      }
+      if (instance.getSource("lh-structures")) {
+        reportStructures("ready");
+        return;
+      }
+
+      reportStructures("loading");
+      try {
+        /* Verify this optional archive independently. Requiring a one-byte 206
+         * prevents an ignored Range header from starting a download of the
+         * whole archive, and means its absence can be handled before MapLibre
+         * turns it into a generic map error. */
+        const response = await fetch(archive, {
+          headers: { Range: "bytes=0-0" },
+          signal: controller.signal,
+        });
+        await response.body?.cancel();
+        if (response.status !== 206) {
+          throw new Error(response.ok
+            ? "structure host does not support byte ranges"
+            : `structure archive returned ${response.status}`);
+        }
+        if (cancelled) return;
+
+        const subject = buildingWeights(readTokens(container.current ?? undefined)).subject;
         instance.addSource("lh-structures", {
           type: "vector",
-          url: `pmtiles://${assetUrls(window.location.origin).structures}`,
-          attribution: "Buildings © Google, Microsoft, OpenStreetMap",
+          tiles: [`pmtiles://${archive}/{z}/{x}/{y}`],
+          minzoom: STRUCTURES_MIN_ZOOM,
+          maxzoom: 15,
+          bounds: [-78.6, 17.6, -75.9, 18.7],
+          attribution: VIDA_ATTRIBUTION,
         });
-      }
-      if (!instance.getLayer("lh-structure-points")) {
-        /* Circles below z14, footprints above, and the split is not cosmetic.
-         *
-         * At z10 a 47 m² building is four hundredths of a pixel. The tiles hold
-         * it, a fill layer draws nothing, and the wide view reads as "no
-         * buildings here" rather than "too small to see". A circle layer has a
-         * minimum radius, so the settlement pattern survives — which is the
-         * whole reason to zoom out.
-         *
-         * Both are added beneath the hazard bands, so the forecast still reads
-         * over the top and the storm centre is never hidden by a town. */
+
+        /* Below z14 each point is a deterministic grid aggregate whose `w`
+         * property is the exact number of mapped structures represented.
+         * Radius uses that count, while bounded stops keep dense cells from
+         * covering neighbouring places. At z14 mapped source footprints replace it. */
         instance.addLayer(
           {
             id: "lh-structure-points",
             type: "circle",
             source: "lh-structures",
             "source-layer": "structure_points",
-            maxzoom: 14,
+            minzoom: STRUCTURES_MIN_ZOOM,
+            maxzoom: STRUCTURE_FOOTPRINT_ZOOM,
             paint: {
-              // Just big enough to register, growing only as the eye gets
-              // close enough to want individual buildings.
-              "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 1, 12, 1.6, 14, 3],
-              "circle-color": paint() as never,
-              "circle-opacity": 0.9,
+              "circle-radius": [
+                "interpolate",
+                ["linear"],
+                ["sqrt", ["coalesce", ["get", "w"], 1]],
+                1, 1,
+                4, 1.6,
+                10, 2.4,
+                32, 4,
+              ],
+              "circle-color": subject,
+              "circle-opacity": 0.8,
             },
           },
           "lh-cone-fill",
@@ -421,59 +605,113 @@ export default function MapView({
             type: "fill",
             source: "lh-structures",
             "source-layer": "structures",
-            minzoom: 14,
-            paint: { "fill-color": paint() as never, "fill-opacity": 0.95 },
+            minzoom: STRUCTURE_FOOTPRINT_ZOOM,
+            paint: { "fill-color": subject, "fill-opacity": 0.92 },
           },
           "lh-cone-fill",
         );
-      } else {
-        instance.setPaintProperty("lh-structure-points", "circle-color", paint() as never);
-        instance.setPaintProperty("lh-structures", "fill-color", paint() as never);
+        reportStructures("ready");
+      } catch (error) {
+        if (cancelled || controller.signal.aborted) return;
+        const reason = error instanceof Error ? error.message : "structure inventory unavailable";
+        console.warn("[map]", reason);
+        reportStructures("unavailable", reason);
       }
     };
 
-    if (ready.current) apply();
-    else instance.once("load", apply);
-  }, [base, advisoryIndex]);
+    const run = () => void apply();
+    if (ready.current) run();
+    else instance.once("load", run);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      instance.off("load", run);
+    };
+  }, [base, reportStructures]);
 
   // The structures layer is hidden rather than removed when the view changes,
   // so its tiles survive a round trip through the other two bases.
   useEffect(() => {
     const instance = map.current;
     if (!instance?.getLayer("lh-structures")) return;
-    const visibility = base === "structures" ? "visible" : "none";
+    const visibility = base === "structures" && structuresStatus === "ready" ? "visible" : "none";
     for (const id of ["lh-structure-points", "lh-structures"]) {
       instance.setLayoutProperty(id, "visibility", visibility);
     }
-  }, [base]);
+  }, [base, structuresStatus]);
 
-  // Satellite toggles as a layer, not a restyle: rebuilding the style would
-  // drop the data layers and the current viewport with them.
+  // Reference imagery toggles as a layer, not a restyle: rebuilding the style
+  // would drop the data layers and the current viewport with them. The local
+  // basemap stays visible below it, including throughout loading and failure.
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
     const satellite = base === "satellite";
 
+    const onSourceData = (event: MapSourceDataEvent) => {
+      if (
+        event.sourceId === "lh-satellite"
+        && event.tile
+        && event.isSourceLoaded
+        && imageryStatusRef.current === "loading"
+      ) {
+        reportImagery("ready");
+      }
+    };
+
+    const onMapIdle = () => {
+      if (
+        instance.getSource("lh-satellite")
+        && instance.isSourceLoaded("lh-satellite")
+        && imageryStatusRef.current === "loading"
+      ) {
+        reportImagery("ready");
+      }
+    };
+
+    if (satellite) {
+      instance.on("sourcedata", onSourceData);
+      // `idle` also covers a successful return to already cached tiles, where
+      // no new tile-completion event is required.
+      instance.on("idle", onMapIdle);
+    }
+
     const apply = () => {
-      const has = instance.getLayer("lh-satellite");
-      if (satellite && !has) {
+      const hasLayer = instance.getLayer("lh-satellite");
+      if (satellite) {
+        const retrying = imageryStatusRef.current === "unavailable";
+        if (retrying) {
+          if (hasLayer) instance.removeLayer("lh-satellite");
+          if (instance.getSource("lh-satellite")) instance.removeSource("lh-satellite");
+        }
+        reportImagery("loading");
         if (!instance.getSource("lh-satellite")) {
           instance.addSource("lh-satellite", {
             type: "raster",
             tiles: [ESRI_IMAGERY],
             tileSize: 256,
             maxzoom: 19,
-            attribution: "Imagery © Esri",
+            attribution: "Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
           });
         }
-        // Under the hazard and impact layers, over the basemap — imagery is
-        // context for the data, not a replacement for it.
-        instance.addLayer(
-          { id: "lh-satellite", type: "raster", source: "lh-satellite", paint: { "raster-opacity": 0.9 } },
-          "lh-cone-fill",
-        );
-      } else if (!satellite && has) {
-        instance.removeLayer("lh-satellite");
+        if (!hasLayer || retrying) {
+          // Under the hazard and impact layers, over the basemap — imagery is
+          // context for the data, not a replacement for it.
+          instance.addLayer(
+            {
+              id: "lh-satellite",
+              type: "raster",
+              source: "lh-satellite",
+              paint: { "raster-opacity": 0.9 },
+            },
+            "lh-parish-impact-fill",
+          );
+        } else {
+          instance.setLayoutProperty("lh-satellite", "visibility", "visible");
+        }
+
+      } else if (hasLayer) {
+        instance.setLayoutProperty("lh-satellite", "visibility", "none");
       }
     };
 
@@ -484,17 +722,22 @@ export default function MapView({
      * Satellite to Structures left the imagery sitting on top of everything. */
     if (ready.current) apply();
     else instance.once("load", apply);
-  }, [base]);
+    return () => {
+      instance.off("load", apply);
+      instance.off("sourcedata", onSourceData);
+      instance.off("idle", onMapIdle);
+    };
+  }, [base, reportImagery]);
 
   // The panel renders the SVG fallback once it hears about this; keeping the
   // container mounted meanwhile avoids tearing down a map that may recover.
   return (
     <div
       ref={container}
+      role="region"
       aria-hidden={failed ? true : undefined}
+      aria-label="Interactive map of the selected forecast and modelled impact across Jamaica"
       style={{ width: "100%", height: "100%", display: failed ? "none" : undefined }}
     />
   );
 }
-
-export { ZOOM_SWITCH };

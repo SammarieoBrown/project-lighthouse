@@ -18,39 +18,109 @@ from __future__ import annotations
 import hashlib
 import sys
 from pathlib import Path
+from typing import Iterable
 
 #: Default for the scripts that predate a second cache.
 CACHE = Path(__file__).parent / "replay" / "cache"
+
+#: Optional newline-delimited glob rules, relative to a cache directory. Some
+#: caches contain both fetched source material and large derived build outputs.
+#: The source manifest must not silently adopt those outputs merely because a
+#: build happened to run before ``manifest.write``.
+IGNORE_FILE = ".manifestignore"
 
 
 def manifest_path(cache: Path) -> Path:
     return cache / "manifest.sha256"
 
 
+def sha256_file(path: Path, *, chunk_size: int = 1 << 20) -> str:
+    """Hash a file without reading a multi-hundred-megabyte asset into RAM."""
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def parse(text: str) -> dict[str, str]:
+    """Parse the two-space ``sha256sum`` format and reject unsafe names."""
+    entries: dict[str, str] = {}
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line:
+            continue
+        try:
+            digest, name = line.split("  ", 1)
+        except ValueError as exc:
+            raise ValueError(f"invalid checksum line {line_number}: {line!r}") from exc
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise ValueError(f"invalid sha256 on line {line_number}: {digest!r}")
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts or not name:
+            raise ValueError(f"unsafe manifest path on line {line_number}: {name!r}")
+        if name in entries:
+            raise ValueError(f"duplicate manifest path on line {line_number}: {name!r}")
+        entries[name] = digest
+    return entries
+
+
+def read(path: Path) -> dict[str, str]:
+    """Read a checksum manifest. Kept public for publishers and build tools."""
+    return parse(path.read_text())
+
+
+def pinned_digest(cache: Path, path: Path) -> str | None:
+    """Return the committed digest for one cache file, if a manifest exists."""
+    try:
+        relative = path.relative_to(cache).as_posix()
+    except ValueError as exc:
+        raise ValueError(f"{path} is outside cache {cache}") from exc
+    target = manifest_path(cache)
+    if not target.exists():
+        return None
+    return read(target).get(relative)
+
+
+def _ignore_patterns(cache: Path) -> tuple[str, ...]:
+    path = cache / IGNORE_FILE
+    if not path.exists():
+        return ()
+    return tuple(
+        line.strip()
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+
+
+def _ignored(relative: Path, patterns: Iterable[str]) -> bool:
+    return any(relative.match(pattern) for pattern in patterns)
+
+
 def build(cache: Path = CACHE) -> str:
     """sha256 of every cached file, sorted by path — the sha256sum format."""
     target = manifest_path(cache)
+    partial = target.with_name(f"{target.name}.partial")
+    patterns = _ignore_patterns(cache)
     lines = []
     for path in sorted(cache.rglob("*")):
-        if not path.is_file() or path == target:
+        if not path.is_file() or path in (target, partial):
             continue
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        lines.append(f"{digest}  {path.relative_to(cache).as_posix()}")
+        relative = path.relative_to(cache)
+        if _ignored(relative, patterns):
+            continue
+        lines.append(f"{sha256_file(path)}  {relative.as_posix()}")
     return "\n".join(lines) + "\n"
 
 
 def write(cache: Path = CACHE) -> int:
     target = manifest_path(cache)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(build(cache))
-    return len(target.read_text().splitlines())
-
-
-def _parse(text: str) -> dict[str, str]:
-    return {
-        name: digest
-        for digest, name in (line.split("  ", 1) for line in text.splitlines() if line)
-    }
+    partial = target.with_name(f"{target.name}.partial")
+    partial.unlink(missing_ok=True)
+    content = build(cache)
+    partial.write_text(content)
+    partial.replace(target)
+    return len(content.splitlines())
 
 
 def verify(cache: Path = CACHE) -> int:
@@ -60,8 +130,12 @@ def verify(cache: Path = CACHE) -> int:
         print(f"{target} is missing — the cache has never been built", file=sys.stderr)
         return 1
 
-    expected = _parse(target.read_text())
-    actual = _parse(build(cache))
+    try:
+        expected = read(target)
+        actual = parse(build(cache))
+    except ValueError as exc:
+        print(f"INVALID   {exc}", file=sys.stderr)
+        return 1
 
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))

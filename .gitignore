@@ -15,6 +15,7 @@ next-env.d.ts
 
 # browser-automation scratch output
 .playwright-mcp/
+.playwright-cli/
 
 # Map tiles are staged into the console's public dir at build time from
 # data/tiles/cache, which is the checksummed copy. Two copies in git would
@@ -23,11 +24,13 @@ apps/console/public/tiles/
 apps/console/.tiles/
 apps/console/public/maplibre/
 
-# The basemap archive is 69 MB and rebuildable in twelve seconds from a pinned
-# upstream build, so it is fetched rather than committed. Its checksum still
-# lives in data/tiles/cache/manifest.sha256, which is committed — the point of
-# the manifest is that your copy matches, not that git carries it.
+# Map archives are large fetched or derived artifacts, so they are not
+# committed. Basemap bytes are pinned by data/tiles/cache/manifest.sha256; the
+# structures build has its separate committed provenance manifest at
+# data/tiles/structures.manifest.json. The point is that a local/published copy
+# matches reviewed provenance, not that git carries the archive itself.
 data/tiles/cache/*.pmtiles
+data/tiles/cache/structures-build.mbtiles*
 # os / editor
 .DS_Store
 .idea/
@@ -49,10 +52,12 @@ data/tiles/cache/*.pmtiles
 
 # Building footprints: 232 MB of fetched-not-committed reference data. Unlike
 # the storm advisories, no replay has to reproduce this byte-for-byte on a demo
-# laptop — it is loaded into Postgres once and queried from there.
+# laptop. DuckDB aggregates it during the inventory build; Postgres stores only
+# the resulting place and exposure counts.
 # Rebuild with data/buildings/fetch_footprints.py
 data/buildings/cache/*.parquet
 
-# Intermediate for the structures tileset — 625 MB, regenerable.
+# Large structures-build intermediates are regenerable and content-verified by
+# the adjacent ignored build-state record before they are reused.
 data/buildings/cache/*.geojsonl
 data/buildings/cache/structure-points.geojsonl

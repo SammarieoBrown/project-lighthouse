@@ -1,27 +1,16 @@
-import type {
-  ExpressionSpecification,
-  LayerSpecification,
-  Map as MapLibreMap,
-  SourceSpecification,
-} from "maplibre-gl";
+import type { LayerSpecification, Map as MapLibreMap, SourceSpecification } from "maplibre-gl";
 import type { GeoJSONSource } from "maplibre-gl";
 
-import type { Snapshot } from "../map";
+import { parishImpacts, type Snapshot } from "../map";
 
 /* The two data layers that sit on the basemap: hazard and impact.
  *
- * Hazard is where the wind reaches. Impact is which homes it hits. They use
+ * Hazard is where the selected forecast says wind may reach. Impact is the
+ * selected advisory's model output, summed to real parish boundaries. They use
  * separate colour scales — cool for hazard, warm for impact — so the eye can
- * hold both at once; see the hazard ramp note in tokens.css for why that is a
- * stated exception to the colour rule rather than drift.
- *
- * Zoom does the aggregation. Below z12.5 the country is 131 district circles,
- * because two thousand individual dots over an island is a texture rather than
- * a map. Above it, the individual homes — which is the zoom at which a person
- * is asking about one street, not one country.
+ * hold both at once. Synthetic household and district coordinates never become
+ * map marks; they are model scaffolding, not observations on the ground.
  */
-
-export const ZOOM_SWITCH = 12.5;
 
 /* What the map is drawn on. Three states rather than a satellite on/off,
  * because "what is underneath the data" is one question with three answers and
@@ -40,6 +29,7 @@ export type BaseView = "map" | "satellite" | "structures";
  * Below z9 there is genuinely nothing to draw, and the panel says so rather
  * than offering an empty screen as an answer. */
 export const STRUCTURES_MIN_ZOOM = 9;
+export const STRUCTURE_FOOTPRINT_ZOOM = 14;
 
 export type MapColours = {
   hazard34: string;
@@ -81,14 +71,13 @@ const EMPTY: Collection = { type: "FeatureCollection", features: [] };
  * on every step and an unusable Play. The map is built once; only its data
  * moves.
  *
- * Districts and homes carry their counts as feature properties, so every paint
- * decision below is an expression over real values rather than a colour baked
- * in at export time. Change the severity rule and the map follows. */
+ * Parish features carry selected-advisory aggregate counts, so every paint
+ * decision below is an expression over model values joined to real geometry. */
 export function frameData(snapshot: Snapshot | null): Record<string, Collection> {
   if (!snapshot) {
     return {
       "lh-hazard": EMPTY, "lh-cone": EMPTY, "lh-track": EMPTY,
-      "lh-storm": EMPTY, "lh-districts": EMPTY, "lh-homes": EMPTY,
+      "lh-storm": EMPTY, "lh-parish-impact": EMPTY,
     };
   }
 
@@ -104,6 +93,14 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
       : EMPTY;
 
   const centre = snapshot.centre ?? (snapshot.track?.coordinates?.[0] as [number, number] | undefined);
+  const impacts = parishImpacts(snapshot);
+  const labelled = new Set(
+    [...impacts]
+      .filter((impact) => impact.majorPlus > 0)
+      .sort((a, b) => b.majorPlus - a.majorPlus)
+      .slice(0, 5)
+      .map((impact) => impact.name),
+  );
 
   return {
     "lh-hazard": {
@@ -122,30 +119,23 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
           features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: centre } }],
         }
       : EMPTY,
-    "lh-districts": {
+    "lh-parish-impact": {
       type: "FeatureCollection",
-      features: snapshot.districts.map((d) => ({
+      features: impacts.map((impact) => ({
         type: "Feature",
         properties: {
-          district: d.district,
-          parish: d.parish,
-          n: d.n,
-          destroyed: d.destroyed,
-          major: d.major,
-          // Precomputed because MapLibre expressions cannot divide by a
-          // per-feature maximum, and the severity rule is a share.
-          severe: d.destroyed >= d.n * 0.25 ? 2 : d.destroyed + d.major >= d.n * 0.25 ? 1 : 0,
-          r: Math.sqrt(d.n),
+          name: impact.name,
+          label: impact.label,
+          homes: impact.homes,
+          destroyed: impact.destroyed,
+          major: impact.major,
+          minor: impact.minor,
+          none: impact.none,
+          majorPlus: impact.majorPlus,
+          band: impact.band,
+          showLabel: labelled.has(impact.name),
         },
-        geometry: { type: "Point", coordinates: [d.lon, d.lat] },
-      })),
-    },
-    "lh-homes": {
-      type: "FeatureCollection",
-      features: (snapshot.households ?? []).map((h) => ({
-        type: "Feature",
-        properties: { band: h.band, parish: h.parish, community: h.community, roof: h.roof },
-        geometry: { type: "Point", coordinates: [h.lon, h.lat] },
+        geometry: impact.geometry as GeoJSON.Geometry,
       })),
     },
   };
@@ -154,7 +144,7 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
 /* Point sources only. A polygon source with no tile buffer shows seams where a
  * wind band crosses a tile edge, and the wind bands are the largest polygons on
  * the map. */
-const UNBUFFERED = new Set(["lh-storm", "lh-districts", "lh-homes"]);
+const UNBUFFERED = new Set(["lh-storm"]);
 
 export function dataSources(snapshot: Snapshot | null): Record<string, SourceSpecification> {
   const spec: Record<string, SourceSpecification> = {};
@@ -173,17 +163,32 @@ export function applyFrame(map: MapLibreMap, snapshot: Snapshot | null): void {
   }
 }
 
-export function dataLayers(c: MapColours, maxDistrict: number): LayerSpecification[] {
-  const bandColour = [
-    "match",
-    ["get", "band"],
-    "DESTROYED", c.critical,
-    "MAJOR", c.elevated,
-    "MINOR", c.quiet,
-    "rgba(0,0,0,0)",
-  ] as unknown as ExpressionSpecification;
-
+export function dataLayers(c: MapColours): LayerSpecification[] {
   return [
+    /* Expected impact first. The administrative geometry is measured; the
+     * counts and fill are explicitly modelled for the selected advisory. */
+    {
+      id: "lh-parish-impact-fill",
+      type: "fill",
+      source: "lh-parish-impact",
+      paint: {
+        "fill-color": [
+          "match",
+          ["get", "band"],
+          "destroyed", c.critical,
+          "major", c.elevated,
+          "rgba(0,0,0,0)",
+        ],
+        "fill-opacity": [
+          "match",
+          ["get", "band"],
+          "destroyed", 0.38,
+          "major", 0.3,
+          0,
+        ],
+      },
+    },
+
     // Cone first and faintest: where the centre might go is a different and
     // much less useful question than who gets hit.
     {
@@ -225,22 +230,74 @@ export function dataLayers(c: MapColours, maxDistrict: number): LayerSpecificati
       },
     },
 
-    /* No district circles and no household dots.
-     *
-     * Both were marks for the synthetic registry: 2,000 households dropped
-     * inside community polygons by a seeded generator, aggregated into bubbles
-     * sized by how many landed where. Every one sat at coordinates where
-     * nothing necessarily stands, so the map was drawing our random seed on top
-     * of Jamaica — and drawing it in the most confident register the screen has,
-     * a filled circle in a severity colour.
-     *
-     * What is left is measured: real coastlines, the real forecast wind field,
-     * and real building footprints out of the basemap archive. The counts moved
-     * to the panel, where a number can carry the word "structures" and say
-     * where it came from. A map should not assert what a table can qualify.
-     *
-     * The sources stay defined and fed — see dataSources — because the SVG
-     * fallback still draws households and the panel still reads their bands. */
+    /* Real parish boundaries keep the aggregate impact legible beneath the
+     * forecast. A selected worst-hit row can strengthen this same geometry;
+     * it never adds a synthetic district point. */
+    {
+      id: "lh-parish-impact-outline",
+      type: "line",
+      source: "lh-parish-impact",
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "band"],
+          "destroyed", c.critical,
+          "major", c.elevated,
+          c.quiet,
+        ],
+        "line-width": [
+          "match",
+          ["get", "band"],
+          "destroyed", 1.5,
+          "major", 1.25,
+          0.75,
+        ],
+        "line-opacity": [
+          "match",
+          ["get", "band"],
+          "destroyed", 0.85,
+          "major", 0.75,
+          0.4,
+        ],
+      },
+    },
+    {
+      id: "lh-focused-parish",
+      type: "line",
+      source: "lh-parish-impact",
+      filter: ["==", ["get", "name"], ""],
+      paint: {
+        "line-color": c.figure,
+        "line-width": 2.5,
+        "line-opacity": 0.95,
+      },
+    },
+    {
+      id: "lh-impact-labels",
+      type: "symbol",
+      source: "lh-parish-impact",
+      maxzoom: 12,
+      filter: ["==", ["get", "showLabel"], true],
+      layout: {
+        "text-field": [
+          "concat",
+          ["get", "label"],
+          "\n",
+          ["to-string", ["get", "majorPlus"]],
+          " major+",
+        ],
+        "text-font": ["Noto Sans Medium"],
+        "text-size": 11,
+        "text-line-height": 1.05,
+        "text-letter-spacing": 0.02,
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": c.figure,
+        "text-halo-color": c.ground,
+        "text-halo-width": 1.25,
+      },
+    },
 
     /* The storm centre, drawn exactly as the SVG fallback draws it — a ring and
      * a dot in the figure colour. Present here because the two maps must not

@@ -6,16 +6,13 @@
  * control — colours we did not choose, labels unreadable at distance, and a
  * visual language that is none of our three registers.
  *
- * Two layers share this canvas: hazard (where the wind reaches) and impact
- * (which homes it hits). They get separate colour scales — cool for hazard,
- * warm for impact — so the eye can hold both at once. See the hazard ramp note
- * in tokens.css for why that is a stated exception rather than drift.
- *
- * Homes are aggregated to district, not drawn one by one. Two thousand
- * individual dots over an island this size is a texture, not a map: you cannot
- * count them, you cannot tell which places are worst, and they bury everything
- * underneath. One mark per district, area proportional to homes, is the same
- * information at a density a person can actually read.
+ * Two layers share this canvas: hazard (where the selected forecast says wind
+ * may reach) and expected impact (the model output for that same advisory).
+ * They get separate colour scales — cool for hazard, warm for impact — so the
+ * eye can hold both at once. Impact is aggregated onto the real parish
+ * boundaries. The model's synthetic household coordinates are useful for the
+ * simulation, but they are not evidence that a home stands at a point on the
+ * ground and therefore never become map marks.
  */
 
 type Ring = [number, number][];
@@ -66,15 +63,17 @@ function boxOf(rings: Ring[]) {
   const ys = points.map((p) => p[1]);
   const x0 = Math.min(...xs);
   const x1 = Math.max(...xs);
-  return { x0, y0: Math.min(...ys), x1, y1: Math.max(...ys), cx: (x0 + x1) / 2 };
+  const y0 = Math.min(...ys);
+  const y1 = Math.max(...ys);
+  return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
 }
 
 export type District = {
   parish: string;
   district: string;
   n: number;
-  lon: number;
-  lat: number;
+  lon?: number;
+  lat?: number;
   destroyed: number;
   major: number;
   minor: number;
@@ -82,12 +81,12 @@ export type District = {
 };
 
 export type Household = {
-  lon: number;
-  lat: number;
+  lon?: number;
+  lat?: number;
   band: string;
   parish: string;
   community: string;
-  roof: string;
+  roof?: string;
 };
 
 export type Snapshot = {
@@ -106,40 +105,145 @@ export type Snapshot = {
   households?: Household[];
 };
 
-/* A district is coloured by the worst band covering a quarter of its homes.
+export type MapFocus = {
+  key: string;
+  lon: number;
+  lat: number;
+  parish?: string;
+};
+
+export const IMPACT_SHARE_THRESHOLD = 0.25;
+
+export type ImpactBand = "destroyed" | "major" | "below-threshold";
+
+export type ParishImpact = {
+  name: string;
+  label: string;
+  geometry: Snapshot["parishes"][number]["geometry"];
+  homes: number;
+  destroyed: number;
+  major: number;
+  minor: number;
+  none: number;
+  majorPlus: number;
+  band: ImpactBand;
+};
+
+function parishKey(name: string): string {
+  return name.trim().toLowerCase().replace(/^st\.?\s+/, "saint ");
+}
+
+function parishLabel(name: string): string {
+  return name.replace(/^Saint /, "St ");
+}
+
+/** Join selected-advisory model output to mapped parish geometry.
  *
- * Only two hues appear, and that is the point. Minor damage is not what an
- * operations room is deciding about in Act 1 — reserving colour for major and
- * destroyed keeps the map answering the question it is actually asked, and
- * leaves the cool end of the palette free for the hazard layer. */
-function severityOf(d: District): { fill: string; ring: string } {
-  const quarter = d.n * 0.25;
-  if (d.destroyed >= quarter) return { fill: "var(--lh-critical)", ring: "var(--lh-critical)" };
-  if (d.destroyed + d.major >= quarter) return { fill: "var(--lh-elevated)", ring: "var(--lh-elevated)" };
-  return { fill: "none", ring: "var(--lh-quiet)" };
+ * District coordinates in the replay belong to a synthetic model registry, so
+ * they must not be plotted. Their counts are valid model output, however, and
+ * can be summed to the administrative unit whose geometry is real. Both the
+ * WebGL map and the SVG fallback call this function so a rendering failure can
+ * never change the evidence being shown. */
+export function parishImpacts(snapshot: Snapshot): ParishImpact[] {
+  const totals = new Map<string, Omit<ParishImpact, "name" | "label" | "geometry" | "majorPlus" | "band">>();
+
+  for (const district of snapshot.districts) {
+    const key = parishKey(district.parish);
+    const current = totals.get(key) ?? {
+      homes: 0,
+      destroyed: 0,
+      major: 0,
+      minor: 0,
+      none: 0,
+    };
+    current.homes += district.n;
+    current.destroyed += district.destroyed;
+    current.major += district.major;
+    current.minor += district.minor;
+    current.none += district.none;
+    totals.set(key, current);
+  }
+
+  return snapshot.parishes.map((parish) => {
+    const counts = totals.get(parishKey(parish.name)) ?? {
+      homes: 0,
+      destroyed: 0,
+      major: 0,
+      minor: 0,
+      none: 0,
+    };
+    const destroyedShare = counts.homes > 0 ? counts.destroyed / counts.homes : 0;
+    const majorPlus = counts.destroyed + counts.major;
+    const majorPlusShare = counts.homes > 0 ? majorPlus / counts.homes : 0;
+    const band: ImpactBand = destroyedShare >= IMPACT_SHARE_THRESHOLD
+      ? "destroyed"
+      : majorPlusShare >= IMPACT_SHARE_THRESHOLD
+        ? "major"
+        : "below-threshold";
+
+    return {
+      name: parish.name,
+      label: parishLabel(parish.name),
+      geometry: parish.geometry,
+      ...counts,
+      majorPlus,
+      band,
+    };
+  });
 }
 
-/* Area proportional to count, so a district with four times the homes looks
- * four times the size — which is what a reader assumes a circle means. Scaling
- * the radius instead is the oldest lie in data graphics. */
-function radiusOf(n: number, max: number): number {
-  return 4 + 17 * Math.sqrt(n / max);
-}
-
-export function SynopticMap({ snapshot }: { snapshot: Snapshot }) {
+export function SynopticMap({ snapshot, focus = null }: { snapshot: Snapshot; focus?: MapFocus | null }) {
   const centre = snapshot.centre ?? snapshot.track?.coordinates?.[0];
-  const biggest = Math.max(...snapshot.districts.map((d) => d.n), 1);
+  const impacts = parishImpacts(snapshot);
+  const focusedParish = focus?.parish ? parishKey(focus.parish) : "";
+  const focusPoint = focus && Number.isFinite(focus.lon) && Number.isFinite(focus.lat)
+    ? project([focus.lon, focus.lat])
+    : null;
+  const focusWidth = W * 0.48;
+  const focusHeight = H * 0.48;
+  const viewBox = focusPoint
+    ? [
+        Math.min(Math.max(focusPoint[0] - focusWidth / 2, 0), W - focusWidth),
+        Math.min(Math.max(focusPoint[1] - focusHeight / 2, 0), H - focusHeight),
+        focusWidth,
+        focusHeight,
+      ].map((value) => value.toFixed(1)).join(" ")
+    : `0 0 ${W} ${H}`;
+  const labelled = new Set(
+    [...impacts]
+      .filter((impact) => impact.majorPlus > 0)
+      .sort((a, b) => b.majorPlus - a.majorPlus)
+      .slice(0, 5)
+      .map((impact) => impact.name),
+  );
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${H}`}
+      viewBox={viewBox}
       width="100%"
       height="100%"
       role="img"
-      aria-label="Forecast wind field and expected damage by district across Jamaica"
+      aria-label={`Selected forecast wind field and expected model impact by parish across Jamaica${focus?.parish ? `, focused on ${focus.parish}` : ""}`}
       preserveAspectRatio="xMidYMid meet"
       style={{ display: "block" }}
     >
+      {/* The island and its expected impact. Each mark is a real parish
+          polygon; the fill is derived from counts aggregated for this advisory. */}
+      {impacts.map((impact) => (
+        <path
+          key={impact.name}
+          d={pathOf(ringsOf(impact.geometry))}
+          fill={impact.band === "destroyed"
+            ? "var(--lh-critical)"
+            : impact.band === "major"
+              ? "var(--lh-elevated)"
+              : "var(--lh-ground)"}
+          fillOpacity={impact.band === "below-threshold" ? 0.72 : 0.38}
+          stroke="none"
+          aria-label={`${impact.name}: ${impact.destroyed} expected destroyed, ${impact.major} expected major damage among ${impact.homes} modelled homes`}
+        />
+      ))}
+
       {/* Cone — where the centre might go, which is a different and much less
           useful question than who gets hit. Faintest for that reason. */}
       <path d={pathOf(ringsOf(snapshot.cone))} fill="var(--lh-figure)" fillOpacity="0.03" />
@@ -188,73 +292,43 @@ export function SynopticMap({ snapshot }: { snapshot: Snapshot }) {
         strokeOpacity="0.5"
       />
 
-      {/* Jamaica. Every parish now carries a registry, so they are drawn alike. */}
-      {snapshot.parishes.map((p) => (
+      {/* Parish boundaries remain legible through both data layers. */}
+      {impacts.map((impact) => (
         <path
-          key={p.name}
-          d={pathOf(ringsOf(p.geometry))}
-          fill="var(--lh-ground)"
-          fillOpacity="0.6"
+          key={`outline-${impact.name}`}
+          d={pathOf(ringsOf(impact.geometry))}
+          fill="none"
           stroke="var(--lh-figure)"
-          strokeWidth="0.75"
-          strokeOpacity="0.4"
+          strokeWidth={parishKey(impact.name) === focusedParish ? 2.5 : 0.75}
+          strokeOpacity={parishKey(impact.name) === focusedParish ? 0.95 : 0.4}
         />
       ))}
 
-      {/* Districts, largest first so a small severe one is never buried. */}
-      {[...snapshot.districts]
-        .sort((a, b) => b.n - a.n)
-        .map((d) => {
-          const [x, y] = project([d.lon, d.lat]);
-          const { fill, ring } = severityOf(d);
-          return (
-            <circle
-              key={`${d.parish}-${d.district}`}
-              cx={x}
-              cy={y}
-              r={radiusOf(d.n, biggest)}
-              fill={fill}
-              fillOpacity={fill === "none" ? 0 : 0.7}
-              stroke={ring}
-              strokeWidth="1.25"
-              strokeOpacity="0.85"
-              /* aria-label rather than an SVG <title> child. React 19 treats
-                 <title> as hoistable document metadata, and the server and
-                 client disagree about SVG scope — a hydration mismatch that
-                 regenerates the whole tree on load. */
-              aria-label={`${d.district}, ${d.parish}: ${d.n} homes, ${d.destroyed} destroyed, ${d.major} major`}
-            />
-          );
-        })}
-
-      {/* Name the parishes the storm is aimed at, outside their outline and
-          knocked out of what is behind. A name set over data is unreadable at
-          any halo weight, and the data does not move. */}
-      {snapshot.parishes
-        .filter((p) => p.name === "Westmoreland" || p.name === "Saint Elizabeth")
-        .map((p) => {
-          const box = boxOf(ringsOf(p.geometry));
+      {/* Label only the five largest major-or-worse model counts. The full
+          parish scale is decoded in the map key; fourteen labels would obscure
+          the hazard field at this size. */}
+      {impacts
+        .filter((impact) => labelled.has(impact.name))
+        .map((impact) => {
+          const box = boxOf(ringsOf(impact.geometry));
           if (!box) return null;
-          const above = p.name === "Westmoreland";
           return (
             <text
-              key={`label-${p.name}`}
+              key={`label-${impact.name}`}
               x={box.cx}
-              y={above ? box.y0 - 14 : box.y1 + 26}
-              fontSize="14"
+              y={box.cy}
+              fontSize="12"
               fill="var(--lh-figure)"
-              fillOpacity="0.85"
+              fillOpacity="0.9"
               stroke="var(--lh-ground)"
-              strokeWidth="5"
+              strokeWidth="4"
               strokeLinejoin="round"
               paintOrder="stroke"
-              fontFamily="var(--lh-font-display)"
-              fontWeight="700"
+              fontFamily="var(--lh-font-data)"
               textAnchor="middle"
-              letterSpacing="0.6"
-              style={{ textTransform: "uppercase" }}
             >
-              {p.name.replace("Saint ", "St ")}
+              <tspan x={box.cx}>{impact.label}</tspan>
+              <tspan x={box.cx} dy="14">{impact.majorPlus} major+</tspan>
             </text>
           );
         })}

@@ -1,0 +1,97 @@
+{
+  "artifact": {
+    "bytes": 46748517,
+    "path": "cache/structures-z15.pmtiles",
+    "sha256": "21e340f09fc8ba6dd3957876afaf215c7d4fc3aec8723cf0bd9164f061c7dc8f"
+  },
+  "build": {
+    "feature_count": 1844379,
+    "inventory_fingerprint": "ab8b0ec9e8a0ed2fef77dff05cb12a91c3f23f55f7343c3bea20949bfd186a6c",
+    "inventory_recipe": {
+      "inputs": {
+        "data/buildings/cache/jamaica-buildings.parquet": "216e909174fcaf80d160d2d8fe2d2efbcd034be9e4f68a41cce90fe15c959377",
+        "data/replay/cache/jamaica/jam_admin_boundaries.shp.zip": "104e43b38caf11404db691bd076e779a264398fd0583e4d9d9e73be91b14fd9f"
+      },
+      "toolchain": {
+        "duckdb": "1.5.5"
+      },
+      "transform": {
+        "boundary_layer": "jam_admin3",
+        "boundary_tie_breaker": "adm3_pcode, then OGC_FID; first match",
+        "feature_zoom": {
+          "structure_points": [
+            9,
+            13
+          ],
+          "structures": [
+            14,
+            15
+          ]
+        },
+        "footprint": "source geometry, EPSG:4326",
+        "placement": "ST_Within(centroid, admin3 geometry)",
+        "properties": {
+          "structure_points": {
+            "w": "structures represented"
+          },
+          "structures": {
+            "c": "admin3 community",
+            "d": "admin2 district"
+          }
+        },
+        "source_order": "GeoParquet file_row_number",
+        "wide_zoom": {
+          "cell_degrees": 0.005,
+          "coordinate": "mean source centroid in cell, rounded to 6 decimals",
+          "coordinate_accumulator": "integer nanodegrees before division",
+          "method": "centroid grid aggregate",
+          "weight_property": "w (exact structures represented)"
+        }
+      },
+      "version": 3
+    },
+    "point_count": 25642,
+    "represented_structures": 1844379,
+    "tile_fingerprint": "a59fc874c381a693a256203b8b902f25e0d4047eaa3f79960e526f75437601b9",
+    "tile_recipe": {
+      "inputs": {
+        "data/buildings/cache/structure-points.geojsonl": "441f8c413c9e2ecbc510860d05fdd143ceff7d2d71506ecdbc45d9e9a0124bec",
+        "data/buildings/cache/structures.geojsonl": "9f527066c13fe216539709785784b8cbdc9b95d053d400a85f4eb88899b9ec3f"
+      },
+      "inventory_fingerprint": "ab8b0ec9e8a0ed2fef77dff05cb12a91c3f23f55f7343c3bea20949bfd186a6c",
+      "layers": {
+        "structure_points": {
+          "maxzoom": 13,
+          "minzoom": 9
+        },
+        "structures": {
+          "maxzoom": 15,
+          "minzoom": 14
+        }
+      },
+      "metadata": {
+        "description": "Mapped Jamaica structure distribution and source footprints",
+        "name": "Project Lighthouse structure inventory"
+      },
+      "tippecanoe": {
+        "base_zoom": 9,
+        "correct_vector_layer_zoom_metadata": true,
+        "drop_rate": 1,
+        "maxzoom": 15,
+        "minzoom": 9,
+        "no_feature_limit": true,
+        "no_tile_size_limit": true,
+        "no_tiny_polygon_reduction": true,
+        "preserve_input_order": true,
+        "simplification": 4
+      },
+      "toolchain": {
+        "pmtiles": "pmtiles dev, commit none, built at unknown",
+        "pmtiles_executable_sha256": "ddd6019d1dc6ee01a38414b89d062f9b4307008c1897f2086c4a353012c18f90",
+        "tippecanoe": "tippecanoe v2.79.0"
+      },
+      "version": 5
+    }
+  },
+  "schema": "lighthouse.structure-archive.v1"
+}

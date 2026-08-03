@@ -24,15 +24,27 @@ from app.agents.risk_mapper import assess
 from app.console.export import (
     BAND_CHAR,
     ExportError,
+    _building_data,
+    _exposure_advisory_rows,
     _frame,
+    _lock_building_snapshot,
     advisory_key,
     build_replay,
     serialise,
     write_replay,
 )
-from app.models import Advisory
+from app.models import Advisory, HazardEvent
 from app.nhc.ingest import ingest_storm
 from app.registry import seed_registry
+from app.registry.buildings import (
+    INVENTORY_RECIPE_VERSION,
+    advisory_fingerprint as exposure_advisory_fingerprint,
+    exposure_rows_sha256,
+    inventory_fingerprint,
+    stored_event_exposure_rows,
+    stored_structure_rows,
+    structure_rows_sha256,
+)
 from app.replay.posture import SIMPLIFY_DEG
 
 #: Small enough that 41 advisories of assessments stay quick, large enough that
@@ -130,7 +142,7 @@ def test_the_exporter_refuses_to_build_a_frame_whose_arrays_disagree():
     """
     advisory = Advisory(advisory_number="7", issued_at=PINNED, raw={})
 
-    with pytest.raises(ExportError, match="mislabels real homes"):
+    with pytest.raises(ExportError, match="mislabels synthetic household records"):
         _frame(
             advisory,
             codes=set(),
@@ -247,6 +259,743 @@ def test_absent_data_is_an_absent_key_rather_than_a_zero(exported):
     # fewer places than the peak did.
     counts = [len(f["probabilities"]) for f in exported["frames"]]
     assert max(counts) > counts[-1]
+
+
+def test_unbuilt_structure_exposure_is_unavailable_not_zero(exported):
+    assert all("structures" not in district for district in exported["districts"])
+    assert all("district_exposed" not in frame for frame in exported["frames"])
+
+
+def _insert_inventory_marker(
+    session,
+    *,
+    structures: int,
+    places: int = 1,
+    recipe_version: str = INVENTORY_RECIPE_VERSION,
+) -> str:
+    source = "1" * 64
+    boundaries = "2" * 64
+    fingerprint = inventory_fingerprint(
+        source_sha256=source,
+        boundaries_sha256=boundaries,
+        recipe_version=recipe_version,
+    )
+    session.execute(
+        text(
+            "INSERT INTO place_structure_build "
+            "(inventory_fingerprint, source_sha256, boundaries_sha256, "
+            " recipe_version, structure_count, place_count, structure_rows_sha256) "
+            "VALUES (:fingerprint, :source, :boundaries, :recipe, :structures, "
+            " :places, :rows_sha256)"
+        ),
+        {
+            "fingerprint": fingerprint,
+            "source": source,
+            "boundaries": boundaries,
+            "recipe": recipe_version,
+            "structures": structures,
+            "places": places,
+            "rows_sha256": structure_rows_sha256(stored_structure_rows(session)),
+        },
+    )
+    return fingerprint
+
+
+def _insert_exposure_marker(
+    session,
+    event: HazardEvent,
+    advisories: list[Advisory],
+    *,
+    inventory_fingerprint: str,
+    exposure_row_count: int = 0,
+    exposed_structure_count: int = 0,
+) -> None:
+    rows = _exposure_advisory_rows(session, event)
+    session.execute(
+        text(
+            "INSERT INTO place_exposure_build "
+            "(hazard_event_id, inventory_fingerprint, structure_rows_sha256, "
+            " advisory_fingerprint, "
+            " advisory_count, exposure_row_count, exposed_structure_count, "
+            " exposure_rows_sha256) "
+            "VALUES (:event, :inventory, :structure_rows, :advisories, :advisory_count, "
+            " :row_count, :structure_count, :rows_sha256)"
+        ),
+        {
+            "event": event.id,
+            "inventory": inventory_fingerprint,
+            "structure_rows": structure_rows_sha256(stored_structure_rows(session)),
+            "advisories": exposure_advisory_fingerprint(rows),
+            "advisory_count": len(advisories),
+            "row_count": exposure_row_count,
+            "structure_count": exposed_structure_count,
+            "rows_sha256": exposure_rows_sha256(
+                event.id,
+                stored_event_exposure_rows(session, event.id),
+            ),
+        },
+    )
+
+
+def _insert_complete_district_inventory(
+    session, districts: list[dict], *, structures_each: int = 17
+) -> tuple[int, int]:
+    session.execute(
+        text(
+            "INSERT INTO place_structures "
+            "(parish, district, community, structures, built_m2) "
+            "VALUES (:parish, :district, :community, :structures, 125.0)"
+        ),
+        [
+            {
+                "parish": district["parish"],
+                "district": district["district"],
+                "community": f"mapped-test-place-{index}",
+                "structures": structures_each,
+            }
+            for index, district in enumerate(districts)
+        ],
+    )
+    return len(districts) * structures_each, len(districts)
+
+
+def _insert_legacy_inventory(session, districts: list[dict]) -> None:
+    session.execute(
+        text(
+            "INSERT INTO place_structures "
+            "(parish, district, community, structures, built_m2) "
+            "VALUES (:parish, :district, :community, :structures, 125.0)"
+        ),
+        [
+            {
+                "parish": districts[index % len(districts)]["parish"],
+                "district": districts[index % len(districts)]["district"],
+                "community": f"legacy-mapped-place-{index}",
+                "structures": 1 if index else 1_841_391,
+            }
+            for index in range(775)
+        ],
+    )
+
+
+def test_completed_all_zero_exposure_emits_zero_arrays(
+    exported, session_module
+):
+    """A marker makes no sparse rows mean zero, not unavailable."""
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        district = exported["districts"][0]
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module, exported["districts"]
+        )
+        fingerprint = _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint=fingerprint,
+        )
+
+        payload = build_replay(session_module, generated_at=PINNED)
+        selected = next(
+            item
+            for item in payload["districts"]
+            if item["parish"] == district["parish"]
+            and item["district"] == district["district"]
+        )
+        assert selected["structures"] == 17
+        assert all("district_exposed" in frame for frame in payload["frames"])
+        assert all(
+            all(bands == [0, 0, 0] for bands in frame["district_exposed"])
+            for frame in payload["frames"]
+        )
+    finally:
+        savepoint.rollback()
+
+
+def test_stale_exposure_inventory_fails_closed(exported, session_module):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module, exported["districts"]
+        )
+        _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint="b" * 64,
+        )
+
+        payload = build_replay(session_module, generated_at=PINNED)
+        assert any("structures" in item for item in payload["districts"])
+        assert all("district_exposed" not in frame for frame in payload["frames"])
+    finally:
+        savepoint.rollback()
+
+
+def test_exposure_marker_must_bind_the_exact_inventory_rows(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module,
+            exported["districts"],
+        )
+        fingerprint = _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint=fingerprint,
+        )
+        session_module.execute(
+            text(
+                "UPDATE place_exposure_build SET structure_rows_sha256 = :stale "
+                "WHERE hazard_event_id = :event"
+            ),
+            {"stale": "f" * 64, "event": event.id},
+        )
+
+        structures, exposure = _building_data(session_module, event, advisories)
+        assert structures is not None
+        assert exposure is None
+    finally:
+        savepoint.rollback()
+
+
+def test_wrong_inventory_counts_fail_closed(exported, session_module):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        district = exported["districts"][0]
+        session_module.execute(
+            text(
+                "INSERT INTO place_structures "
+                "(parish, district, community, structures, built_m2) "
+                "VALUES (:parish, :district, 'mapped-test-place', 17, 125.0)"
+            ),
+            {"parish": district["parish"], "district": district["district"]},
+        )
+        _insert_inventory_marker(
+            session_module,
+            structures=18,  # does not match the actual aggregate
+        )
+
+        assert _building_data(session_module, event, advisories) == (None, None)
+    finally:
+        savepoint.rollback()
+
+
+def test_stale_inventory_recipe_fails_closed(exported, session_module):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        district = exported["districts"][0]
+        session_module.execute(
+            text(
+                "INSERT INTO place_structures "
+                "(parish, district, community, structures, built_m2) "
+                "VALUES (:parish, :district, 'mapped-test-place', 17, 125.0)"
+            ),
+            {"parish": district["parish"], "district": district["district"]},
+        )
+        _insert_inventory_marker(
+            session_module,
+            structures=17,
+            recipe_version="place-structures-v1",
+        )
+
+        assert _building_data(session_module, event, advisories) == (None, None)
+    finally:
+        savepoint.rollback()
+
+
+def test_same_count_and_total_inventory_redistribution_fails_row_digest(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module, exported["districts"]
+        )
+        _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+
+        session_module.execute(
+            text(
+                "UPDATE place_structures SET structures = CASE community "
+                "WHEN 'mapped-test-place-0' THEN 16 "
+                "WHEN 'mapped-test-place-1' THEN 18 ELSE structures END "
+                "WHERE community IN ('mapped-test-place-0', 'mapped-test-place-1')"
+            )
+        )
+
+        assert _building_data(session_module, event, advisories) == (None, None)
+    finally:
+        savepoint.rollback()
+
+
+def test_nonfinite_inventory_area_fails_closed_without_aborting_replay(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        district = exported["districts"][0]
+        session_module.execute(
+            text(
+                "INSERT INTO place_structures "
+                "(parish, district, community, structures, built_m2) "
+                "VALUES (:parish, :district, 'mapped-test-place', 17, 125.0)"
+            ),
+            {"parish": district["parish"], "district": district["district"]},
+        )
+        _insert_inventory_marker(session_module, structures=17)
+        session_module.execute(
+            text(
+                "UPDATE place_structures SET built_m2 = 'NaN'::double precision "
+                "WHERE community = 'mapped-test-place'"
+            )
+        )
+
+        assert _building_data(session_module, event, advisories) == (None, None)
+    finally:
+        savepoint.rollback()
+
+
+def test_same_total_exposure_redistribution_above_inventory_fails_closed(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+            .order_by(Advisory.issued_at)
+        ).all()
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module,
+            exported["districts"],
+            structures_each=10,
+        )
+        fingerprint = _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+        first, second = exported["districts"][:2]
+        session_module.execute(
+            text(
+                "INSERT INTO place_exposure "
+                "(advisory_id, parish, district, community, band, structures) "
+                "VALUES (:advisory, :parish, :district, :community, 34, :structures)"
+            ),
+            [
+                {
+                    "advisory": advisories[0].id,
+                    "parish": first["parish"],
+                    "district": first["district"],
+                    "community": "redistributed-a",
+                    "structures": 4,
+                },
+                {
+                    "advisory": advisories[0].id,
+                    "parish": second["parish"],
+                    "district": second["district"],
+                    "community": "redistributed-b",
+                    "structures": 11,
+                },
+            ],
+        )
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint=fingerprint,
+            exposure_row_count=2,
+            exposed_structure_count=15,
+        )
+
+        structures, exposure = _building_data(session_module, event, advisories)
+        assert structures is not None
+        assert exposure is None
+    finally:
+        savepoint.rollback()
+
+
+def test_same_count_and_total_exposure_redistribution_within_inventory_fails_digest(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+            .order_by(Advisory.issued_at)
+        ).all()
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module,
+            exported["districts"],
+            structures_each=10,
+        )
+        fingerprint = _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+        first, second = exported["districts"][:2]
+        session_module.execute(
+            text(
+                "INSERT INTO place_exposure "
+                "(advisory_id, parish, district, community, band, structures) "
+                "VALUES (:advisory, :parish, :district, :community, 34, :structures)"
+            ),
+            [
+                {
+                    "advisory": advisories[0].id,
+                    "parish": first["parish"],
+                    "district": first["district"],
+                    "community": "digest-a",
+                    "structures": 4,
+                },
+                {
+                    "advisory": advisories[0].id,
+                    "parish": second["parish"],
+                    "district": second["district"],
+                    "community": "digest-b",
+                    "structures": 6,
+                },
+            ],
+        )
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint=fingerprint,
+            exposure_row_count=2,
+            exposed_structure_count=10,
+        )
+        session_module.execute(
+            text(
+                "UPDATE place_exposure SET structures = 5 "
+                "WHERE advisory_id = :advisory "
+                "  AND community IN ('digest-a', 'digest-b')"
+            ),
+            {"advisory": advisories[0].id},
+        )
+
+        structures, exposure = _building_data(session_module, event, advisories)
+        assert structures is not None
+        assert exposure is None
+    finally:
+        savepoint.rollback()
+
+
+def test_marker_backed_exposure_rejects_observed_advisory_rows(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        observed = session_module.scalar(
+            select(Advisory).where(
+                Advisory.hazard_event_id == event.id,
+                Advisory.observed.is_(True),
+            )
+        )
+        structure_count, place_count = _insert_complete_district_inventory(
+            session_module,
+            exported["districts"],
+        )
+        fingerprint = _insert_inventory_marker(
+            session_module,
+            structures=structure_count,
+            places=place_count,
+        )
+        district = exported["districts"][0]
+        session_module.execute(
+            text(
+                "INSERT INTO place_exposure "
+                "(advisory_id, parish, district, community, band, structures) "
+                "VALUES (:advisory, :parish, :district, 'observed-row', 34, 3)"
+            ),
+            {
+                "advisory": observed.id,
+                "parish": district["parish"],
+                "district": district["district"],
+            },
+        )
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint=fingerprint,
+            exposure_row_count=1,
+            exposed_structure_count=3,
+        )
+
+        structures, exposure = _building_data(session_module, event, advisories)
+        assert structures is not None
+        assert exposure is None
+    finally:
+        savepoint.rollback()
+
+
+def test_partial_district_inventory_omits_inventory_and_exposure(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+        ).all()
+        district = exported["districts"][0]
+        session_module.execute(
+            text(
+                "INSERT INTO place_structures "
+                "(parish, district, community, structures, built_m2) "
+                "VALUES (:parish, :district, 'mapped-test-place', 17, 125.0)"
+            ),
+            {"parish": district["parish"], "district": district["district"]},
+        )
+        fingerprint = _insert_inventory_marker(session_module, structures=17)
+        _insert_exposure_marker(
+            session_module,
+            event,
+            advisories,
+            inventory_fingerprint=fingerprint,
+        )
+
+        payload = build_replay(session_module, generated_at=PINNED)
+        assert all("structures" not in item for item in payload["districts"])
+        assert all("district_exposed" not in frame for frame in payload["frames"])
+    finally:
+        savepoint.rollback()
+
+
+def test_building_snapshot_holds_share_locks_on_all_present_tables(session_module):
+    # Use the module transaction that built the replay fixture: its own writes
+    # hold RowExclusive locks, and PostgreSQL correctly blocks another
+    # connection's SHARE request until that fixture ends.
+    assert _lock_building_snapshot(session_module) == (True, True, True)
+    locks = set(
+        session_module.execute(
+            text(
+                "SELECT c.relname, l.mode "
+                "FROM pg_locks l "
+                "JOIN pg_class c ON c.oid = l.relation "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE l.pid = pg_backend_pid() "
+                "  AND n.nspname = current_schema()"
+            )
+        ).all()
+    )
+    for table in (
+        "advisory",
+        "place_exposure",
+        "place_exposure_build",
+        "place_structures",
+        "place_structure_build",
+    ):
+        assert (table, "ShareLock") in locks
+
+
+def test_predigest_marker_schema_fails_closed_instead_of_selecting_missing_columns(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        session_module.execute(
+            text("ALTER TABLE place_exposure_build DROP COLUMN exposure_rows_sha256")
+        )
+        assert _lock_building_snapshot(session_module) == (True, True, False)
+
+        payload = build_replay(session_module, generated_at=PINNED)
+        assert all("structures" not in item for item in payload["districts"])
+        assert all("district_exposed" not in frame for frame in payload["frames"])
+    finally:
+        savepoint.rollback()
+
+
+@pytest.mark.parametrize(
+    "marker_tables_exist",
+    [False, True],
+    ids=["pre-migration", "upgraded-empty-markers"],
+)
+def test_legacy_complete_melissa_build_infers_sparse_zero_frames(
+    exported, session_module, marker_tables_exist
+):
+    """The pre-marker builder replaced the full 41-advisory build atomically."""
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+            .order_by(Advisory.issued_at)
+        ).all()
+        district = exported["districts"][0]
+        _insert_legacy_inventory(session_module, exported["districts"])
+        session_module.execute(
+            text(
+                "INSERT INTO place_exposure "
+                "(advisory_id, parish, district, community, band, structures) "
+                "VALUES (:advisory, :parish, :district, 'mapped-test-place', 34, 3)"
+            ),
+            [
+                {
+                    "advisory": advisory.id,
+                    "parish": district["parish"],
+                    "district": district["district"],
+                }
+                for advisory in advisories[:31]
+            ],
+        )
+        if not marker_tables_exist:
+            session_module.execute(text("DROP TABLE place_exposure_build"))
+            session_module.execute(text("DROP TABLE place_structure_build"))
+
+        payload = build_replay(session_module, generated_at=PINNED)
+        assert all("district_exposed" in frame for frame in payload["frames"])
+        assert all(
+            all(bands == [0, 0, 0] for bands in frame["district_exposed"])
+            for frame in payload["frames"][31:]
+        )
+        selected_index = next(
+            index
+            for index, item in enumerate(payload["districts"])
+            if item["parish"] == district["parish"]
+            and item["district"] == district["district"]
+        )
+        assert payload["frames"][30]["district_exposed"][selected_index] == [0, 0, 3]
+    finally:
+        savepoint.rollback()
+
+
+def test_observed_advisory_cannot_substitute_for_missing_legacy_forecast(
+    exported, session_module
+):
+    savepoint = session_module.begin_nested()
+    try:
+        event = session_module.scalar(
+            select(HazardEvent).where(HazardEvent.external_ref == "al132025")
+        )
+        advisories = session_module.scalars(
+            select(Advisory)
+            .where(Advisory.hazard_event_id == event.id, Advisory.observed.is_(False))
+            .order_by(Advisory.issued_at)
+        ).all()
+        _insert_legacy_inventory(session_module, exported["districts"])
+        district = exported["districts"][0]
+        observed_id = session_module.scalar(
+            text(
+                "INSERT INTO advisory "
+                "(hazard_event_id, advisory_number, issued_at, observed) "
+                "VALUES (:event, '31', :issued_at, true) RETURNING id"
+            ),
+            {"event": event.id, "issued_at": PINNED},
+        )
+        exposure_ids = [advisory.id for advisory in advisories[:30]] + [observed_id]
+        session_module.execute(
+            text(
+                "INSERT INTO place_exposure "
+                "(advisory_id, parish, district, community, band, structures) "
+                "VALUES (:advisory, :parish, :district, 'observed-collision', 34, 3)"
+            ),
+            [
+                {
+                    "advisory": advisory_id,
+                    "parish": district["parish"],
+                    "district": district["district"],
+                }
+                for advisory_id in exposure_ids
+            ],
+        )
+
+        assert _building_data(session_module, event, advisories) == (None, None)
+    finally:
+        savepoint.rollback()
 
 
 def test_geometry_is_geojson_in_lon_lat_order_rounded_on_write(exported):

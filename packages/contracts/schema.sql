@@ -120,27 +120,29 @@ CREATE INDEX storm_file_parish_idx   ON storm_file (parish);
 -- ---------------------------------------------------------------------------
 -- Every registry row above is synthetic and sits where nothing necessarily
 -- stands, which makes "413 of our 500 synthetic homes" a sentence about our
--- random seed rather than about Jamaica. These two tables are the real
--- denominator, from VIDA's combined build (Google Open Buildings + Microsoft
--- GlobalML + OSM, deduplicated) — 1,844,379 structures, ODbL.
+-- random seed rather than about Jamaica. These tables provide the
+-- mapped-reference denominator from VIDA's combined build (Google Open
+-- Buildings + Microsoft GlobalML + OSM, deduplicated) — 1,844,379 source
+-- footprints, ODbL.
 --
--- **Aggregates, not the buildings themselves, and that was measured not
--- assumed.** The individual centroids were loaded once: 423 MB for the table,
--- 144 MB for the GIST index, 43 MB for the key — 610 MB against a 512 MB
+-- **Aggregates, not the buildings themselves, and that design was benchmarked
+-- rather than assumed.** The individual centroids were loaded once: 423 MB for
+-- the table, 144 MB for the GIST index, 43 MB for the key — 610 MB against a 512 MB
 -- project limit. And a single band on a single advisory took 93.9 seconds,
 -- because geography predicates do spheroid math 1.8 million times; the full
 -- 41 advisories would have run for hours.
 --
 -- Nothing needs a building row at query time. Counting is an aggregate,
 -- exposure is an aggregate, the dasymetric population weight is an aggregate,
--- and the map draws footprints from the basemap tiles. So the footprints stay
+-- and the map draws source geometry from the dedicated structure archive. So
+-- the footprints stay
 -- in the cached parquet, DuckDB does the planar spatial work, and Postgres
 -- holds the answers. Storage falls from 610 MB to kilobytes.
 --
--- **The one real-world dataset here, and it holds no PII.** A footprint is a
--- public geospatial feature with no occupant attached, so the
--- synthetic-data-only rule is untouched: this measures where structures are,
--- never who lives in them.
+-- **The one external public-source dataset here, and it holds no PII.** A
+-- footprint is a geospatial feature with no occupant attached, so the
+-- synthetic-data-only rule is untouched: this records where source footprints
+-- are mapped, never who lives in them or whether every feature is current.
 
 -- Structures per admin-3 community, with parish and district denormalised so
 -- any level rolls up with a GROUP BY. built_m2 is the weight for spreading a
@@ -155,27 +157,24 @@ CREATE TABLE place_structures (
   PRIMARY KEY (parish, district, community)
 );
 
--- Structures inside each wind band, per advisory.
---
--- Bands are **mutually exclusive**: a structure is counted once, at the highest
--- band it reaches, matching the CASE ladder the risk mapper already uses. They
--- are nested geometrically, so counting each band independently would report
--- the same building three times and inflate exposure by the width of the storm.
---
--- Only non-zero rows exist. A community absent for an advisory had no structure
--- in that band, which is different from having no data — and rows for every
--- (advisory, community, band) would be 95,325 of which most say nothing.
-CREATE TABLE place_exposure (
-  advisory_id uuid NOT NULL REFERENCES advisory(id) ON DELETE CASCADE,
-  parish      text NOT NULL,
-  district    text NOT NULL,
-  community   text NOT NULL,
-  band        smallint NOT NULL CHECK (band IN (34, 50, 64)),
-  structures  integer NOT NULL CHECK (structures > 0),
-  PRIMARY KEY (advisory_id, parish, district, community, band)
+-- The aggregate table above is replaceable reference data, so its identity
+-- cannot live in a migration number. This singleton records the exact source
+-- bytes, boundary bytes and aggregation recipe that produced the current
+-- rows. Exporters validate the exact canonical row digest as well as the counts
+-- and input fingerprint before describing the mapped inventory as available.
+CREATE TABLE place_structure_build (
+  singleton             boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  inventory_fingerprint text NOT NULL UNIQUE
+    CHECK (inventory_fingerprint ~ '^[0-9a-f]{64}$'),
+  source_sha256          text NOT NULL CHECK (source_sha256 ~ '^[0-9a-f]{64}$'),
+  boundaries_sha256      text NOT NULL CHECK (boundaries_sha256 ~ '^[0-9a-f]{64}$'),
+  recipe_version         text NOT NULL,
+  structure_count        bigint NOT NULL CHECK (structure_count > 0),
+  place_count            integer NOT NULL CHECK (place_count > 0),
+  structure_rows_sha256  text NOT NULL
+    CHECK (structure_rows_sha256 ~ '^[0-9a-f]{64}$'),
+  completed_at           timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX place_exposure_advisory_idx ON place_exposure (advisory_id);
 
 -- REG-03/REG-04: consent is versioned and revocable, never a boolean column.
 CREATE TABLE consent (
@@ -241,6 +240,56 @@ CREATE TABLE advisory (
 );
 
 CREATE INDEX advisory_event_idx ON advisory (hazard_event_id, issued_at);
+
+-- Structures inside each wind band, per advisory. This table is declared only
+-- after advisory so a fresh/isolated schema cannot accidentally bind its
+-- foreign key to an advisory table later on the search path (for example
+-- public.advisory in a cloned CI database).
+--
+-- Bands are **mutually exclusive**: a structure is counted once, at the highest
+-- band it reaches, matching the CASE ladder the risk mapper already uses. They
+-- are nested geometrically, so counting each band independently would report
+-- the same building three times and inflate exposure by the width of the storm.
+--
+-- Only non-zero rows exist. A community absent for an advisory had no structure
+-- in that band, which is different from having no data — and rows for every
+-- (advisory, community, band) would be 95,325 of which most say nothing. A
+-- separate completed-build record distinguishes a valid all-zero advisory from
+-- an exposure build that has not run.
+CREATE TABLE place_exposure (
+  advisory_id uuid NOT NULL REFERENCES advisory(id) ON DELETE CASCADE,
+  parish      text NOT NULL,
+  district    text NOT NULL,
+  community   text NOT NULL,
+  band        smallint NOT NULL CHECK (band IN (34, 50, 64)),
+  structures  integer NOT NULL CHECK (structures > 0),
+  PRIMARY KEY (advisory_id, parish, district, community, band)
+);
+
+CREATE INDEX place_exposure_advisory_idx ON place_exposure (advisory_id);
+
+-- Sparse exposure rows need an explicit completion record. Zero rows for one
+-- advisory can mean a valid zero; without this marker the same absence means
+-- "not built". The advisory fingerprint covers the selected advisory IDs,
+-- numbers and wind geometry, while the inventory fingerprint binds the result
+-- to the exact denominator used by the build. The row digest covers every
+-- material event-scoped exposure field; counts and totals alone cannot detect a
+-- same-total redistribution between places.
+CREATE TABLE place_exposure_build (
+  hazard_event_id         uuid PRIMARY KEY REFERENCES hazard_event(id) ON DELETE CASCADE,
+  inventory_fingerprint   text NOT NULL
+    CHECK (inventory_fingerprint ~ '^[0-9a-f]{64}$'),
+  structure_rows_sha256   text NOT NULL
+    CHECK (structure_rows_sha256 ~ '^[0-9a-f]{64}$'),
+  advisory_fingerprint    text NOT NULL
+    CHECK (advisory_fingerprint ~ '^[0-9a-f]{64}$'),
+  advisory_count          integer NOT NULL CHECK (advisory_count > 0),
+  exposure_row_count      integer NOT NULL CHECK (exposure_row_count >= 0),
+  exposed_structure_count bigint NOT NULL CHECK (exposed_structure_count >= 0),
+  exposure_rows_sha256    text NOT NULL
+    CHECK (exposure_rows_sha256 ~ '^[0-9a-f]{64}$'),
+  completed_at            timestamptz NOT NULL DEFAULT now()
+);
 
 -- IMP-01: one assessment per household per advisory. Transparent parametric
 -- lookup in v1 — method and model_version are stored so a prediction can

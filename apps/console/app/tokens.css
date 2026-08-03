@@ -164,6 +164,14 @@
   --lh-hazard-50: #5590c9;
   --lh-hazard-64: #7fb8f0;
 
+  /* MAPPED INVENTORY — Register I only. A structure is context, neither a
+   * hazard threshold nor an impact outcome, so borrowing either scale would
+   * make its colour assert the wrong thing. This cyan-blue is restricted to
+   * the explicit Structures view and its key. It separates public-source
+   * footprints from neutral land at non-text contrast without becoming a UI
+   * accent, glow, or status colour. */
+  --lh-structure: #22d3ee;
+
   --lh-critical: #e4574a;        /* act now — ACT posture, URGENT triage, blocking gate */
   --lh-critical-text: #e4574a;
   --lh-elevated: #e8a33d;        /* attend soon — READY posture, HIGH triage, open approval */
@@ -187,6 +195,7 @@
   --lh-rule: #c9ccc3;
   --lh-quiet: #5c645f;
   --lh-figure: #141a18;
+  --lh-structure: #004f91; /* same mapped-inventory role; dark enough over light land */
 
   /* Marks first, at 3:1 or better — these stay recognisably red, amber, blue
    * and green, because a swatch that has to be explained is not carrying its
@@ -208,6 +217,7 @@
     --lh-rule: #c9ccc3;
     --lh-quiet: #5c645f;
     --lh-figure: #141a18;
+    --lh-structure: #004f91;
 
     --lh-critical: #cf3b2b;
     --lh-critical-text: #a8251a;
