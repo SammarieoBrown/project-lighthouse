@@ -47,13 +47,22 @@ export type ReplayFrame = {
   district_counts: number[][];
   /** Parallel to `households`, one character each. See BANDS. */
   household_bands: string;
+  /** Parallel to `districts`: measured structures at [64, 50, 34] kt, mutually
+   *  exclusive. Absent when the building inventory has not been built — which
+   *  is why it is optional rather than zeroed, since zero would assert that
+   *  nothing is exposed rather than that nothing was measured. */
+  district_exposed?: number[][];
 };
 
 export type Replay = {
   generated_at: string;
   event: { id: string; name: string; advisory_count: number };
   parishes: { name: string; registry: boolean; geometry: Geometry }[];
-  districts: { id: number; parish: string; district: string; n: number; lon: number; lat: number }[];
+  districts: {
+    id: number; parish: string; district: string; n: number; lon: number; lat: number;
+    /** Measured building footprints in this district. Absent without inventory. */
+    structures?: number;
+  }[];
   households: { id: number; lon: number; lat: number; parish: string; community: string; roof: string }[];
   frames: ReplayFrame[];
 };

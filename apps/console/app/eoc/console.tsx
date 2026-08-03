@@ -144,6 +144,25 @@ export function EocConsole() {
     [replay],
   );
 
+  /* Measured, unlike everything derived from the registry above. `structures`
+   * is the island's building footprints; `exposed` is how many of them sit
+   * inside the forecast wind field for this advisory. Null rather than zero
+   * when the inventory has not been built, because "not measured" and "none"
+   * are different statements and only one of them is ours to make. */
+  const structures = useMemo(
+    () => (replay ? replay.districts.reduce((a, d) => a + (d.structures ?? 0), 0) : 0),
+    [replay],
+  );
+  /* The 64 kt band only. The 34 kt field is the union across every forecast
+   * hour out to five days, and for a storm this size it swallows the whole
+   * island — at advisory 15 it reported 1,842,165 of 1,842,165, which is true,
+   * useless, and reads as a broken counter. Hurricane-force wind is the number
+   * somebody acts on. */
+  const exposed = useMemo(
+    () => frame?.district_exposed?.reduce((a, band) => a + band[0], 0) ?? null,
+    [frame],
+  );
+
   const totals = frame?.totals ?? { destroyed: 0, major: 0, minor: 0, none: 0 };
   const atRisk = totals.destroyed + totals.major;
   const warning = frame ? strongestWarning(frame.watch_codes ?? []) : null;
@@ -257,30 +276,21 @@ export function EocConsole() {
             )}
           </div>
 
+          {/* The legend describes the map, so it lists only what the map draws.
+              The damage counts moved to the panel with the marks they belonged
+              to: they are modelled outcomes for a synthetic registry, and a key
+              beside a coastline reads as a key to the coastline. */}
           <div className={styles.legend}>
-            <span className={styles.legendItem}>
-              <span className={styles.legendDot} style={{ background: "var(--lh-critical)" }} />
-              Mostly destroyed
-              <span className={styles.legendCount}>{nf.format(totals.destroyed)} homes</span>
-            </span>
-            <span className={styles.legendItem}>
-              <span className={styles.legendDot} style={{ background: "var(--lh-elevated)" }} />
-              Major damage
-              <span className={styles.legendCount}>{nf.format(totals.major)} homes</span>
-            </span>
-            <span className={styles.legendItem}>
-              <span
-                className={styles.legendDot}
-                style={{ border: "1px solid var(--lh-quiet)" }}
-              />
-              Minor or none
-              <span className={styles.legendCount}>
-                {nf.format(totals.minor + totals.none)} homes
-              </span>
-            </span>
-            <span className={styles.legendItem}>Circle size · homes registered there</span>
             <span className={styles.legendItem} style={{ color: "var(--lh-hazard-50)" }}>
               Blue bands · wind reaching 34, 50 and 64 knots
+            </span>
+            {exposed === null ? null : (
+              <span className={styles.legendItem}>
+                <b>{nf.format(exposed)}</b> structures in hurricane-force wind
+              </span>
+            )}
+            <span className={styles.legendItem}>
+              {nf.format(structures)} on the island · measured footprints
             </span>
           </div>
         </section>

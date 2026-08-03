@@ -66,6 +66,21 @@ function mix(a: string, b: string, amount: number): string {
  * Roads are all one quiet value. A basemap that ranks motorways above lanes is
  * answering a driving question; the question here is which settlement a
  * household sits in, so the road network is texture, not hierarchy. */
+/* The two weights a building is drawn at, from the same land tone the flavor
+ * derives so the pair cannot drift apart when the palette moves.
+ *
+ * `quiet` is the default: buildings as context, barely there, because a
+ * footprint competing with a wind band is a map arguing with itself. `subject`
+ * is the structures view, where the buildings are the only thing left on screen
+ * and the hazard has stepped back to being their backdrop.
+ *
+ * Same hue, different distance from the ground. A separate colour would be a
+ * second meaning, and there is only one thing here — a building. */
+export function buildingWeights(t: Tokens): { quiet: string; subject: string } {
+  const land = mix(t.panel, t.figure, 0.26);
+  return { quiet: mix(land, t.figure, 0.12), subject: mix(land, t.figure, 0.62) };
+}
+
 export function lighthouseFlavor(t: Tokens): Flavor {
   const base = namedFlavor("black");
   // Land has to read as land at a glance, from across a room, with a
@@ -94,7 +109,7 @@ export function lighthouseFlavor(t: Tokens): Flavor {
     military: land, zoo: land, aerodrome: land,
     pedestrian: land, pier: land, runway: t.rule,
 
-    buildings: mix(land, t.figure, 0.12),
+    buildings: buildingWeights(t).quiet,
 
     // One road colour, casings the ground so they read as separation not as ink.
     other: road, minor_a: road, minor_b: road, minor_service: road,

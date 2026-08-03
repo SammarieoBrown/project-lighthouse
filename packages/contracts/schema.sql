@@ -115,6 +115,68 @@ CREATE INDEX storm_file_location_gix ON storm_file USING gist (location);
 CREATE INDEX storm_file_state_idx    ON storm_file (state);
 CREATE INDEX storm_file_parish_idx   ON storm_file (parish);
 
+-- ---------------------------------------------------------------------------
+-- Building inventory, aggregated. Reference data, not the claim lifecycle.
+-- ---------------------------------------------------------------------------
+-- Every registry row above is synthetic and sits where nothing necessarily
+-- stands, which makes "413 of our 500 synthetic homes" a sentence about our
+-- random seed rather than about Jamaica. These two tables are the real
+-- denominator, from VIDA's combined build (Google Open Buildings + Microsoft
+-- GlobalML + OSM, deduplicated) — 1,844,379 structures, ODbL.
+--
+-- **Aggregates, not the buildings themselves, and that was measured not
+-- assumed.** The individual centroids were loaded once: 423 MB for the table,
+-- 144 MB for the GIST index, 43 MB for the key — 610 MB against a 512 MB
+-- project limit. And a single band on a single advisory took 93.9 seconds,
+-- because geography predicates do spheroid math 1.8 million times; the full
+-- 41 advisories would have run for hours.
+--
+-- Nothing needs a building row at query time. Counting is an aggregate,
+-- exposure is an aggregate, the dasymetric population weight is an aggregate,
+-- and the map draws footprints from the basemap tiles. So the footprints stay
+-- in the cached parquet, DuckDB does the planar spatial work, and Postgres
+-- holds the answers. Storage falls from 610 MB to kilobytes.
+--
+-- **The one real-world dataset here, and it holds no PII.** A footprint is a
+-- public geospatial feature with no occupant attached, so the
+-- synthetic-data-only rule is untouched: this measures where structures are,
+-- never who lives in them.
+
+-- Structures per admin-3 community, with parish and district denormalised so
+-- any level rolls up with a GROUP BY. built_m2 is the weight for spreading a
+-- parish population across its communities — the only population signal that
+-- exists below admin-1.
+CREATE TABLE place_structures (
+  parish      text NOT NULL,
+  district    text NOT NULL,
+  community   text NOT NULL,
+  structures  integer NOT NULL,
+  built_m2    double precision NOT NULL,
+  PRIMARY KEY (parish, district, community)
+);
+
+-- Structures inside each wind band, per advisory.
+--
+-- Bands are **mutually exclusive**: a structure is counted once, at the highest
+-- band it reaches, matching the CASE ladder the risk mapper already uses. They
+-- are nested geometrically, so counting each band independently would report
+-- the same building three times and inflate exposure by the width of the storm.
+--
+-- Only non-zero rows exist. A community absent for an advisory had no structure
+-- in that band, which is different from having no data — and rows for every
+-- (advisory, community, band) would be 95,325 of which most say nothing.
+CREATE TABLE place_exposure (
+  advisory_id uuid NOT NULL REFERENCES advisory(id) ON DELETE CASCADE,
+  parish      text NOT NULL,
+  district    text NOT NULL,
+  community   text NOT NULL,
+  band        smallint NOT NULL CHECK (band IN (34, 50, 64)),
+  structures  integer NOT NULL CHECK (structures > 0),
+  PRIMARY KEY (advisory_id, parish, district, community, band)
+);
+
+CREATE INDEX place_exposure_advisory_idx ON place_exposure (advisory_id);
+
 -- REG-03/REG-04: consent is versioned and revocable, never a boolean column.
 CREATE TABLE consent (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -289,6 +289,51 @@ def _districts(households: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], 
     return districts, [index_of[key] for key in named]
 
 
+def _structures(session: Session) -> dict[tuple[str, str], int]:
+    """Real structures per district, from the footprint inventory.
+
+    The counts beside these are synthetic: 2,000 households dropped inside
+    community polygons by a seeded generator, each sitting where nothing
+    necessarily stands. These are 1,844,379 measured footprints. Where both
+    exist the map should size itself on the measured one, because "413 of our
+    500 synthetic homes" describes our random seed and "42,264 structures in
+    Black River" describes Jamaica.
+    """
+    rows = session.execute(
+        text(
+            "SELECT parish, district, sum(structures)::int "
+            "FROM place_structures GROUP BY 1, 2"
+        )
+    ).all()
+    return {(parish, district): n for parish, district, n in rows}
+
+
+def _exposure(session: Session) -> dict[UUID, dict[tuple[str, str], list[int]]]:
+    """Structures per district inside each wind band, per advisory.
+
+    ``[n64, n50, n34]``, mutually exclusive — a structure is counted once, at
+    the strongest wind reaching it. The bands nest, so counting them
+    independently would report the same building three times and inflate
+    exposure by the width of the storm.
+
+    Empty when the inventory has not been built. That is a legitimate state on
+    a clone that has not run app.registry.buildings, so it degrades to absent
+    keys rather than failing the export.
+    """
+    out: dict[UUID, dict[tuple[str, str], list[int]]] = {}
+    rows = session.execute(
+        text(
+            "SELECT advisory_id, parish, district, band, sum(structures)::int "
+            "FROM place_exposure GROUP BY 1, 2, 3, 4"
+        )
+    ).all()
+    for advisory_id, parish, district, band, n in rows:
+        slot = {64: 0, 50: 1, 34: 2}[band]
+        entry = out.setdefault(advisory_id, {}).setdefault((parish, district), [0, 0, 0])
+        entry[slot] = n
+    return out
+
+
 # --------------------------------------------------------------------------
 # Per advisory
 # --------------------------------------------------------------------------
@@ -449,6 +494,7 @@ def _frame(
     bands: str,
     district_index: list[int],
     district_count: int,
+    exposed: list[list[int]] | None = None,
 ) -> dict[str, Any]:
     if len(bands) != len(district_index):
         raise ExportError(
@@ -477,6 +523,11 @@ def _frame(
     frame["totals"] = dict(zip(BAND_NAMES, totals, strict=True))
     frame["district_counts"] = counts
     frame["household_bands"] = bands
+    # Absent, not zeroed, when the inventory has not been built — a clone that
+    # has not run app.registry.buildings has no measurement, and zero would be
+    # a claim that nothing is exposed.
+    if exposed is not None:
+        frame["district_exposed"] = exposed
     return frame
 
 
@@ -520,6 +571,16 @@ def build_replay(
     geometry = _geometry(session, event)
     bands = _bands(session, event)
 
+    # Measured structures beside the synthetic households. Absent on a clone
+    # that has not built the inventory, which the frames express by omitting the
+    # key rather than by reporting zeros.
+    structures = _structures(session)
+    exposure = _exposure(session)
+    for entry in districts:
+        n = structures.get((entry["parish"], entry["district"]))
+        if n is not None:
+            entry["structures"] = n
+
     missing = [a.advisory_number for a in advisories if a.id not in bands]
     if missing:
         raise ExportError(
@@ -536,6 +597,14 @@ def build_replay(
             bands=bands[advisory.id],
             district_index=district_index,
             district_count=len(districts),
+            exposed=(
+                [
+                    exposure[advisory.id].get((d["parish"], d["district"]), [0, 0, 0])
+                    for d in districts
+                ]
+                if advisory.id in exposure
+                else None
+            ),
         )
         for advisory in advisories
     ]

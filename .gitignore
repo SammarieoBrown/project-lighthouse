@@ -46,3 +46,12 @@ data/tiles/cache/*.pmtiles
 .pytest_cache/
 .vercel
 .env*.local
+
+# Building footprints: 232 MB of fetched-not-committed reference data. Unlike
+# the storm advisories, no replay has to reproduce this byte-for-byte on a demo
+# laptop — it is loaded into Postgres once and queried from there.
+# Rebuild with data/buildings/fetch_footprints.py
+data/buildings/cache/*.parquet
+
+# Intermediate for the structures tileset — 625 MB, regenerable.
+data/buildings/cache/*.geojsonl

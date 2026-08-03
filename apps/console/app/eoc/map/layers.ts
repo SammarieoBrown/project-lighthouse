@@ -23,6 +23,21 @@ import type { Snapshot } from "../map";
 
 export const ZOOM_SWITCH = 12.5;
 
+/* What the map is drawn on. Three states rather than a satellite on/off,
+ * because "what is underneath the data" is one question with three answers and
+ * a screen should not ask it twice.
+ *
+ * `structures` is not a cosmetic mode. It answers a different question from the
+ * other two — not "where is this" but "what is standing here" — and it is the
+ * only view where the buildings are the subject rather than the backdrop. */
+export type BaseView = "map" | "satellite" | "structures";
+
+/* Buildings live only in the island archive and Protomaps carries them from
+ * about z14. The region archive stops at z11 and has none, so below this the
+ * structures view has nothing to show and must say so rather than presenting an
+ * empty screen as an answer. */
+export const STRUCTURES_MIN_ZOOM = 13.5;
+
 export type MapColours = {
   hazard34: string;
   hazard50: string;
@@ -207,42 +222,22 @@ export function dataLayers(c: MapColours, maxDistrict: number): LayerSpecificati
       },
     },
 
-    // Districts: area proportional to homes, so four times the homes looks four
-    // times the size. Scaling radius instead is the oldest lie in data graphics.
-    {
-      id: "lh-districts",
-      type: "circle",
-      source: "lh-districts",
-      maxzoom: ZOOM_SWITCH,
-      paint: {
-        "circle-radius": [
-          "interpolate", ["linear"], ["zoom"],
-          6, ["+", 3, ["*", 13, ["/", ["get", "r"], Math.sqrt(maxDistrict)]]],
-          11, ["+", 5, ["*", 26, ["/", ["get", "r"], Math.sqrt(maxDistrict)]]],
-        ],
-        "circle-color": ["match", ["get", "severe"], 2, c.critical, 1, c.elevated, "rgba(0,0,0,0)"],
-        "circle-opacity": 0.7,
-        "circle-stroke-width": 1.25,
-        "circle-stroke-color": ["match", ["get", "severe"], 2, c.critical, 1, c.elevated, c.quiet],
-        "circle-stroke-opacity": 0.85,
-      },
-    },
-
-    // Individual homes, once the zoom means somebody is asking about a street.
-    {
-      id: "lh-homes",
-      type: "circle",
-      source: "lh-homes",
-      minzoom: ZOOM_SWITCH,
-      paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 12.5, 3, 17, 7],
-        "circle-color": bandColour,
-        "circle-opacity": 0.85,
-        "circle-stroke-width": 1,
-        "circle-stroke-color": ["case", ["==", ["get", "band"], "NONE"], c.quiet, c.ground],
-        "circle-stroke-opacity": 0.9,
-      },
-    },
+    /* No district circles and no household dots.
+     *
+     * Both were marks for the synthetic registry: 2,000 households dropped
+     * inside community polygons by a seeded generator, aggregated into bubbles
+     * sized by how many landed where. Every one sat at coordinates where
+     * nothing necessarily stands, so the map was drawing our random seed on top
+     * of Jamaica — and drawing it in the most confident register the screen has,
+     * a filled circle in a severity colour.
+     *
+     * What is left is measured: real coastlines, the real forecast wind field,
+     * and real building footprints out of the basemap archive. The counts moved
+     * to the panel, where a number can carry the word "structures" and say
+     * where it came from. A map should not assert what a table can qualify.
+     *
+     * The sources stay defined and fed — see dataSources — because the SVG
+     * fallback still draws households and the panel still reads their bands. */
 
     /* The storm centre, drawn exactly as the SVG fallback draws it — a ring and
      * a dot in the figure colour. Present here because the two maps must not

@@ -18,8 +18,10 @@ import { useEffect, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { Snapshot } from "../map";
-import { lighthouseFlavor, pruneLayers, readTokens, retarget } from "./flavor";
-import { applyFrame, dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from "./layers";
+import { buildingWeights, lighthouseFlavor, pruneLayers, readTokens, retarget } from "./flavor";
+import {
+  applyFrame, dataLayers, dataSources, readMapColours, ZOOM_SWITCH, type BaseView,
+} from "./layers";
 
 /* MapLibre, wired by hand.
  *
@@ -117,6 +119,26 @@ const ESRI_IMAGERY =
  */
 const WORKER = "/maplibre/maplibre-gl-worker.mjs";
 
+/* What survives in the structures view besides the buildings.
+ *
+ * Land and water, and they are not optional. Jamaica's shape on this map comes
+ * entirely from the basemap — there is no parish outline layer of our own — so
+ * hiding every basemap layer takes the island with it. Buildings only exist
+ * from about z14, which left the wide view as wind bands floating on an empty
+ * sea: nothing to orient by, and no way to tell a missing layer from a country
+ * with no buildings in it.
+ *
+ * So the coast stays and the roads, labels, landuse and POIs go. The buildings
+ * become the only thing drawn *on* the island rather than the only thing on
+ * the screen.
+ *
+ * The label exclusion is load-bearing, not tidiness: Protomaps names its text
+ * layers `water_label_ocean`, `earth_label_islands` and so on, so matching on
+ * "water" or "earth" alone keeps every place name on the map and the view is
+ * no longer isolated at all. */
+const keepInStructures = (id: string) =>
+  /-(background|earth|water)/.test(id) && !id.includes("label");
+
 // Both are global and throw if repeated, so they happen once per document
 // rather than once per mount.
 let configured = false;
@@ -136,13 +158,13 @@ export type MapViewProps = {
    *  not to the frame. Passed as a number so the init effect has a primitive
    *  dependency that does not change when the advisory does. */
   maxDistrict: number;
-  satellite: boolean;
+  base: BaseView;
   onZoomChange?: (zoom: number) => void;
   /** Reported upward so the panel can fall back to the SVG map. */
   onFail?: (reason: string) => void;
 };
 
-export default function MapView({ snapshot, maxDistrict, satellite, onZoomChange, onFail }: MapViewProps) {
+export default function MapView({ snapshot, maxDistrict, base, onZoomChange, onFail }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -298,11 +320,53 @@ export default function MapView({ snapshot, maxDistrict, satellite, onZoomChange
     applyFrame(instance, snapshot);
   }, [snapshot]);
 
+  /* Structures: the basemap steps back so the buildings are the only thing on
+   * it. Every basemap layer is hidden except the buildings, which are turned up
+   * from the near-invisible weight they carry as context.
+   *
+   * Visibility and paint, never a restyle — the same reason the satellite layer
+   * is added rather than swapped in. Our own layers all carry the `lh-` prefix
+   * and are left alone: the hazard bands stay, the parish outlines stay, and
+   * those outlines are what keeps the view navigable once the coastline the
+   * basemap was drawing is gone. */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+
+    const apply = () => {
+      const style = instance.getStyle();
+      if (!style?.layers) return;
+      const structures = base === "structures";
+
+      for (const layer of style.layers) {
+        if (layer.id.startsWith("lh-")) continue;
+        const isBuilding = layer.id.endsWith("-buildings");
+        instance.setLayoutProperty(
+          layer.id,
+          "visibility",
+          !structures || isBuilding || keepInStructures(layer.id) ? "visible" : "none",
+        );
+        if (isBuilding && layer.type === "fill") {
+          const w = buildingWeights(readTokens(container.current ?? undefined));
+          instance.setPaintProperty(
+            layer.id,
+            "fill-color",
+            structures ? w.subject : w.quiet,
+          );
+        }
+      }
+    };
+
+    if (ready.current) apply();
+    else instance.once("load", apply);
+  }, [base]);
+
   // Satellite toggles as a layer, not a restyle: rebuilding the style would
   // drop the data layers and the current viewport with them.
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
+    const satellite = base === "satellite";
 
     const apply = () => {
       const has = instance.getLayer("lh-satellite");
@@ -329,7 +393,7 @@ export default function MapView({ snapshot, maxDistrict, satellite, onZoomChange
 
     if (instance.isStyleLoaded()) apply();
     else instance.once("load", apply);
-  }, [satellite]);
+  }, [base]);
 
   // The panel renders the SVG fallback once it hears about this; keeping the
   // container mounted meanwhile avoids tearing down a map that may recover.
