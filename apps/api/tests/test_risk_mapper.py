@@ -146,6 +146,40 @@ def test_probabilities_are_fractions_not_percentages(assessed, session_module):
     assert row.p64 > 0, "some household should carry a hurricane-force probability"
 
 
+def test_unavailable_historical_probabilities_are_null_not_zero(assessed, session_module):
+    """No probability product is unknown evidence, never a zero forecast."""
+    advisories, _ = assessed
+    source = advisories["9"]
+    historical = Advisory(
+        hazard_event_id=source.hazard_event_id,
+        advisory_number="historical-no-probability",
+        issued_at=source.issued_at,
+        observed=True,
+        raw={"probabilities": {}, "hindcast": True},
+    )
+    session_module.add(historical)
+    session_module.flush()
+
+    run = assess(session_module, historical)
+    session_module.flush()
+    row = session_module.execute(
+        text(
+            """
+            SELECT count(*) AS total,
+                   count(p34) AS known34,
+                   count(p50) AS known50,
+                   count(p64) AS known64
+            FROM risk_assessment
+            WHERE advisory_id = :id
+            """
+        ),
+        {"id": historical.id},
+    ).one()
+
+    assert run.assessed == 200
+    assert (row.total, row.known34, row.known50, row.known64) == (200, 0, 0, 0)
+
+
 def test_confidence_falls_off_with_distance_from_a_sample_point(assessed, session_module):
     """NHC publishes probabilities for two places in Jamaica, and no others.
 

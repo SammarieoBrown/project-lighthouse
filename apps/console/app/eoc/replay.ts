@@ -20,7 +20,8 @@ type Geometry = { type: "Polygon" | "MultiPolygon"; coordinates: unknown };
 type LineGeometry = { type: "LineString"; coordinates: number[][] };
 
 export type ReplayFrame = {
-  /** Advisory number as printed by NHC — a string because NHC prints "11A". */
+  /** Frame identifier. Advisory replays preserve NHC forms such as "11A";
+   * hindcasts use an ordered historical-fix number. */
   n: string;
   at: string;
   posture: Posture;
@@ -160,21 +161,33 @@ export type StormEntry = {
   to: string;
   file: string;
   kind: "advisory" | "hindcast";
-  sizeSource: "measured" | "modelled";
+  sizeSource: "measured" | "modelled" | "mixed" | "unavailable";
   bytes?: number;
 };
 
-export type Library = { default: string | null; storms: StormEntry[] };
+export type Library = {
+  default: string | null;
+  generatedAt: string;
+  storms: StormEntry[];
+};
+
+export type LibraryState =
+  | { status: "loading" }
+  | { status: "ready"; library: Library }
+  | { status: "absent" }
+  | { status: "error"; reason: string };
 
 export type ReplayState =
-  | { status: "loading" }
+  | { status: "loading"; replay: Replay | null }
   | { status: "ready"; replay: Replay }
-  | { status: "absent"; reason: string };
+  | { status: "absent"; reason: string; replay: Replay | null };
 
 const POSTURES = new Set<Posture>(["QUIET", "WATCH", "READY", "ACT"]);
 const BAND_CODES = new Set(Object.keys(BANDS));
 const UTC_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 const ADVISORY = /^(\d+)([A-Z]?)$/;
+const STORM_ID = /^[A-Za-z]{2}\d{6}$/;
+const REPLAY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 
 function rejectNulls(value: unknown, path: string): void {
   if (value === null) throw new Error(`${path} must omit unavailable data rather than use null`);
@@ -234,6 +247,21 @@ function timestampAt(value: unknown, path: string): string {
     throw new Error(`${path} must be a UTC ISO timestamp ending in Z`);
   }
   return stamp;
+}
+
+function stormIdAt(value: unknown, path: string): string {
+  const id = stringAt(value, path);
+  if (!STORM_ID.test(id)) {
+    throw new Error(`${path} must be an eight-character basin/storm/year identifier`);
+  }
+  return id;
+}
+
+/** Storm IDs are case-insensitive in the source archives. Keep comparison in
+ * one place so an index using `al132025` matches the replay contract's
+ * `AL132025`, without weakening identity to a name or filename heuristic. */
+export function canonicalStormId(id: string): string {
+  return id.toUpperCase();
 }
 
 function positionAt(value: unknown, path: string): number[] {
@@ -330,7 +358,7 @@ export function validateReplay(raw: unknown): Replay {
   timestampAt(replay.generated_at, "generated_at");
 
   const event = recordAt(replay.event, "event");
-  stringAt(event.id, "event.id");
+  stormIdAt(event.id, "event.id");
   stringAt(event.name, "event.name");
   const advisoryCount = countAt(event.advisory_count, "event.advisory_count");
 
@@ -573,56 +601,140 @@ export function validateReplay(raw: unknown): Replay {
  * own replay availability, and this reader can later target the live endpoint
  * without changing the component boundary. The server and first client render
  * both show loading; data lands after hydration, so there is no mismatch. */
-/* The storm library, read once.
+/** Validate the storm index before it is allowed to choose a replay artifact.
  *
- * Optional by construction. An older deployment — or a clone that has exported
- * a single storm and nothing else — has no index, and that must degrade to the
- * one replay it does have rather than to an empty screen. An absent library is
- * a console with one storm, not a broken console.
- */
-export function useLibrary(): Library | null {
-  const [library, setLibrary] = useState<Library | null>(null);
+ * Provenance fields fail closed. Treating an unknown `kind` as an advisory or
+ * an unknown `size_source` as measured would turn malformed metadata into a
+ * stronger evidence claim than the source can support. */
+export function validateLibrary(raw: unknown): Library {
+  const source = recordAt(raw, "index.json");
+  const generatedAt = timestampAt(source.generated_at, "index.generated_at");
+  const rawStorms = arrayAt(source.storms, "index.storms");
+  const ids = new Set<string>();
+  const files = new Set<string>();
+
+  const storms = rawStorms.map((value, index): StormEntry => {
+    const path = `index.storms[${index}]`;
+    const storm = recordAt(value, path);
+    const id = stormIdAt(storm.id, `${path}.id`);
+    const canonicalId = canonicalStormId(id);
+    if (ids.has(canonicalId)) throw new Error(`${path}.id duplicates ${id}`);
+    ids.add(canonicalId);
+
+    const file = stringAt(storm.file, `${path}.file`);
+    if (!REPLAY_FILE.test(file) || file === "index.json") {
+      throw new Error(`${path}.file must be a replay JSON basename`);
+    }
+    if (files.has(file)) throw new Error(`${path}.file duplicates ${file}`);
+    files.add(file);
+
+    const advisories = countAt(storm.advisories, `${path}.advisories`);
+    if (advisories === 0) throw new Error(`${path}.advisories must be greater than zero`);
+    const from = timestampAt(storm.from, `${path}.from`);
+    const to = timestampAt(storm.to, `${path}.to`);
+    if (Date.parse(to) < Date.parse(from)) throw new Error(`${path}.to is earlier than .from`);
+
+    if (storm.kind !== "advisory" && storm.kind !== "hindcast") {
+      throw new Error(`${path}.kind must be advisory or hindcast`);
+    }
+    if (
+      storm.size_source !== "measured" &&
+      storm.size_source !== "modelled" &&
+      storm.size_source !== "mixed" &&
+      storm.size_source !== "unavailable"
+    ) {
+      throw new Error(
+        `${path}.size_source must be measured, modelled, mixed or unavailable`,
+      );
+    }
+
+    let bytes: number | undefined;
+    if ("bytes" in storm) {
+      bytes = countAt(storm.bytes, `${path}.bytes`);
+      if (bytes === 0) throw new Error(`${path}.bytes must be greater than zero`);
+    }
+
+    return {
+      id,
+      name: stringAt(storm.name, `${path}.name`),
+      advisories,
+      from,
+      to,
+      file,
+      kind: storm.kind,
+      sizeSource: storm.size_source,
+      bytes,
+    };
+  });
+
+  let defaultStorm: string | null = null;
+  if (source.default !== null && source.default !== undefined) {
+    defaultStorm = stormIdAt(source.default, "index.default");
+    if (!ids.has(canonicalStormId(defaultStorm))) {
+      throw new Error(`index.default does not reference a declared storm: ${defaultStorm}`);
+    }
+  } else if (storms.length > 0) {
+    throw new Error("index.default is required when storms are published");
+  }
+
+  return { default: defaultStorm, generatedAt, storms };
+}
+
+/** Prove that the artifact selected by the index is the artifact received.
+ * This check belongs after full replay validation: matching an ID must never
+ * make an otherwise malformed replay acceptable. */
+export function validateReplayForEntry(replay: Replay, entry: StormEntry): Replay {
+  if (canonicalStormId(replay.event.id) !== canonicalStormId(entry.id)) {
+    throw new Error(
+      `Replay identity mismatch: index selected ${entry.id}, artifact contains ${replay.event.id}`,
+    );
+  }
+  if (replay.event.name !== entry.name) {
+    throw new Error(
+      `Replay name mismatch for ${entry.id}: index says ${entry.name}, artifact says ${replay.event.name}`,
+    );
+  }
+  if (replay.event.advisory_count !== entry.advisories) {
+    throw new Error(
+      `Replay advisory count mismatch for ${entry.id}: index says ${entry.advisories}, artifact contains ${replay.event.advisory_count}`,
+    );
+  }
+  if (replay.frames[0].at !== entry.from || replay.frames[replay.frames.length - 1].at !== entry.to) {
+    throw new Error(`Replay date range does not match the index for ${entry.id}`);
+  }
+  return replay;
+}
+
+/* The index has four states, not two. Only a real 404/410 means this is a
+ * legacy single-replay deployment. A malformed index, a server error, or an
+ * offline cache miss must remain an error; silently loading replay.json in any
+ * of those cases can replace the selected historical storm with another one. */
+export function useLibrary(): LibraryState {
+  const [state, setState] = useState<LibraryState>({ status: "loading" });
 
   useEffect(() => {
-    let live = true;
-    fetch(LIBRARY_URL, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((raw: unknown) => {
-        if (!live || !raw || typeof raw !== "object") return;
-        const source = raw as { default?: unknown; storms?: unknown };
-        if (!Array.isArray(source.storms)) return;
-        const storms = source.storms
-          .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
-          .map((s) => ({
-            id: String(s.id ?? ""),
-            name: String(s.name ?? ""),
-            advisories: Number(s.advisories ?? 0),
-            from: String(s.from ?? ""),
-            to: String(s.to ?? ""),
-            file: String(s.file ?? ""),
-            kind: s.kind === "hindcast" ? ("hindcast" as const) : ("advisory" as const),
-            sizeSource:
-              s.size_source === "modelled" ? ("modelled" as const) : ("measured" as const),
-            bytes: typeof s.bytes === "number" ? s.bytes : undefined,
-          }))
-          .filter((s) => s.id && s.file);
-        if (storms.length) {
-          setLibrary({
-            default: typeof source.default === "string" ? source.default : storms[0].id,
-            storms,
-          });
+    const controller = new AbortController();
+    fetch(LIBRARY_URL, { cache: "no-store", signal: controller.signal })
+      .then(async (res) => {
+        if (res.status === 404 || res.status === 410) return null;
+        if (!res.ok) throw new Error(`Storm library returned ${res.status}`);
+        return validateLibrary(await res.json());
+      })
+      .then((library) => {
+        if (!controller.signal.aborted) {
+          setState(library ? { status: "ready", library } : { status: "absent" });
         }
       })
-      .catch(() => {
-        // Silent, and deliberately. A missing index is the expected state on a
-        // deployment that predates the library; it is not an error to report.
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const reason = error instanceof Error ? error.message : String(error);
+        console.warn("[storm-library]", reason);
+        setState({ status: "error", reason });
       });
-    return () => {
-      live = false;
-    };
+    return () => controller.abort();
   }, []);
 
-  return library;
+  return state;
 }
 
 /**
@@ -634,30 +746,46 @@ export function useLibrary(): Library | null {
  * the legacy path first and then immediately replacing it would download a
  * megabyte nobody asked for.
  */
-export function useReplay(url: string | null = REPLAY_URL): ReplayState {
-  const [state, setState] = useState<ReplayState>({ status: "loading" });
+export function useReplay(
+  url: string | null = REPLAY_URL,
+  expectedEntry: StormEntry | null = null,
+  requestKey = 0,
+): ReplayState {
+  const [state, setState] = useState<ReplayState>({ status: "loading", replay: null });
 
   useEffect(() => {
     if (!url) return;
-    let live = true;
-    setState({ status: "loading" });
-    fetch(url, { cache: "no-store" })
+    const controller = new AbortController();
+    setState((current) => ({ status: "loading", replay: current.replay }));
+    fetch(url, { cache: "no-store", signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`${url} returned ${res.status}`);
-        return validateReplay(await res.json());
+        const replay = validateReplay(await res.json());
+        return expectedEntry ? validateReplayForEntry(replay, expectedEntry) : replay;
       })
       .then((replay) => {
-        if (live) setState({ status: "ready", replay });
+        if (controller.signal.aborted) return;
+        setState({ status: "ready", replay });
+        // On the first visit the worker may have installed after this fetch.
+        // Ask the now-active worker to retain the exact verified artifact so a
+        // later offline reload can reopen the selected storm.
+        if ("serviceWorker" in navigator) {
+          void navigator.serviceWorker.ready.then((registration) => {
+            (navigator.serviceWorker.controller ?? registration.active)?.postMessage({
+              type: "cache-urls",
+              urls: [url],
+            });
+          });
+        }
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
         const reason = error instanceof Error ? error.message : String(error);
         console.warn("[replay]", reason);
-        if (live) setState({ status: "absent", reason });
+        setState((current) => ({ status: "absent", reason, replay: current.replay }));
       });
-    return () => {
-      live = false;
-    };
-  }, [url]);
+    return () => controller.abort();
+  }, [url, expectedEntry, requestKey]);
 
   return state;
 }

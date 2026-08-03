@@ -235,6 +235,21 @@
   text-decoration: underline;
 }
 
+.simulatorLink {
+  color: var(--lh-figure);
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--lh-rule);
+  text-underline-offset: var(--lh-space-2);
+  text-transform: uppercase;
+}
+
+.simulatorLink:hover,
+.simulatorLink:focus-visible {
+  text-decoration-color: currentColor;
+}
+
 /* ---------- body ---------- */
 
 .body {
@@ -992,4 +1007,109 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* The desktop grid uses named areas, so responsive layouts must redefine the
+ * areas as well as their columns. Longhand grid-column rules alone leave the
+ * inherited desktop placement active and let provenance occupy the posture
+ * cell — the overlap seen on a 390px viewport. */
+@media (max-width: 56em) {
+  .chrome {
+    grid-template-areas:
+      "brand posture"
+      "sync sync"
+      "readings readings";
+  }
+
+  .stormLine {
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: var(--lh-space-1);
+  }
+
+  .stale > * + *::before {
+    content: "·";
+    display: inline;
+    width: auto;
+    height: auto;
+    margin: 0 var(--lh-space-2);
+    background: none;
+    vertical-align: baseline;
+  }
+}
+
+@media (max-width: 34em) {
+  .chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand brand"
+      "sync posture"
+      "readings readings";
+    column-gap: var(--lh-space-4);
+  }
+
+  .brand {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .brandText,
+  .stormLine,
+  .stormPick {
+    min-width: 0;
+  }
+
+  .stormPick {
+    max-width: 100%;
+  }
+
+  .stormSelect {
+    min-height: 44px;
+    max-width: 100%;
+  }
+
+  .posture {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  .stale {
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    align-self: start;
+    gap: var(--lh-space-1);
+    min-width: 0;
+  }
+
+  .stale > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .simulatorLink {
+    align-items: center;
+    display: inline-flex;
+    min-height: 44px;
+  }
+
+  .stale > * + *::before {
+    content: none;
+    display: none;
+  }
+
+  .readings {
+    grid-row: 3;
+  }
+
+  .transportButton {
+    min-height: 44px;
+  }
+
+  .tick {
+    flex-basis: 44px;
+    min-width: 44px;
+  }
 }

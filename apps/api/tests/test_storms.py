@@ -10,6 +10,7 @@ refuse.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -90,6 +91,22 @@ def test_a_threshold_with_no_data_is_omitted_not_zeroed():
     assert [r.threshold_kt for r in radii] == [50]
 
 
+def test_a_partially_analysed_quadrant_stays_missing_until_modelled():
+    """Archive silence is not an observed zero-wind quadrant."""
+    radii = tracks._radii_from([100, None, 0, 80] + [None] * 8)
+    assert len(radii) == 1
+    assert (radii[0].ne, radii[0].se, radii[0].sw, radii[0].nw) == (100, None, 0, 80)
+    assert not radii[0].is_complete
+
+
+def test_hurdat_status_is_preserved_separately_from_position_kind():
+    gilbert = tracks.read_hurdat2()["AL081988"]
+    assert gilbert.positions[0].kind == "observed"
+    assert gilbert.positions[0].status == "TD"
+    assert any(position.status == "HU" for position in gilbert.positions)
+    assert gilbert.positions[-1].status == "EX"
+
+
 # ---------------------------------------------------------------------------
 # The wind model
 # ---------------------------------------------------------------------------
@@ -144,6 +161,79 @@ def test_forward_motion_makes_the_field_asymmetric():
     )
 
 
+def test_quadrant_radii_are_sector_maxima_for_a_northwest_moving_storm():
+    """NW motion aligns the strongest field inside NE, near 68 degrees.
+
+    Testing ``radii_for`` closes the gap left by testing one surface point: the
+    exported quadrant values, rather than merely the underlying vector, must
+    put the maximum in the forward-right sector.
+    """
+    radii = wind.radii_for(
+        vmax_kt=100,
+        pressure_mb=950,
+        lat=18.0,
+        r34_nm=140,
+        translation_kt=30,
+        heading_deg=315,
+    )
+    for threshold in radii:
+        assert threshold.ne == max(
+            threshold.ne, threshold.se, threshold.sw, threshold.nw
+        )
+        assert threshold.ne > threshold.sw
+
+
+def test_surface_field_is_calibrated_to_the_authoritative_vmax():
+    """Independent grid benchmark of the full vector field's maximum."""
+    vmax_kt = 100.0
+    pressure_mb = 950.0
+    lat = 18.0
+    rmw_nm = 25.0
+    heading = 315.0
+    forward_kt = 20.0
+    delta_p = wind.AMBIENT_MB - pressure_mb
+    translation_ms = min(
+        forward_kt * wind.KT_TO_MS * wind.TRANSLATION_ASYMMETRY_FACTOR,
+        vmax_kt * wind.KT_TO_MS * wind.MAX_TRANSLATION_SHARE_OF_VMAX,
+    )
+    b = wind.fit_b_to_r34(
+        120.0,
+        rmw_nm=rmw_nm,
+        vmax_kt=vmax_kt,
+        delta_p_hpa=delta_p,
+        lat=lat,
+        translation_ms=translation_ms,
+        heading_deg=heading,
+    )
+    scale = wind._intensity_scale(
+        vmax_ms=vmax_kt * wind.KT_TO_MS,
+        rmw_nm=rmw_nm,
+        b=b,
+        delta_p_hpa=delta_p,
+        lat=lat,
+        translation_ms=translation_ms,
+    )
+    aligned = wind._aligned_bearing(heading_deg=heading, northern=True)
+    # This grid is deliberately independent of the bounded search used by the
+    # implementation.  It includes the entire inner core and enough of the
+    # outer profile to catch a misplaced maximum.
+    modelled = max(
+        wind.surface_wind_kt(
+            radius_nm * wind.NM_TO_KM,
+            aligned,
+            rmw_km=rmw_nm * wind.NM_TO_KM,
+            b=b,
+            delta_p_hpa=delta_p,
+            lat=lat,
+            translation_ms=translation_ms,
+            heading_deg=heading,
+            intensity_scale=scale,
+        )
+        for radius_nm in (rmw_nm * index / 1000.0 for index in range(1, 3001))
+    )
+    assert modelled == pytest.approx(vmax_kt, rel=1e-4)
+
+
 def test_radii_grow_with_the_size_target():
     """The authoring control must actually control something.
 
@@ -170,6 +260,77 @@ def test_a_hurricane_always_has_a_hurricane_force_field():
 def test_a_tropical_depression_has_no_hurricane_field():
     radii = wind.radii_for(vmax_kt=25, pressure_mb=1005, lat=18.0)
     assert not any(r.threshold_kt == 64 for r in radii)
+
+
+def test_fast_weak_or_stale_pressure_fix_cannot_invent_stronger_thresholds():
+    """Translation and low pressure never outrank authoritative source vmax."""
+    radii = wind.radii_for(
+        vmax_kt=25,
+        pressure_mb=960,
+        lat=40.0,
+        r34_nm=220,
+        translation_kt=50,
+        heading_deg=45,
+    )
+    assert radii == ()
+
+    tropical_storm = wind.radii_for(
+        vmax_kt=55,
+        pressure_mb=940,
+        lat=25.0,
+        r34_nm=180,
+        translation_kt=45,
+        heading_deg=20,
+    )
+    assert {radius.threshold_kt for radius in tropical_storm} == {34, 50}
+    assert all(radius.threshold_kt <= 55 for radius in tropical_storm)
+
+
+def test_every_requested_threshold_below_vmax_is_emitted():
+    radii = wind.radii_for(
+        vmax_kt=80,
+        pressure_mb=1005,
+        lat=18.0,
+        r34_nm=100,
+        translation_kt=20,
+        heading_deg=315,
+    )
+    assert {radius.threshold_kt for radius in radii} == {34, 50, 64}
+    assert all(not radius.is_empty for radius in radii)
+
+
+def test_threshold_equal_to_vmax_does_not_create_a_spurious_quadrant_wedge():
+    """An equal-threshold contour is a point/ring, not a filled wind sector."""
+    storm_50 = wind.radii_for(
+        vmax_kt=50,
+        pressure_mb=990,
+        lat=18.0,
+        r34_nm=90,
+        translation_kt=15,
+        heading_deg=315,
+    )
+    storm_64 = wind.radii_for(
+        vmax_kt=64,
+        pressure_mb=980,
+        lat=18.0,
+        r34_nm=110,
+        translation_kt=15,
+        heading_deg=315,
+    )
+    assert {radius.threshold_kt for radius in storm_50} == {34}
+    assert {radius.threshold_kt for radius in storm_64} == {34, 50}
+
+
+def test_equal_threshold_absence_is_explicit_in_provenance():
+    from app.storms.synthesize import _fill_radii
+
+    base = _toy_track()
+    positions = tuple(
+        replace(position, max_wind_kt=50, radii=()) for position in base.positions
+    )
+    _, provenance = _fill_radii(replace(base, positions=positions))
+    assert set(provenance[0][34].values()) == {"modelled"}
+    assert set(provenance[0][50].values()) == {"model_zero_area_at_vmax"}
 
 
 def test_intense_storms_have_tighter_cores():
@@ -265,7 +426,63 @@ def test_measured_radii_are_never_overwritten_by_the_model():
     from app.storms.synthesize import _fill_radii
 
     track = _toy_track()
-    filled, modelled = _fill_radii(track)
-    assert not any(modelled), "every point here has measured radii"
+    filled, provenance = _fill_radii(track)
     original = track.positions[0].radius(34)
     assert filled[0].radius(34) == original
+    assert set(provenance[0][34].values()) == {"measured"}
+    assert set(provenance[0][50].values()) == {"modelled"}
+    assert set(provenance[0][64].values()) == {"modelled"}
+
+
+def test_partial_quadrants_are_filled_without_overwriting_measurements():
+    from app.storms.synthesize import _fill_radii
+
+    base = _toy_track()
+    first = replace(
+        base.positions[0],
+        radii=(Radii(threshold_kt=34, ne=123, se=None, sw=0, nw=None),),
+    )
+    track = replace(base, positions=(first, *base.positions[1:]))
+    filled, provenance = _fill_radii(track)
+
+    r34 = filled[0].radius(34)
+    assert r34 is not None and r34.is_complete
+    assert r34.ne == 123
+    assert r34.sw == 0
+    assert r34.se is not None and r34.nw is not None
+    assert provenance[0][34] == {
+        "ne": "measured",
+        "se": "modelled",
+        "sw": "measured",
+        "nw": "modelled",
+    }
+
+
+def test_synthetic_advisories_represent_status_instead_of_inferring_from_wind():
+    track = _toy_track()
+    statuses = ("TD", "TS", "HU", "EX", "SD", "SS", "LO", "WV")
+    positions = tuple(
+        replace(position, status=status)
+        for position, status in zip(track.positions, statuses, strict=True)
+    )
+    advisories = advisories_from_track(replace(track, positions=positions))
+    assert [advisory.storm_type for advisory in advisories] == [
+        "TROPICAL DEPRESSION",
+        "TROPICAL STORM",
+        "HURRICANE",
+        "EXTRATROPICAL CYCLONE",
+        "SUBTROPICAL DEPRESSION",
+        "SUBTROPICAL STORM",
+        "LOW",
+        "TROPICAL WAVE",
+    ]
+
+
+def test_hindcast_advisory_keeps_its_disclosed_historical_path():
+    from app.storms.synthesize import _track_wkt
+
+    advisory = advisories_from_track(_toy_track())[0]
+    track = _track_wkt(advisory.positions)
+    assert track is not None
+    assert track.startswith("LINESTRING(")
+    assert f"{advisory.current.lon:.6f} {advisory.current.lat:.6f}" in track

@@ -11,6 +11,7 @@ import {
   STRUCTURES_MIN_ZOOM,
   type BaseView,
 } from "./layers";
+import type { StormEntry } from "../replay";
 
 /* Client shell for the map.
  *
@@ -29,11 +30,38 @@ const MapView = dynamic(() => import("./MapView"), {
   loading: () => <div className={styles.loading}>Loading map…</div>,
 });
 
-const BASES: [BaseView, string][] = [
-  ["map", "Forecast + impact"],
-  ["satellite", "Reference imagery"],
-  ["structures", "Structures"],
-];
+const BASES: BaseView[] = ["map", "satellite", "structures"];
+type EvidenceKind = "advisory" | "hindcast" | "unknown";
+
+function evidenceLabel(kind: EvidenceKind): string {
+  if (kind === "hindcast") return "historical hindcast";
+  if (kind === "advisory") return "advisory forecast";
+  return "legacy replay with unavailable evidence provenance";
+}
+
+function baseViewLabel(base: BaseView, kind: EvidenceKind): string {
+  if (base === "satellite") return "Reference imagery";
+  if (base === "structures") return "Structures";
+  if (kind === "hindcast") return "Hindcast + impact";
+  if (kind === "advisory") return "Forecast + impact";
+  return "Replay + impact";
+}
+
+function windQualifierFor(kind: EvidenceKind, source: StormEntry["sizeSource"]): string {
+  if (kind === "advisory") return "advisory forecast";
+  if (kind === "unknown") return "replay wind field with unavailable provenance";
+  if (source === "modelled") return "modelled hindcast";
+  if (source === "measured") return "measured-radii hindcast";
+  if (source === "mixed") return "mixed-source hindcast";
+  return "hindcast with unavailable extent provenance";
+}
+
+function hindcastSourceDescription(source: StormEntry["sizeSource"]): string {
+  if (source === "modelled") return "modelled";
+  if (source === "measured") return "reconstructed from measured radii";
+  if (source === "mixed") return "reconstructed from mixed measured and modelled radii";
+  return "shown without source provenance";
+}
 
 const NOTHING: Snapshot = {
   parishes: [],
@@ -49,10 +77,14 @@ const NOTHING: Snapshot = {
 export function MapPanel({
   snapshot,
   focus = null,
+  evidenceKind = "unknown",
+  sizeSource = "unavailable",
 }: {
-  /** The selected advisory, or null when there is no replay to read. */
+  /** The selected replay frame, or null when there is no replay to read. */
   snapshot: Snapshot | null;
   focus?: MapFocus | null;
+  evidenceKind?: EvidenceKind;
+  sizeSource?: StormEntry["sizeSource"];
 }) {
   const [base, setBase] = useState<BaseView>("map");
   const [zoom, setZoom] = useState(7.4);
@@ -79,6 +111,7 @@ export function MapPanel({
 
   const structuresTooFar = base === "structures" && zoom < STRUCTURES_MIN_ZOOM;
   const showingFootprints = base === "structures" && zoom >= STRUCTURE_FOOTPRINT_ZOOM;
+  const windQualifier = windQualifierFor(evidenceKind, sizeSource);
 
   /* What the marks mean right now. The distinction at z14 is evidence, not
    * polish: low zoom is a count-weighted grid distribution; high zoom contains
@@ -91,25 +124,33 @@ export function MapPanel({
         : structuresTooFar
           ? "Mapped structure inventory begins at zoom 9"
           : showingFootprints
-            ? "Mapped building footprints · selected forecast above"
-            : "Aggregated structure distribution · selected forecast above"
+            ? `Mapped building footprints · selected ${windQualifier} above`
+            : `Aggregated structure distribution · selected ${windQualifier} above`
     : base === "satellite"
       ? imagery.status === "ready"
         ? "Reference imagery ready · online context, not post-event damage"
         : imagery.status === "unavailable"
           ? "Reference imagery unavailable · standard basemap remains"
           : "Loading reference imagery · standard basemap remains"
-      : "Selected forecast · modelled impact aggregated by parish";
+      : evidenceKind === "hindcast"
+        ? `Historical ${windQualifier} · synthetic impact aggregated by parish`
+        : evidenceKind === "advisory"
+          ? "Selected advisory forecast · synthetic impact aggregated by parish"
+          : "Selected legacy replay · evidence provenance unavailable";
 
   const spokenStatus = base === "structures"
-    ? `${note}. Structures are neutral inventory marks; wind colours come from the selected forecast.`
+    ? `${note}. Structures are neutral inventory marks; wind colours come from the selected ${evidenceLabel(evidenceKind)}.`
     : base === "satellite"
       ? imagery.status === "ready"
         ? "Reference imagery ready. This is online context imagery, not post-event damage imagery."
         : imagery.status === "unavailable"
           ? "Reference imagery unavailable. The standard basemap remains visible."
           : "Reference imagery loading. The standard basemap remains visible while it loads."
-      : "Forecast and impact selected. Wind is forecast; warm parish fills are modelled expected impact.";
+      : evidenceKind === "hindcast"
+        ? `Historical hindcast and impact selected. Wind extent is ${hindcastSourceDescription(sizeSource)}; warm parish fills are synthetic modelled impact.`
+        : evidenceKind === "advisory"
+          ? "Advisory forecast and impact selected. Wind is forecast; warm parish fills are synthetic modelled impact."
+          : "Legacy replay and impact selected. Wind evidence provenance is unavailable; warm parish fills are synthetic modelled impact.";
 
   const onBaseKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     /* Arrow movement starts from the focused radio, not the checked radio.
@@ -120,7 +161,7 @@ export function MapPanel({
     const focused = event.target instanceof HTMLButtonElement
       ? event.target.dataset.base as BaseView | undefined
       : undefined;
-    const current = BASES.findIndex(([value]) => value === focused);
+    const current = BASES.findIndex((value) => value === focused);
     if (current < 0) return;
     let next = current;
     if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (current + 1) % BASES.length;
@@ -129,7 +170,7 @@ export function MapPanel({
     else if (event.key === "End") next = BASES.length - 1;
     else return;
     event.preventDefault();
-    const nextBase = BASES[next][0];
+    const nextBase = BASES[next];
     setBase(nextBase);
     bases.current
       ?.querySelector<HTMLButtonElement>(`button[data-base="${nextBase}"]`)
@@ -144,12 +185,12 @@ export function MapPanel({
         <SynopticMap snapshot={snapshot ?? NOTHING} focus={focus} />
         <div className={styles.controls}>
           <span className={styles.scaleNote}>
-            Static forecast + impact · {failed}{focus?.parish ? ` · focused on ${focus.parish}` : ""}
+            Static {evidenceLabel(evidenceKind)} + impact · {failed}{focus?.parish ? ` · focused on ${focus.parish}` : ""}
           </span>
         </div>
-        <MapKey />
+        <MapKey evidenceKind={evidenceKind} />
         <span className={styles.srOnly} role="status" aria-live="polite">
-          Interactive basemap unavailable. Showing the same forecast and parish impact evidence as a static map.
+          Interactive basemap unavailable. Showing the same {evidenceLabel(evidenceKind)} and parish impact evidence as a static map.
         </span>
       </div>
     );
@@ -160,6 +201,7 @@ export function MapPanel({
       <MapView
         snapshot={snapshot}
         base={base}
+        ariaLabel={`Interactive map of the selected ${evidenceLabel(evidenceKind)} and synthetic modelled impact across Jamaica`}
         focus={focus}
         onZoomChange={onZoomChange}
         onFail={onFail}
@@ -179,7 +221,7 @@ export function MapPanel({
           aria-label="Map view"
           onKeyDown={onBaseKeyDown}
         >
-          {BASES.map(([value, label]) => (
+          {BASES.map((value) => (
             <button
               key={value}
               type="button"
@@ -190,13 +232,17 @@ export function MapPanel({
               data-base={value}
               onClick={() => setBase(value)}
             >
-              {label}
+              {baseViewLabel(value, evidenceKind)}
             </button>
           ))}
         </div>
       </div>
 
-      <MapKey structures={base === "structures" && structures.status === "ready"} footprints={showingFootprints} />
+      <MapKey
+        structures={base === "structures" && structures.status === "ready"}
+        footprints={showingFootprints}
+        evidenceKind={evidenceKind}
+      />
       <span className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
         {spokenStatus}
       </span>
@@ -208,23 +254,40 @@ export function MapPanel({
   );
 }
 
-function MapKey({ structures = false, footprints = false }: { structures?: boolean; footprints?: boolean }) {
+function MapKey({
+  structures = false,
+  footprints = false,
+  evidenceKind = "unknown",
+}: {
+  structures?: boolean;
+  footprints?: boolean;
+  evidenceKind?: EvidenceKind;
+}) {
+  const wind = evidenceKind === "hindcast"
+    ? "hindcast extent"
+    : evidenceKind === "advisory" ? "forecast" : "replay extent · provenance unavailable";
   return (
     <aside className={styles.key} aria-label="Map key">
       <span className={styles.keyTitle}>Map key</span>
       <div className={styles.keyGrid}>
         <span className={`${styles.keyMark} ${styles.wind34}`} aria-hidden="true" />
-        <span>34 kt forecast</span>
+        <span>34 kt {wind}</span>
         <span className={`${styles.keyMark} ${styles.wind50}`} aria-hidden="true" />
-        <span>50 kt forecast</span>
+        <span>50 kt {wind}</span>
         <span className={`${styles.keyMark} ${styles.wind64}`} aria-hidden="true" />
-        <span>64 kt forecast</span>
+        <span>64 kt {wind}</span>
         <span className={`${styles.keyMark} ${styles.impactMajor}`} aria-hidden="true" />
         <span>Major+ ≥25% of modelled homes</span>
         <span className={`${styles.keyMark} ${styles.impactDestroyed}`} aria-hidden="true" />
         <span>Destroyed ≥25% of modelled homes</span>
         <span className={`${styles.keyMark} ${styles.track}`} aria-hidden="true" />
-        <span>Forecast track</span>
+        <span>
+          {evidenceKind === "hindcast"
+            ? "Historical best track"
+            : evidenceKind === "advisory"
+              ? "Forecast track"
+              : "Replay track · provenance unavailable"}
+        </span>
         {structures ? (
           <>
             <span className={`${styles.keyMark} ${styles.structure}`} aria-hidden="true" />

@@ -110,7 +110,10 @@ def _radii_from(values: list[int | None]) -> tuple[Radii, ...]:
         quad = values[i * 4 : i * 4 + 4]
         if all(v is None for v in quad):
             continue
-        ne, se, sw, nw = (v or 0 for v in quad)
+        # Preserve a missing quadrant as ``None``.  Turning it into zero would
+        # assert that the source analysed calm air there and would prevent the
+        # synthesiser from filling the actual evidence gap.
+        ne, se, sw, nw = quad
         out.append(Radii(threshold_kt=threshold, ne=ne, se=se, sw=sw, nw=nw))
     return tuple(out)
 
@@ -177,6 +180,7 @@ def read_hurdat2(path: Path = HURDAT2) -> dict[str, StormTrack]:
                 kind="observed",
                 max_wind_kt=_int(parts[6]),
                 radii=radii,
+                status=parts[3].upper() or None,
             )
         )
         pressures.append(_int(parts[7]))
@@ -280,6 +284,7 @@ def load_tracks(*, hurdat2: Path = HURDAT2, ebtrk: Path = EBTRK) -> dict[str, St
                     max_wind_kt=position.max_wind_kt,
                     gust_kt=position.gust_kt,
                     radii=eb_radii,
+                    status=position.status,
                 )
             )
             existing = track.rmw_nm[index] if index < len(track.rmw_nm) else None

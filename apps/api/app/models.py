@@ -20,16 +20,17 @@ from sqlalchemy import (
     ARRAY,
     BigInteger,
     Boolean,
-    CheckConstraint,
     DateTime,
     Enum as SAEnum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -119,6 +120,14 @@ class StormFile(Base):
 
 class HazardEvent(Base):
     __tablename__ = "hazard_event"
+    __table_args__ = (
+        Index(
+            "hazard_event_external_ref_uidx",
+            "external_ref",
+            unique=True,
+            postgresql_where=text("external_ref IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     name: Mapped[str] = mapped_column(Text)

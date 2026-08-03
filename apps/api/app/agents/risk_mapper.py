@@ -94,22 +94,26 @@ class RiskRun:
     by_band: dict[str, int]
 
 
-def _probabilities(advisory: Advisory) -> dict[str, dict[int, float]]:
-    """Cumulative probability at each Jamaican sample point, as 0–1.
+def _probabilities(advisory: Advisory) -> dict[str, dict[int, float | None]]:
+    """Cumulative probability at each Jamaican sample point, as 0–1 or unknown.
 
     Takes the 48-hour cumulative figure: far enough out to be actionable, close
     enough that the forecast means something. NHC publishes percentages; the
     contract wants fractions, and mixing the two is the kind of hundred-fold
-    error that renders as a plausible-looking map.
+    error that renders as a plausible-looking map.  Historical hindcasts have
+    no NHC probability product; their values remain ``None`` so absence cannot
+    be asserted as a zero-percent forecast.
     """
     published = advisory.raw.get("probabilities") or {}
-    out: dict[str, dict[int, float]] = {}
+    out: dict[str, dict[int, float | None]] = {}
     for location in PROBABILITY_POINTS:
         rows = published.get(location) or {}
-        out[location] = {
-            kt: (rows.get(str(kt), {}).get("cumulative", {}).get("48", 0) or 0) / 100.0
-            for kt in (34, 50, 64)
-        }
+        out[location] = {}
+        for kt in (34, 50, 64):
+            published_value = rows.get(str(kt), {}).get("cumulative", {}).get("48")
+            out[location][kt] = (
+                float(published_value) / 100.0 if published_value is not None else None
+            )
     return out
 
 
@@ -172,9 +176,24 @@ INSERT INTO risk_assessment
 SELECT
   w.storm_file_id,
   :advisory_id,
-  (:p34_kgn * w.w_kgn + :p34_mbj * w.w_mbj) / (w.w_kgn + w.w_mbj),
-  (:p50_kgn * w.w_kgn + :p50_mbj * w.w_mbj) / (w.w_kgn + w.w_mbj),
-  (:p64_kgn * w.w_kgn + :p64_mbj * w.w_mbj) / (w.w_kgn + w.w_mbj),
+  CASE
+    WHEN CAST(:p34_kgn AS real) IS NULL THEN CAST(:p34_mbj AS real)
+    WHEN CAST(:p34_mbj AS real) IS NULL THEN CAST(:p34_kgn AS real)
+    ELSE (CAST(:p34_kgn AS real) * w.w_kgn + CAST(:p34_mbj AS real) * w.w_mbj)
+         / (w.w_kgn + w.w_mbj)
+  END,
+  CASE
+    WHEN CAST(:p50_kgn AS real) IS NULL THEN CAST(:p50_mbj AS real)
+    WHEN CAST(:p50_mbj AS real) IS NULL THEN CAST(:p50_kgn AS real)
+    ELSE (CAST(:p50_kgn AS real) * w.w_kgn + CAST(:p50_mbj AS real) * w.w_mbj)
+         / (w.w_kgn + w.w_mbj)
+  END,
+  CASE
+    WHEN CAST(:p64_kgn AS real) IS NULL THEN CAST(:p64_mbj AS real)
+    WHEN CAST(:p64_mbj AS real) IS NULL THEN CAST(:p64_kgn AS real)
+    ELSE (CAST(:p64_kgn AS real) * w.w_kgn + CAST(:p64_mbj AS real) * w.w_mbj)
+         / (w.w_kgn + w.w_mbj)
+  END,
   ({band_case})::damage_band,
   greatest(
     :floor,

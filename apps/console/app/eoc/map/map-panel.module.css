@@ -260,6 +260,7 @@
 
   .bases .toggle {
     min-width: 0;
+    min-height: 44px;
     padding-inline: var(--lh-space-2);
     line-height: var(--lh-leading-tight);
     white-space: normal;

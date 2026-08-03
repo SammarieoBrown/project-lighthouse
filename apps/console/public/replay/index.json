@@ -1,10 +1,11 @@
 {
   "default": "al132025",
-  "generated_at": "2026-08-03T18:28:09.575951Z",
+  "generated_at": "2026-08-03T20:21:05.782653Z",
   "storms": [
     {
       "advisories": 41,
-      "bytes": 1297180,
+      "artifact_source": "last_known_good",
+      "bytes": 1354690,
       "file": "al132025.json",
       "from": "2025-10-21T15:00:00Z",
       "id": "al132025",
@@ -15,13 +16,14 @@
     },
     {
       "advisories": 49,
-      "bytes": 892075,
+      "artifact_source": "generated",
+      "bytes": 821876,
       "file": "al081988.json",
       "from": "1988-09-08T18:00:00Z",
       "id": "al081988",
       "kind": "hindcast",
       "name": "Hurricane Gilbert 1988",
-      "size_source": "modelled",
+      "size_source": "mixed",
       "to": "1988-09-20T00:00:00Z"
     }
   ]

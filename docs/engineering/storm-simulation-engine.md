@@ -248,7 +248,55 @@ rather than blur.
 - `apps/api/app/storms/wind.py` — the parametric model
 - `apps/api/app/storms/synthesize.py` — track → advisories
 - `apps/api/app/console/library.py` — multi-storm export and index
+- `data/storms/build_goes_imagery.py` — curated GOES-19 → MBTiles → PMTiles
+- `/simulator` — track drawing/editing, intensity/size/speed controls, hourly
+  playback, local save/export, and community-centroid impact preview
+- Browser source-track bundle for all 195 eligible archive storms; complete
+  replay artifacts are preferred when one exists
+- MapLibre particle wind layer, contained to active playback and stopped for
+  pause, hidden documents and `prefers-reduced-motion`
 - Console storm picker, with provenance shown beside the name
+
+### Reproducible catalogue and selected-storm build
+
+The 195-storm discovery catalogue is a deterministic JSON contract. It contains
+no generation timestamp, so the pinned archives and filters produce identical
+bytes:
+
+```bash
+cd apps/api
+uv run python -m app.storms.catalogue \
+  --output ../console/public/replay/catalogue.json \
+  --tracks-output ../console/public/replay/catalogue-tracks.json
+```
+
+The console build serves that artifact at `/replay/catalogue.json`; API and UI
+clients do not need Python or database access to discover the full archive.
+Its provenance is coverage-based: only fixes capable of a 34 kt field count,
+and a storm is `measured` only when every applicable threshold is complete at
+every such fix. Partial archives are `mixed`; sub-34 kt fixes are explicitly
+non-applicable rather than falsely labelled unavailable.
+
+Building one selected storm is also one command, but writes are never implied.
+The first command resolves the archive record and prints the full read-only
+plan; the second applies it. Regenerating an existing event additionally needs
+`--replace`, and preserves the event UUID so claims and allocation plans do not
+lose their event identity.
+
+```bash
+cd apps/api
+uv run python -m app.storms.pipeline AL081988
+uv run alembic upgrade head
+uv run python -m app.storms.pipeline AL081988 --apply --replace
+```
+
+Apply runs ingest and household risk in one transaction, then the independently
+atomic mapped-building exposure build, then the library exporter. A failure
+between stages is restartable and fails closed: an artifact is not listed until
+every district has a validated structure denominator and every frame has
+digest-backed exposure. The historical Melissa `replay.json` is an explicit
+last-known-good fallback for the library split; it must match Melissa and pass
+the same completeness gate before it can be reused.
 
 **The integration seam is `advisory.raw`.** Nothing below it knows where a storm
 came from, so a historical storm is written as a `ForecastAdvisory` — the same
@@ -261,22 +309,83 @@ out and every advisory reported maximum damage — a flat line where the whole
 point is escalation. The full track stays in `raw` so posture still sees a 64 kt
 arrival at 72 hours; the wind field unions only the next 48.
 
-## What is not built
+### Curated GOES-19 imagery
 
-- **Authoring** — draw a track, set intensity/size/speed. The engine accepts
-  these parameters and `ingest_track` accepts any track; what is missing is the
-  UI and a fast path. The current pipeline is ingest → 98,000 risk assessments →
-  a four-minute exposure build, which is fine for a catalogue storm and useless
-  for dragging a slider. Interactive authoring needs a client-side wind field
-  and community-level impact.
-- **Particle wind rendering**
-- **GOES imagery pipeline**
-- **The motion exception**, written into the design rules
+Satellite replay is intentionally a small offline build, not an on-demand API.
+`data/storms/goes_scenes.json` currently selects three Melissa frames over a
+bounded Caribbean/Jamaica extent. The resolver lists the official public
+`noaa-goes19` S3 bucket and reads the observation time from the ABI-L2-MCMIPF
+object key; S3 `LastModified` is never used as scene time. Gilbert is absent:
+GOES-19 did not exist in 1988, so this pipeline must not suggest that it has
+GOES-19 coverage.
+
+Each ~360 MB source object is streamed to an ignored cache. Its bucket key,
+ETag, byte count and SHA-256 are pinned in `goes_artifacts.json`. C02, C01 and
+C03 form a day true-colour composite; C13 supplies observed cloud brightness at
+night. The code crops in the satellite geostationary projection, reprojects the
+bounded result to EPSG:3857 raster tiles, writes MBTiles, converts with the
+installed `pmtiles` CLI and runs `pmtiles verify`. Only then are the provenance
+manifest and exact browser contract `{storms:[{id,source,frames:[{at,tiles}]}]}`
+replaced atomically.
+
+The read-only resolver is the first operational step. It downloads no imagery:
+
+```bash
+python3 data/storms/build_goes_imagery.py --dry-run --storm al132025
+python3 data/storms/build_goes_imagery.py --list --storm al132025
+```
+
+Build with the PEP 723 environment and the real public base of the R2 custom
+domain. This creates local files and manifests; it never uploads them:
+
+```bash
+uv run --script data/storms/build_goes_imagery.py \
+  --build --storm al132025 \
+  --tiles-base "$LIGHTHOUSE_TILES_BASE"
+
+uv run --script data/storms/build_goes_imagery.py --verify
+```
+
+After review, publication is one explicit, separate operation. Run it once from
+the repository root; the object keys match those already written into the
+browser index:
+
+```bash
+find data/storms/goes_cache/artifacts -type f -name '*.pmtiles' -print0 |
+  while IFS= read -r -d '' goes_file; do
+    goes_key="${goes_file#data/storms/goes_cache/artifacts/}"
+    npx --yes wrangler@4 r2 object put \
+      "lighthouse-tiles/storm-imagery/${goes_key}" \
+      --file="${goes_file}" \
+      --content-type=application/octet-stream \
+      --cache-control="public, max-age=0, must-revalidate" \
+      --remote
+  done
+```
+
+The empty checked-in `storm-imagery/index.json` is deliberate until that real
+build succeeds. Never add a frame URL by hand.
+
+## Operational follow-up, not fabricated state
+
+The GOES pipeline is complete, but the checked-in imagery manifest remains
+empty until the three pinned Melissa source objects are downloaded, converted,
+verified and deliberately published. That is a roughly 954 MB source-data
+operation, not something a browser request or repository build should trigger.
+Until it succeeds the simulator explicitly says imagery is not staged; it never
+substitutes a different storm or claims GOES coverage for Gilbert.
+
+The interactive impact panel is intentionally the fast planning path. It
+samples the committed roof mix at each mapped community centroid against the
+full structure denominator. It is not the database publication path and does
+not claim individual-building, terrain, surge, rainfall or uncertainty results.
+Use the selected-storm pipeline for a release-gated replay artifact.
 
 ## Verification
 
 ```bash
 cd apps/api && uv run pytest tests/test_storms.py
+cd ../.. && python3 -m unittest discover -s data/storms/goes_tests -v
 ```
 
 Load Gilbert and confirm it produces wind fields at all — the EBTRK merge is the

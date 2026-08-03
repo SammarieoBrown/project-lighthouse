@@ -203,6 +203,12 @@ CREATE TABLE hazard_event (
   replay          boolean NOT NULL DEFAULT false
 );
 
+-- Application code resolves events by external identity and must never choose
+-- an arbitrary row. PostgreSQL permits multiple NULLs in a unique index, so
+-- locally-authored events without an external identity remain valid.
+CREATE UNIQUE INDEX hazard_event_external_ref_uidx
+  ON hazard_event (external_ref) WHERE external_ref IS NOT NULL;
+
 -- HAZ-01: one row per NHC advisory cycle. Cone, track and wind field are stored
 -- as geometry so verification can ask "what happened here".
 --

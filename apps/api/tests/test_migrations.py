@@ -121,6 +121,15 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
                     {"schema": migrated_schema},
                 ).scalars()
             )
+            hazard_external_ref_indexes = set(
+                connection.execute(
+                    text(
+                        "SELECT indexname FROM pg_indexes "
+                        "WHERE schemaname = :schema AND tablename = 'hazard_event'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
     finally:
         engine.dispose()
 
@@ -147,6 +156,7 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
         "exposed_structure_count",
         "exposure_rows_sha256",
     } <= exposure_build_columns
+    assert "hazard_event_external_ref_uidx" in hazard_external_ref_indexes
 
 
 def test_alembic_incremental_0003_to_0004_creates_digest_markers(

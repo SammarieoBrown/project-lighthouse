@@ -85,14 +85,23 @@ class Radii:
     """
 
     threshold_kt: int
-    ne: int
-    se: int
-    sw: int
-    nw: int
+    # Historical archives can analyse only part of a quadrant row.  ``None``
+    # means that quadrant was not analysed; zero means it was analysed and the
+    # threshold did not reach that quadrant.  Live NHC products always provide
+    # all four values, while the storm synthesiser fills historical gaps before
+    # a radius reaches the geometry builder.
+    ne: int | None
+    se: int | None
+    sw: int | None
+    nw: int | None
 
     @property
     def is_empty(self) -> bool:
         return not any((self.ne, self.se, self.sw, self.nw))
+
+    @property
+    def is_complete(self) -> bool:
+        return all(value is not None for value in (self.ne, self.se, self.sw, self.nw))
 
 
 @dataclass(frozen=True)
@@ -106,6 +115,11 @@ class Position:
     max_wind_kt: int | None = None
     gust_kt: int | None = None
     radii: tuple[Radii, ...] = ()
+    # HURDAT2 system status (TD, TS, HU, EX, ...).  This is deliberately
+    # separate from ``kind``: a position can be an observed extratropical
+    # cyclone or a forecast hurricane, and collapsing those axes loses source
+    # evidence.
+    status: str | None = None
 
     def radius(self, threshold_kt: int) -> Radii | None:
         for r in self.radii:

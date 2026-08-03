@@ -176,6 +176,17 @@ These are the ones that do not appear in any general anti-slop guide, because th
   3. A live write landing (a claim arriving, a disbursement confirming).
 Anything decorative that pulses makes static status look live, which is the exact failure mode that gets a real alert ignored.
 
+One narrowly bounded motion exception is committed for the **storm simulation
+surface**. Particle advection inside that map may move only while simulated time
+is advancing. It encodes the direction and relative speed of the selected
+synthetic or historical wind field; a static contour cannot carry either fact.
+The particles are synthesised model output, never observed wind, and the surface
+must name them as such. They must stop immediately when playback pauses, when
+the surface is hidden, or when `prefers-reduced-motion` is set. The exception
+must never acquire pulsing, easing, decorative turbulence, status colour,
+attention-seeking chrome, or motion outside the map canvas. Its containment
+boundary is `apps/console/app/simulator/`; it does not relax M1 anywhere else.
+
 **C1 — Colour is a controlled vocabulary, not a palette.** Posture and severity own specific hues. Once a hue is assigned to `URGENT`, nothing else on any screen may use that hue for any reason — not a button, not a link, not a chart series, not a hover state. The whole value of semantic colour collapses the first time it is borrowed for decoration.
 
 **C2 — Confidence never appears without its signals.** No lone percentage, no donut, no meter standing alone. Verification confidence renders only alongside the five signals that produced it, each individually scored. This is the screen that proves human-in-the-loop to a judge; a single number is precisely the thing we are arguing against.

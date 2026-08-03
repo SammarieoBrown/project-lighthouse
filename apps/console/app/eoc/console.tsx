@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import { LighthouseMark } from "../logo";
 import { MapPanel } from "./map/MapPanel";
 import {
+  canonicalStormId,
   districtsAt,
   feedUpto,
   hhmm,
@@ -19,16 +21,17 @@ import {
   worstHit,
   REPLAY_URL,
   type Replay,
+  type StormEntry,
 } from "./replay";
 import type { District } from "./map";
 import styles from "./eoc.module.css";
 
 /* EOC console — Act 1.
  *
- * Every value on this screen comes from the selected advisory of the replay,
+ * Every value on this screen comes from the selected frame of the replay,
  * and the replay is one generated file (docs/engineering/replay-export-contract.md).
- * Nothing here is a literal: not the posture, not the advisory number, not the
- * count of advisories, not the clock. If it reads like a measurement it was
+ * Nothing here is a literal: not the posture, not the frame identifier, not the
+ * count of frames, not the clock. If it reads like a measurement it was
  * measured, and if there is no measurement it reads as a dash.
  *
  * This is a historical replay, not an operational write surface. The proposed
@@ -39,22 +42,52 @@ import styles from "./eoc.module.css";
  */
 
 /* Playback rate as storm time against real time, because that is the only thing
- * the number can honestly mean. Advisories are six hours apart, so 21,600×
- * is one advisory per second and the whole storm runs in about forty seconds —
+ * the number can honestly mean. Most frames are six hours apart, so 21,600×
+ * is one frame per second and the whole storm runs in about forty seconds —
  * the pace this screen is actually watched at. The slow setting is for reading
  * the escalation, the fast one for getting to landfall. */
 const RATES = [3600, 21600, 86400];
 const DEFAULT_RATE = 21600;
 
 /* A frame is never allowed to land faster than the eye resolves it. Without a
- * floor, a replay with two advisories minutes apart would flicker through them
+ * floor, a replay with two frames minutes apart would flicker through them
  * and the screen would report a state nobody saw. */
 const MIN_FRAME_MS = 60;
 const NO_FRAMES: Replay["frames"] = [];
+const STORM_QUERY = "storm";
+const STORM_STORAGE = "lighthouse.console.selected-storm.v1";
 
 const POSTURE_RANK: Record<string, number> = { QUIET: 0, WATCH: 1, READY: 2, ACT: 3 };
 
-/* Open on the first advisory at the storm's highest posture — the moment the
+function windSourceLabel(source: StormEntry["sizeSource"]): string {
+  if (source === "measured") return "measured wind extent";
+  if (source === "modelled") return "modelled wind extent";
+  if (source === "mixed") return "mixed measured/modelled wind extent";
+  return "wind-extent provenance unavailable";
+}
+
+function stormEntry(storms: StormEntry[], id: string | null): StormEntry | null {
+  if (!id) return null;
+  const wanted = canonicalStormId(id);
+  return storms.find((storm) => canonicalStormId(storm.id) === wanted) ?? null;
+}
+
+function preferredStormId(storms: StormEntry[], defaultId: string | null): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = stormEntry(storms, params.get(STORM_QUERY));
+  if (fromUrl) return fromUrl.id;
+
+  try {
+    const fromStorage = stormEntry(storms, window.localStorage.getItem(STORM_STORAGE));
+    if (fromStorage) return fromStorage.id;
+  } catch {
+    // Privacy modes can disable localStorage. The shareable URL and library
+    // default still provide deterministic selection.
+  }
+  return stormEntry(storms, defaultId)?.id ?? storms[0]?.id ?? null;
+}
+
+/* Open on the first replay frame at the storm's highest posture — the moment the
  * console first demanded that somebody act. An operator arriving at this screen
  * is not asking where the storm started; they are asking what it did. */
 function openingFrame(replay: Replay): number {
@@ -111,14 +144,37 @@ export function EocConsole() {
    *
    * A deployment with no index falls back to that legacy path, which is what
    * keeps an older build working rather than blank. */
-  const library = useLibrary();
-  const [stormId, setStormId] = useState<string | null>(null);
-  const selected = library
-    ? (library.storms.find((s) => s.id === (stormId ?? library.default)) ?? library.storms[0])
+  const libraryState = useLibrary();
+  const library = libraryState.status === "ready" ? libraryState.library : null;
+  const [stormRequest, setStormRequest] = useState<{ id: string; nonce: number } | null>(null);
+
+  /* Resolve URL/local preference before reading a replay. `loading` is not the
+   * same thing as "no index": collapsing those states was what started a
+   * legacy replay download while index.json was still in flight. */
+  useEffect(() => {
+    if (!library) return;
+    setStormRequest((current) => {
+      if (current && stormEntry(library.storms, current.id)) return current;
+      const id = preferredStormId(library.storms, library.default);
+      return id ? { id, nonce: 0 } : null;
+    });
+  }, [library]);
+
+  const requestedEntry = library
+    ? stormEntry(library.storms, stormRequest?.id ?? null)
     : null;
-  const replayUrl = library ? (selected ? `/replay/${selected.file}` : null) : REPLAY_URL;
-  const state = useReplay(replayUrl);
-  const replay = state.status === "ready" ? state.replay : null;
+  const replayUrl =
+    libraryState.status === "absent"
+      ? REPLAY_URL
+      : requestedEntry
+        ? `/replay/${requestedEntry.file}`
+        : null;
+  const state = useReplay(replayUrl, requestedEntry, stormRequest?.nonce ?? 0);
+  const replay = state.replay;
+  const activeEntry = replay && library
+    ? stormEntry(library.storms, replay.event.id)
+    : null;
+  const evidenceEntry = activeEntry ?? (!replay ? requestedEntry : null);
   const connectivity = useConnectivity();
 
   const [index, setIndex] = useState(0);
@@ -131,35 +187,64 @@ export function EocConsole() {
   const mapSection = useRef<HTMLElement>(null);
   const timeline = useRef<HTMLDivElement>(null);
 
+  const onStormChange = useCallback((id: string) => {
+    setPlaying(false);
+    setStormRequest((current) => ({ id, nonce: (current?.nonce ?? 0) + 1 }));
+  }, []);
+
   /* Once per storm, keyed on which storm. Re-running on every render would
    * drag the scrubber back under the operator's hand; latching on a boolean
-   * would strand it — advisory 15 of Melissa does not exist in a storm with
+   * would strand it — frame 15 of Melissa does not exist in a storm with
    * twelve frames, and the screen would read from an index past the end. */
   useEffect(() => {
     if (!replay || opened.current === replay.event.id) return;
     opened.current = replay.event.id;
     setPlaying(false);
     setIndex(openingFrame(replay));
+    setSelectedDistrict(null);
   }, [replay]);
+
+  /* Selection becomes durable only after the requested artifact has passed
+   * both the replay contract and its index identity check. That keeps the URL,
+   * picker and evidence on one committed storm even when a switch fails. */
+  useEffect(() => {
+    if (state.status !== "ready" || !requestedEntry || !replay) return;
+    if (canonicalStormId(replay.event.id) !== canonicalStormId(requestedEntry.id)) return;
+    try {
+      window.localStorage.setItem(STORM_STORAGE, requestedEntry.id);
+    } catch {
+      // The URL remains the durable/shareable selection when storage is denied.
+    }
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(STORM_QUERY) !== requestedEntry.id) {
+      url.searchParams.set(STORM_QUERY, requestedEntry.id);
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [state.status, requestedEntry, replay]);
 
   const frames = replay?.frames ?? NO_FRAMES;
   const last = frames.length - 1;
-  const frame = frames[index] ?? null;
+  const displayIndex = replay
+    ? opened.current === replay.event.id
+      ? Math.min(index, last)
+      : openingFrame(replay)
+    : 0;
+  const frame = frames[displayIndex] ?? null;
 
   /* The play loop. A timeout chain rather than an interval, because the gap
    * between advisories is a property of the data — NHC issues intermediate
    * advisories — and an interval would claim it is uniform. */
   useEffect(() => {
     if (!playing || !frame) return;
-    if (index >= last) {
+    if (displayIndex >= last) {
       setPlaying(false);
       return;
     }
-    const stormMs = Date.parse(frames[index + 1].at) - Date.parse(frames[index].at);
+    const stormMs = Date.parse(frames[displayIndex + 1].at) - Date.parse(frames[displayIndex].at);
     const delay = Math.max(MIN_FRAME_MS, stormMs / rate);
     const id = window.setTimeout(() => setIndex((i) => Math.min(i + 1, last)), delay);
     return () => window.clearTimeout(id);
-  }, [playing, index, last, rate, frames, frame]);
+  }, [playing, displayIndex, last, rate, frames, frame]);
 
   const onPlay = useCallback(() => {
     if (playing) {
@@ -168,9 +253,9 @@ export function EocConsole() {
     }
     // From the end, Play restarts. A transport control that does nothing when
     // pressed is indistinguishable from a broken one.
-    if (index >= last) setIndex(0);
+    if (displayIndex >= last) setIndex(0);
     setPlaying(true);
-  }, [playing, index, last]);
+  }, [playing, displayIndex, last]);
 
   const onStep = useCallback(() => {
     setPlaying(false);
@@ -222,8 +307,8 @@ export function EocConsole() {
     mapSection.current?.scrollIntoView({ block: "nearest" });
   }, []);
 
-  /* Joined once per advisory, and memoised so the map sees a new object only
-   * when the advisory actually changed — the map updates its sources by
+  /* Joined once per frame, and memoised so the map sees a new object only
+   * when the selected evidence actually changed — the map updates its sources by
    * identity and a fresh object every render would push 2,000 features per
    * keystroke. */
   const districts = useMemo(
@@ -234,7 +319,10 @@ export function EocConsole() {
     () => (replay && frame ? snapshotAt(replay, frame, districts) : null),
     [replay, frame, districts],
   );
-  const feed = useMemo(() => (replay ? feedUpto(replay, index) : []), [replay, index]);
+  const feed = useMemo(
+    () => (replay ? feedUpto(replay, displayIndex) : []),
+    [replay, displayIndex],
+  );
 
   const replaySummary = useMemo(() => {
     if (!replay) return { homes: 0, structures: null as number | null };
@@ -253,14 +341,12 @@ export function EocConsole() {
 
   /* Mapped from public-source footprints, unlike everything derived from the registry above. `structures`
    * is the island's building footprints; `exposed` is how many of them sit
-   * inside the forecast wind field for this advisory. Null rather than zero
+   * inside the selected wind field for this frame. Null rather than zero
    * when the inventory has not been built, because "not available" and "none"
    * are different statements and only one of them is ours to make. */
-  /* The 64 kt band only. The 34 kt field is the union across every forecast
-   * hour out to five days, and for a storm this size it swallows the whole
-   * island — at advisory 15 it reported 1,842,165 of 1,842,165, which is true,
-   * useless, and reads as a broken counter. Hurricane-force wind is the number
-   * somebody acts on. */
+  /* The 64 kt band only. Broad 34 kt fields frequently saturate the island and
+   * turn the exposure counter into a restatement of total inventory.
+   * Hurricane-force exposure is the decision-relevant number here. */
   const exposed = useMemo(
     () =>
       structures === null
@@ -281,28 +367,72 @@ export function EocConsole() {
     [districts],
   );
   const worstDistricts = rankedDistricts.slice(0, 5);
+  const evidenceKind = evidenceEntry?.kind ?? "unknown";
+  const isHindcast = evidenceKind === "hindcast";
+  const isAdvisory = evidenceKind === "advisory";
+  const windSource = evidenceEntry?.sizeSource ?? "unavailable";
+  const frameNoun = isHindcast ? "historical fix" : isAdvisory ? "advisory" : "replay frame";
+  const windEvidence = isHindcast
+    ? windSource === "modelled"
+      ? "modelled hindcast wind field"
+      : windSource === "measured"
+        ? "measured-radii hindcast wind field"
+        : windSource === "mixed"
+          ? "mixed-source hindcast wind field"
+          : "hindcast wind field with unavailable extent provenance"
+    : isAdvisory
+      ? "forecast wind field"
+      : "replay wind field with unavailable evidence provenance";
+
+  const switching = Boolean(
+    replay &&
+      requestedEntry &&
+      activeEntry &&
+      canonicalStormId(requestedEntry.id) !== canonicalStormId(activeEntry.id) &&
+      state.status === "loading",
+  );
+  const switchFailed = Boolean(replay && requestedEntry && state.status === "absent");
+  const initialFailure =
+    !replay &&
+    (libraryState.status === "error" ||
+      state.status === "absent" ||
+      (libraryState.status === "ready" && libraryState.library.storms.length === 0));
+  const failureReason =
+    libraryState.status === "error"
+      ? libraryState.reason
+      : state.status === "absent"
+        ? state.reason
+        : libraryState.status === "ready" && libraryState.library.storms.length === 0
+          ? "The storm library contains no published replays."
+          : null;
 
   /* Sync state, rule C4. This is a recorded storm being replayed, so it says
    * so — a console that reads "live" over October 2025 advisories is asserting
    * something the data flatly contradicts. */
   const replayStatus =
-    state.status === "loading"
-      ? "Reading replay"
-      : state.status === "absent"
-        ? "No replay data"
-        : index < last
-          ? `Replay · next advisory ${hhmm(frames[index + 1].at)}Z`
-          : "Replay · last advisory";
+    libraryState.status === "loading"
+      ? "Reading storm library"
+      : switching
+        ? `Opening ${requestedEntry?.name} · ${activeEntry?.name} remains visible`
+        : switchFailed
+          ? `Could not open ${requestedEntry?.name} · fetch or verification failed · ${activeEntry?.name ?? "current replay"} remains visible`
+          : initialFailure
+            ? "No verified replay available"
+            : state.status === "loading"
+              ? `Reading ${requestedEntry?.name ?? "legacy"} replay`
+              : displayIndex < last
+                ? `Replay · next ${frameNoun} ${hhmm(frames[displayIndex + 1].at)}Z`
+                : `Replay · last ${frameNoun}`;
   const connectionStatus =
     connectivity === "checking"
       ? "Browser network · checking"
       : connectivity === "offline"
         ? replay
-          ? "Browser network · offline · cached replay available"
-          : "Browser network · offline · replay unavailable"
+          ? "Browser network · offline · loaded replay remains visible"
+          : "Browser network · offline · selected replay unavailable"
         : "Browser network · online · historical replay";
 
-  const missing = state.status === "absent";
+  const missing = initialFailure;
 
   return (
     // The console is dark because an EOC is read in a dim room during a storm.
@@ -319,12 +449,13 @@ export function EocConsole() {
                 <span className={styles.srOnly}>Storm</span>
                 <select
                   className={styles.stormSelect}
-                  value={selected?.id ?? ""}
-                  onChange={(event) => setStormId(event.target.value)}
+                  value={activeEntry?.id ?? requestedEntry?.id ?? ""}
+                  aria-label="Historical storm replay"
+                  onChange={(event) => onStormChange(event.target.value)}
                 >
                   {library.storms.map((storm) => (
                     <option key={storm.id} value={storm.id}>
-                      {storm.name}
+                      {storm.name} — {storm.kind === "hindcast" ? "hindcast" : "advisory replay"}
                     </option>
                   ))}
                 </select>
@@ -332,13 +463,17 @@ export function EocConsole() {
             ) : (
               <span className={styles.brandMode}>Emergency operations replay</span>
             )}
-            {selected ? (
+            {evidenceEntry ? (
               /* What kind of claim this storm is, next to the storm's name.
                  An advisory replay is what forecasters published at the time;
                  a hindcast projects the track the storm actually took. */
               <span className={styles.provenance}>
-                {selected.kind === "hindcast" ? "Hindcast" : "Advisory replay"}
-                {selected.sizeSource === "modelled" ? " · modelled extent" : ""}
+                {evidenceEntry.kind === "hindcast" ? "Historical hindcast" : "Historical advisory replay"}
+                {` · ${windSourceLabel(evidenceEntry.sizeSource)}`}
+              </span>
+            ) : libraryState.status === "absent" ? (
+              <span className={styles.provenance}>
+                Legacy replay · evidence provenance unavailable
               </span>
             ) : null}
             </span>
@@ -366,7 +501,11 @@ export function EocConsole() {
                 ? "—"
                 : `${frame.position.max_wind_kt} kt`}
             </span>
-            <span className={styles.readingLabel}>Observed sustained wind</span>
+            <span className={styles.readingLabel}>
+              {isHindcast
+                ? "Historical best-track sustained wind"
+                : isAdvisory ? "Advisory sustained wind" : "Replay sustained wind · provenance unavailable"}
+            </span>
           </div>
           <div className={styles.reading}>
             <span
@@ -377,13 +516,23 @@ export function EocConsole() {
                 ? "—"
                 : `${frame.position.pressure_mb} mb`}
             </span>
-            <span className={styles.readingLabel}>Observed central pressure</span>
+            <span className={styles.readingLabel}>
+              {isHindcast
+                ? "Historical best-track central pressure"
+                : isAdvisory ? "Advisory central pressure" : "Replay central pressure · provenance unavailable"}
+            </span>
           </div>
           <div className={styles.reading}>
             <span className={styles.readingValue} data-empty={montego === undefined ? "true" : undefined}>
               {montego === undefined ? "—" : `${montego}%`}
             </span>
-            <span className={styles.readingLabel}>Forecast 64 kt chance · Montego Bay at 48 h</span>
+            <span className={styles.readingLabel}>
+              {isHindcast
+                ? "Contemporaneous 64 kt probability · unavailable"
+                : isAdvisory
+                  ? "Forecast 64 kt chance · Montego Bay at 48 h"
+                  : "64 kt probability · provenance unavailable"}
+            </span>
           </div>
           <div className={styles.reading}>
             <span className={styles.readingValue} data-empty={frame ? undefined : "true"}>
@@ -401,12 +550,21 @@ export function EocConsole() {
           </div>
         </div>
 
-        <div className={styles.stale} aria-live="polite">
+        <div className={styles.stale}>
+          <Link className={styles.simulatorLink} href="/simulator">
+            Storm simulator
+          </Link>
           <span>
-            {frame ? `Advisory ${frame.n} · ${stamp(frame.at)}Z` : "No advisory"}
+            {frame
+              ? `${isHindcast ? "Historical fix" : isAdvisory ? "Advisory" : "Replay frame"} ${frame.n} · ${stamp(frame.at)}Z`
+              : "No replay frame"}
           </span>
-          <span>{replayStatus}</span>
-          <span className={styles.connectivity} data-state={connectivity}>
+          <span aria-live="polite">{replayStatus}</span>
+          <span
+            className={styles.connectivity}
+            data-state={connectivity}
+            aria-live="polite"
+          >
             {connectionStatus}
           </span>
         </div>
@@ -415,7 +573,13 @@ export function EocConsole() {
       <div className={styles.body}>
         <section className={styles.mapPanel} ref={mapSection}>
           <div className={styles.panelHead}>
-            <h1 className={styles.panelTitle}>Selected forecast and mapped structure exposure</h1>
+            <h1 className={styles.panelTitle}>
+              {isHindcast
+                ? "Selected historical hindcast and mapped structure exposure"
+                : isAdvisory
+                  ? "Selected advisory forecast and mapped structure exposure"
+                  : "Selected legacy replay and mapped structure exposure"}
+            </h1>
             <span>
               {replay ? (
                 <>
@@ -423,9 +587,9 @@ export function EocConsole() {
                   {replay.parishes.length} parishes
                 </>
               ) : missing ? (
-                "Replay unavailable · check /replay/replay.json"
+                "Verified replay unavailable · no substitute storm shown"
               ) : (
-                "Reading replay"
+                "Reading and verifying replay"
               )}
             </span>
           </div>
@@ -434,10 +598,12 @@ export function EocConsole() {
             {/* Mounted once the outcome of the fetch is known, so the map is
                 built exactly once. Advisory changes update its data sources;
                 rebuilding would refetch the basemap and drop the viewport. */}
-            {state.status === "loading" ? null : (
+            {!replay && state.status === "loading" ? null : (
               <MapPanel
                 snapshot={snapshot}
                 focus={selectedDistrict}
+                evidenceKind={evidenceKind}
+                sizeSource={windSource}
               />
             )}
           </div>
@@ -449,9 +615,11 @@ export function EocConsole() {
           <div className={styles.legend} aria-label="Map counts and data provenance">
             <span className={styles.legendItem}>
               {exposed === null ? (
-                "Forecast exposure inventory unavailable"
+                `${isHindcast ? "Hindcast" : isAdvisory ? "Forecast" : "Replay wind-field"} exposure inventory unavailable`
               ) : (
-                <><b>{nf.format(exposed)}</b> mapped footprints in the selected 64 kt forecast</>
+                <>
+                  <b>{nf.format(exposed)}</b> mapped footprints in the selected 64 kt {windEvidence}
+                </>
               )}
             </span>
             <span className={styles.legendItem}>
@@ -460,9 +628,35 @@ export function EocConsole() {
                 : `${nf.format(structures)} mapped building footprints from public datasets`}
             </span>
             <p className={styles.provenance}>
-              <b>Historical replay, not live.</b> Storm position and intensity are advisory
-              observations. Wind areas and probabilities are forecasts. Building footprints
-              are mapped public-source inventory; household locations and damage counts are synthetic model output.
+              {isHindcast ? (
+                <>
+                  <b>Historical hindcast, not a forecast or live product.</b> Track and intensity
+                  are historical best-track observations. Wind extent is {windSource === "modelled"
+                    ? "a modelled reconstruction"
+                    : windSource === "measured"
+                      ? "reconstructed from measured radii"
+                      : windSource === "mixed"
+                        ? "reconstructed from a mix of measured and modelled radii"
+                        : "shown without source provenance and must not be treated as measured"}; no contemporaneous probability
+                  forecast is implied. Building footprints are mapped public-source inventory;
+                  household locations and damage counts are synthetic model output.
+                </>
+              ) : isAdvisory ? (
+                <>
+                  <b>Historical advisory replay, not live.</b> Storm position and intensity are
+                  advisory observations. Wind areas and probabilities are forecasts published or
+                  derived for that advisory. Building footprints are mapped public-source
+                  inventory; household locations and damage counts are synthetic model output.
+                </>
+              ) : (
+                <>
+                  <b>Legacy historical replay, not live.</b> The deployment did not publish a
+                  storm index, so Lighthouse cannot verify whether this artifact is an advisory
+                  replay or a hindcast, or whether its wind extent is measured or modelled.
+                  Building footprints are mapped public-source inventory; household locations and
+                  damage counts are synthetic model output.
+                </>
+              )}
             </p>
           </div>
         </section>
@@ -476,7 +670,7 @@ export function EocConsole() {
               </h2>
               <p className={styles.gateDetail}>
                 {warning ? `${warning} in effect. ` : ""}Patois and English, WhatsApp
-                with SMS fallback. Proposed from advisory {frame.n}.
+                with SMS fallback. Proposed from {frameNoun} {frame.n}.
               </p>
               <p className={styles.replayLimit} id="replay-action-limit">
                 Historical replay only. Approval, messaging and ledger writes are not
@@ -626,13 +820,13 @@ export function EocConsole() {
             disabled={!replay}
             onClick={onPlay}
           >
-            {playing ? "Pause" : index >= last ? "Replay" : "Play"}
+            {playing ? "Pause" : displayIndex >= last ? "Replay" : "Play"}
           </button>
           {/* Not a toggle, so no pressed state to report. It had one. */}
           <button
             type="button"
             className={styles.transportButton}
-            disabled={!replay || index >= last}
+            disabled={!replay || displayIndex >= last}
             onClick={onStep}
           >
             Step
@@ -667,12 +861,12 @@ export function EocConsole() {
                   role="radio"
                   key={x.n}
                   className={styles.tick}
-                  data-current={i === index}
+                  data-current={i === displayIndex}
                   data-frame-index={i}
-                  aria-checked={i === index}
-                  aria-label={`Frame ${i + 1} of ${frames.length}, advisory ${x.n}: ${t.destroyed} synthetic households modelled destroyed, ${t.major} modelled major`}
-                  tabIndex={i === index ? 0 : -1}
-                  title={`Advisory ${x.n}`}
+                  aria-checked={i === displayIndex}
+                  aria-label={`Frame ${i + 1} of ${frames.length}, ${frameNoun} ${x.n}: ${t.destroyed} synthetic households modelled destroyed, ${t.major} modelled major`}
+                  tabIndex={i === displayIndex ? 0 : -1}
+                  title={`${isHindcast ? "Historical fix" : isAdvisory ? "Advisory" : "Replay frame"} ${x.n}`}
                   onClick={() => {
                     setPlaying(false);
                     setIndex(i);
@@ -694,8 +888,8 @@ export function EocConsole() {
              that looks like a storm with no history. */
           <p className={styles.absent}>
             {missing
-              ? `No replay to scrub. ${state.reason} Check public/replay/replay.json.`
-              : "Reading the replay."}
+              ? `No verified replay to scrub. ${failureReason ?? "The selected replay is unavailable."} Reload while online or ask the deployment operator to publish the replay; Lighthouse did not substitute a different storm.`
+              : "Reading and verifying the selected replay."}
           </p>
         )}
 
@@ -703,8 +897,8 @@ export function EocConsole() {
           {frame ? `${hhmm(frame.at)}Z` : "—"}
           <span className={styles.clockLabel}>
             {frame
-              ? `Storm time · advisory ${frame.n} · frame ${index + 1} of ${frames.length}`
-              : "Storm time · no advisory"}
+              ? `Storm time · ${frameNoun} ${frame.n} · frame ${displayIndex + 1} of ${frames.length}`
+              : "Storm time · no replay frame"}
           </span>
         </div>
       </footer>

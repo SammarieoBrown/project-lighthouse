@@ -70,8 +70,23 @@ MS_TO_KT = 1.0 / KT_TO_MS
 NM_TO_KM = 1.852
 KM_TO_NM = 1.0 / NM_TO_KM
 
-#: Quadrant centre bearings, in the order the Radii model stores them.
-QUADRANTS = ((0.0, "ne"), (90.0, "se"), (180.0, "sw"), (270.0, "nw"))
+#: True quadrant sectors, clockwise from north, in the order ``Radii`` stores
+#: them.  NHC radii are the *largest extent anywhere in the quadrant*, not the
+#: value on a cardinal boundary and not the value at a single centre bearing.
+QUADRANT_SECTORS = (
+    (0.0, 90.0, "ne"),
+    (90.0, 180.0, "se"),
+    (180.0, 270.0, "sw"),
+    (270.0, 360.0, "nw"),
+)
+
+#: Only part of a cyclone's forward speed appears as a surface-wind asymmetry.
+#: The half-speed correction is the deliberately conservative operational
+#: approximation used here.  The resulting component is also capped at half
+#: the source maximum wind so a fast-moving weak/remnant system cannot turn its
+#: translation into a fictitious tropical-storm field.
+TRANSLATION_ASYMMETRY_FACTOR = 0.5
+MAX_TRANSLATION_SHARE_OF_VMAX = 0.5
 
 #: How far out to look for a threshold crossing. Beyond this the profile is
 #: below tropical storm force for any plausible storm, and a root found further
@@ -167,6 +182,7 @@ def surface_wind_kt(
     translation_ms: float = 0.0,
     heading_deg: float = 0.0,
     northern: bool = True,
+    intensity_scale: float = 1.0,
 ) -> float:
     """Wind speed at a point, given as a bearing and distance from the eye.
 
@@ -179,7 +195,7 @@ def surface_wind_kt(
     field spirals rather than circles.
     """
     v = gradient_wind_ms(r_km, rmw_km=rmw_km, b=b, delta_p_hpa=delta_p_hpa, lat=lat)
-    v *= SURFACE_FACTOR
+    v *= SURFACE_FACTOR * max(0.0, intensity_scale)
 
     # Tangential direction: counter-clockwise in the northern hemisphere, and
     # rotated inward by the inflow angle.
@@ -218,6 +234,8 @@ def radius_of_kt(
     translation_ms: float = 0.0,
     heading_deg: float = 0.0,
     northern: bool = True,
+    intensity_scale: float = 1.0,
+    peak_radius_nm: float | None = None,
     step_nm: float = 2.0,
 ) -> float:
     """How far `threshold_kt` reaches along one bearing, in nautical miles.
@@ -242,10 +260,22 @@ def radius_of_kt(
         translation_ms=translation_ms,
         heading_deg=heading_deg,
         northern=northern,
+        intensity_scale=intensity_scale,
     )
 
+    # Coriolis moves the true radial maximum slightly inside nominal Rmax.  A
+    # scan beginning at Rmax can therefore miss a narrow 34/50/64 kt contour
+    # for a storm only one knot above the threshold.  Seed the outward search
+    # at the actual peak; from there it still finds the outermost crossing.
+    if peak_radius_nm is None:
+        peak_radius_nm = _gradient_peak_radius_km(
+            rmw_nm=rmw_nm,
+            b=b,
+            delta_p_hpa=delta_p_hpa,
+            lat=lat,
+        ) * KM_TO_NM
     last_inside = 0.0
-    r_nm = max(step_nm, rmw_nm)
+    r_nm = max(1e-6, peak_radius_nm)
     while r_nm <= MAX_SEARCH_NM:
         if surface_wind_kt(r_nm * NM_TO_KM, bearing_deg, **kw) >= threshold_kt:
             last_inside = r_nm
@@ -263,13 +293,123 @@ def radius_of_kt(
     return round(last_inside)
 
 
+def _aligned_bearing(*, heading_deg: float, northern: bool) -> float:
+    """Bearing where cyclonic flow and translation point the same way.
+
+    At a fixed radius the radial profile and translation damping do not depend
+    on bearing.  Bearing enters only through the angle between those two
+    vectors, so their aligned bearing is the global maximum of the asymmetric
+    field.  This gives us an exact angular maximum without a coarse bearing
+    grid.
+    """
+    spin = 1.0 if northern else -1.0
+    return (heading_deg + spin * (90.0 + INFLOW_DEG)) % 360.0
+
+
+def _quadrant_peak_bearing(
+    start_deg: float,
+    end_deg: float,
+    *,
+    heading_deg: float,
+    northern: bool,
+) -> float:
+    """Bearing of the maximum wind within one closed quadrant sector."""
+    aligned = _aligned_bearing(heading_deg=heading_deg, northern=northern)
+    # Unwrap the circular bearing beside the ordinary [start, end] interval,
+    # clamp it into the sector, then retain the closest representation.  A
+    # maximum on 0/360 legitimately belongs to both neighbouring quadrants:
+    # NHC defines each quadrant by its maximum, so the shared boundary is data
+    # for both.
+    choices: list[tuple[float, float]] = []
+    for candidate in (aligned - 360.0, aligned, aligned + 360.0):
+        clamped = max(start_deg, min(end_deg, candidate))
+        choices.append((abs(candidate - clamped), clamped % 360.0))
+    return min(choices)[1]
+
+
+def _gradient_peak_radius_km(
+    *,
+    rmw_nm: float,
+    b: float,
+    delta_p_hpa: float,
+    lat: float,
+) -> float:
+    """Actual radial maximum of Holland+Coriolis, at or just inside Rmax."""
+    rmw_km = rmw_nm * NM_TO_KM
+    lo, hi = rmw_km * 1e-3, rmw_km
+    for _ in range(24):
+        left = lo + (hi - lo) / 3.0
+        right = hi - (hi - lo) / 3.0
+        left_wind = gradient_wind_ms(
+            left,
+            rmw_km=rmw_km,
+            b=b,
+            delta_p_hpa=delta_p_hpa,
+            lat=lat,
+        )
+        right_wind = gradient_wind_ms(
+            right,
+            rmw_km=rmw_km,
+            b=b,
+            delta_p_hpa=delta_p_hpa,
+            lat=lat,
+        )
+        if left_wind < right_wind:
+            lo = left
+        else:
+            hi = right
+    return (lo + hi) / 2.0
+
+
+def _intensity_scale(
+    *,
+    vmax_ms: float,
+    rmw_nm: float,
+    b: float,
+    delta_p_hpa: float,
+    lat: float,
+    translation_ms: float,
+) -> float:
+    """Calibrate the surface field to the source maximum wind.
+
+    HURDAT2 ``vmax`` is the authoritative maximum one-minute surface wind.  A
+    pressure-derived Holland profile is a shape, not permission to replace
+    that observation.  The Coriolis term moves the radial maximum slightly
+    inside the nominal Rmax, so a bounded one-dimensional search finds the
+    actual peak rather than assuming it.  On the forward-right aligned bearing
+    the two vectors add directly; scaling that peak to ``vmax - translation``
+    makes the model reproduce the supplied maximum by construction while
+    retaining pressure and B as shape inputs.
+    """
+    rmw_km = rmw_nm * NM_TO_KM
+    peak_radius_km = _gradient_peak_radius_km(
+        rmw_nm=rmw_nm,
+        b=b,
+        delta_p_hpa=delta_p_hpa,
+        lat=lat,
+    )
+    base_surface = gradient_wind_ms(
+        peak_radius_km,
+        rmw_km=rmw_km,
+        b=b,
+        delta_p_hpa=delta_p_hpa,
+        lat=lat,
+    ) * SURFACE_FACTOR
+    if base_surface <= 0.0 or vmax_ms <= 0.0:
+        return 0.0
+    rotational_target = max(0.0, vmax_ms - max(0.0, translation_ms))
+    return rotational_target / base_surface
+
+
 def fit_b_to_r34(
     r34_nm: float,
     *,
     rmw_nm: float,
+    vmax_kt: float,
     delta_p_hpa: float,
     lat: float,
     translation_ms: float = 0.0,
+    heading_deg: float = 0.0,
 ) -> float:
     """Choose the profile shape that reaches 34 kt where the storm actually did.
 
@@ -297,17 +437,37 @@ def fit_b_to_r34(
     comes up short.
     """
     lo, hi = 1.0, 2.5
+    northern = lat >= 0
+    bearing = _aligned_bearing(heading_deg=heading_deg, northern=northern)
+    vmax_ms = max(0.0, vmax_kt) * KT_TO_MS
     for _ in range(28):
         mid = (lo + hi) / 2.0
-        reach = radius_of_kt(
-            34,
-            0.0,
+        intensity_scale = _intensity_scale(
+            vmax_ms=vmax_ms,
             rmw_nm=rmw_nm,
             b=mid,
             delta_p_hpa=delta_p_hpa,
             lat=lat,
             translation_ms=translation_ms,
+        )
+        peak_radius_nm = _gradient_peak_radius_km(
+            rmw_nm=rmw_nm,
+            b=mid,
+            delta_p_hpa=delta_p_hpa,
+            lat=lat,
+        ) * KM_TO_NM
+        reach = radius_of_kt(
+            34,
+            bearing,
+            rmw_nm=rmw_nm,
+            b=mid,
+            delta_p_hpa=delta_p_hpa,
+            lat=lat,
+            translation_ms=translation_ms,
+            heading_deg=heading_deg,
             northern=lat >= 0,
+            intensity_scale=intensity_scale,
+            peak_radius_nm=peak_radius_nm,
             step_nm=5.0,
         )
         if reach > r34_nm:
@@ -352,11 +512,18 @@ def radii_for(
     through the rest of the system and nothing downstream has to know which is
     which. What must not be lost is that the caller knows, and says so.
 
-    A threshold the storm never reaches is omitted rather than returned as
-    zeros, matching `quadrant_polygon_wkt`, which returns None for an empty
-    ring rather than drawing a point.
+    A threshold at or above the source ``vmax`` is omitted even when stale
+    pressure would make an unconstrained parametric profile produce it.  At
+    equality the idealised contour collapses to a zero-area radial maximum;
+    turning one maximum-radius point into a quadrant polygon would invent a
+    wedge of stronger wind.  Every requested threshold strictly below ``vmax``
+    must produce a non-empty radius: failure is raised rather than silently
+    deleting an expected wind band.
     """
     vmax_ms = max(0.0, vmax_kt) * KT_TO_MS
+    eligible_thresholds = tuple(threshold for threshold in thresholds if threshold < vmax_kt)
+    if not eligible_thresholds:
+        return ()
 
     if pressure_mb and pressure_mb < ambient_mb:
         delta_p = ambient_mb - pressure_mb
@@ -369,7 +536,14 @@ def radii_for(
     if delta_p <= 0:
         return ()
 
-    translation_ms = max(0.0, translation_kt) * KT_TO_MS
+    # Translation shapes the asymmetry but cannot create intensity the source
+    # did not report.  HURDAT2 vmax already includes storm motion; applying the
+    # entire forward speed again double-counts it, especially for fast weak or
+    # extratropical fixes.
+    translation_ms = min(
+        max(0.0, translation_kt) * KT_TO_MS * TRANSLATION_ASYMMETRY_FACTOR,
+        vmax_ms * MAX_TRANSLATION_SHARE_OF_VMAX,
+    )
     northern = lat >= 0
     climatological = climatological_r34_nm(vmax_kt=vmax_kt, lat=lat)
     target_r34 = r34_nm if r34_nm else climatological
@@ -394,18 +568,41 @@ def radii_for(
         b = fit_b_to_r34(
             target_r34,
             rmw_nm=rmw,
+            vmax_kt=vmax_kt,
             delta_p_hpa=delta_p,
             lat=lat,
             translation_ms=translation_ms,
+            heading_deg=heading_deg,
         )
     else:
         b = holland_b(vmax_ms=vmax_ms, delta_p_hpa=delta_p, lat=lat)
 
+    intensity_scale = _intensity_scale(
+        vmax_ms=vmax_ms,
+        rmw_nm=rmw,
+        b=b,
+        delta_p_hpa=delta_p,
+        lat=lat,
+        translation_ms=translation_ms,
+    )
+    peak_radius_nm = _gradient_peak_radius_km(
+        rmw_nm=rmw,
+        b=b,
+        delta_p_hpa=delta_p,
+        lat=lat,
+    ) * KM_TO_NM
+
     out: list[Radii] = []
-    for threshold in thresholds:
+    for threshold in eligible_thresholds:
         quad: dict[str, int] = {}
-        for bearing, name in QUADRANTS:
-            quad[name] = int(
+        for start, end, name in QUADRANT_SECTORS:
+            bearing = _quadrant_peak_bearing(
+                start,
+                end,
+                heading_deg=heading_deg,
+                northern=northern,
+            )
+            radius = int(
                 radius_of_kt(
                     threshold,
                     bearing,
@@ -416,10 +613,18 @@ def radii_for(
                     translation_ms=translation_ms,
                     heading_deg=heading_deg,
                     northern=northern,
+                    intensity_scale=intensity_scale,
+                    peak_radius_nm=peak_radius_nm,
                 )
             )
+            quad[name] = radius
         if any(quad.values()):
             out.append(Radii(threshold_kt=threshold, **quad))
+        else:
+            raise ValueError(
+                f"calibrated wind field did not reach {threshold} kt "
+                f"despite source vmax {vmax_kt:g} kt"
+            )
     return tuple(out)
 
 

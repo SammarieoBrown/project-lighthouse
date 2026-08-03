@@ -209,6 +209,8 @@ export type MapViewProps = {
   /** The current advisory. Changes on every step of the replay. */
   snapshot: Snapshot | null;
   base: BaseView;
+  /** Evidence-aware accessible name; a hindcast must never be announced as a forecast. */
+  ariaLabel?: string;
   /** A list selection may centre the map on its district reference point. The
    *  point itself is never drawn; the real parish geometry is highlighted. */
   focus?: MapFocus | null;
@@ -232,6 +234,7 @@ export type MapViewProps = {
 export default function MapView({
   snapshot,
   base,
+  ariaLabel = "Interactive map of the selected replay with unavailable evidence provenance and synthetic modelled impact across Jamaica",
   focus = null,
   onZoomChange,
   onFail,
@@ -736,7 +739,7 @@ export default function MapView({
       ref={container}
       role="region"
       aria-hidden={failed ? true : undefined}
-      aria-label="Interactive map of the selected forecast and modelled impact across Jamaica"
+      aria-label={ariaLabel}
       style={{ width: "100%", height: "100%", display: failed ? "none" : undefined }}
     />
   );

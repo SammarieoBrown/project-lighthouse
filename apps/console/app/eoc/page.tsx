@@ -10,8 +10,9 @@ import { EocConsole } from "./console";
  */
 
 export const metadata = {
-  title: "Lighthouse — EOC console",
-  description: "Posture, wind field and expected damage across the Melissa replay.",
+  title: "Lighthouse — Historical storm replay console",
+  description:
+    "Explore clearly labelled Atlantic hurricane advisory replays and historical hindcasts for Jamaica.",
 };
 
 export default function EocPage() {
