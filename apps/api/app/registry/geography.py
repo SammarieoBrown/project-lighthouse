@@ -88,6 +88,35 @@ def _parish_shapes() -> dict[str, dict[str, Any]]:
     }
 
 
+def parish_names() -> tuple[str, ...]:
+    """Every parish in the boundary dataset, alphabetically.
+
+    ``REPLAY_PARISHES`` is where the storm made landfall, not where the registry
+    is. The console draws the whole island, so it needs the whole list.
+    """
+    return tuple(sorted(_parish_shapes()))
+
+
+@lru_cache(maxsize=1)
+def community_districts() -> dict[tuple[str, str], str]:
+    """``(parish, community)`` to the admin-2 district that contains it.
+
+    A Storm File carries a parish and a community — admin-1 and admin-3. The
+    console groups households at admin-2, which sits between them, and the link
+    is published in the admin-3 attribute table.
+
+    So this is a dictionary lookup rather than a point-in-polygon join against
+    131 district outlines. Same answer, no PostGIS, and no coastal household
+    quietly falling outside every polygon and out of the counts.
+    """
+    return {
+        (_strip(f.attributes["adm1_name"]), _strip(f.attributes["adm3_name"])): _strip(
+            f.attributes["adm2_name"]
+        )
+        for f in read_layer(BOUNDARIES, "jam_admin3")
+    }
+
+
 def load_parishes(names: tuple[str, ...] = REPLAY_PARISHES) -> dict[str, Parish]:
     shapes, population = _parish_shapes(), _parish_population()
 

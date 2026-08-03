@@ -97,6 +97,10 @@ export type Snapshot = {
   wind64: { type: string; coordinates: unknown } | null;
   cone: { type: string; coordinates: unknown } | null;
   track: { type: string; coordinates: number[][] } | null;
+  /** Storm centre for this advisory, `[lon, lat]`. The first track vertex is
+   *  the same point in practice, but the position is what the advisory states
+   *  and the track is a forecast drawn from it. */
+  centre?: [number, number] | null;
   districts: District[];
   /** Only rendered past the zoom switch; absent in the SVG fallback. */
   households?: Household[];
@@ -123,7 +127,7 @@ function radiusOf(n: number, max: number): number {
 }
 
 export function SynopticMap({ snapshot }: { snapshot: Snapshot }) {
-  const centre = snapshot.track?.coordinates?.[0];
+  const centre = snapshot.centre ?? snapshot.track?.coordinates?.[0];
   const biggest = Math.max(...snapshot.districts.map((d) => d.n), 1);
 
   return (

@@ -24,7 +24,25 @@ const MapView = dynamic(() => import("./MapView"), {
   loading: () => <div className={styles.loading}>Loading map…</div>,
 });
 
-export function MapPanel({ snapshot }: { snapshot: Snapshot }) {
+const NOTHING: Snapshot = {
+  parishes: [],
+  wind34: null,
+  wind50: null,
+  wind64: null,
+  cone: null,
+  track: null,
+  districts: [],
+  households: [],
+};
+
+export function MapPanel({
+  snapshot,
+  maxDistrict,
+}: {
+  /** The selected advisory, or null when there is no replay to read. */
+  snapshot: Snapshot | null;
+  maxDistrict: number;
+}) {
   const [satellite, setSatellite] = useState(false);
   const [zoom, setZoom] = useState(7.4);
   const [failed, setFailed] = useState<string | null>(null);
@@ -38,7 +56,7 @@ export function MapPanel({ snapshot }: { snapshot: Snapshot }) {
   if (failed) {
     return (
       <div className={styles.wrap}>
-        <SynopticMap snapshot={snapshot} />
+        <SynopticMap snapshot={snapshot ?? NOTHING} />
         <div className={styles.controls}>
           <span className={styles.scaleNote}>Static map · {failed}</span>
         </div>
@@ -50,6 +68,7 @@ export function MapPanel({ snapshot }: { snapshot: Snapshot }) {
     <div className={styles.wrap}>
       <MapView
         snapshot={snapshot}
+        maxDistrict={maxDistrict}
         satellite={satellite}
         onZoomChange={onZoomChange}
         onFail={onFail}
@@ -72,7 +91,7 @@ export function MapPanel({ snapshot }: { snapshot: Snapshot }) {
       </div>
 
       <noscript>
-        <SynopticMap snapshot={snapshot} />
+        <SynopticMap snapshot={snapshot ?? NOTHING} />
       </noscript>
     </div>
   );

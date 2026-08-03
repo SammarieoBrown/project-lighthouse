@@ -65,7 +65,11 @@ READY_64_WITHIN_H = 72
 #: The parish outlines carry tens of thousands of vertices and the question is
 #: whether a wind field hundreds of kilometres across touches them. Verified,
 #: not assumed: a test compares every advisory against the unsimplified outline.
-_SIMPLIFY_DEG = 0.002
+#:
+#: The console export reduces the same outlines to the same tolerance, and
+#: imports this rather than restating it: a map drawn at one resolution from a
+#: posture decided at another would disagree with itself on screen.
+SIMPLIFY_DEG = 0.002
 
 _AREA_WKB: str | None = None
 
@@ -90,7 +94,7 @@ def replay_area_wkb(session: Session, *, simplify: bool = True) -> str:
     )
     geom = "ST_Union(ST_GeomFromGeoJSON(:area))"
     if simplify:
-        geom = f"ST_SimplifyPreserveTopology({geom}, {_SIMPLIFY_DEG})"
+        geom = f"ST_SimplifyPreserveTopology({geom}, {SIMPLIFY_DEG})"
 
     wkb = session.execute(
         text(f"SELECT encode(ST_AsBinary({geom}), 'hex') AS wkb"), {"area": collection}
@@ -176,10 +180,14 @@ def arrival_hours(session: Session, advisory: Advisory, *, simplify: bool = True
     }
 
 
-def posture_for(session: Session, advisory: Advisory, *, simplify: bool = True) -> Posture:
-    """Four rules, in order of severity. Nothing here is a model."""
-    codes = warning_codes_here(session, advisory, simplify=simplify)
-    arrival = arrival_hours(session, advisory, simplify=simplify)
+def posture_from(codes: set[str], arrival: dict[int, float]) -> Posture:
+    """Four rules, in order of severity. Nothing here is a model.
+
+    Split out from ``posture_for`` so a caller that already holds the codes and
+    the arrival times — the console export wants both on the frame anyway — can
+    reach the same verdict without asking the database for them twice. There is
+    still one definition of what READY means, and it is this function.
+    """
 
     def within(kt: int, hours: float) -> bool:
         return kt in arrival and arrival[kt] <= hours
@@ -195,3 +203,11 @@ def posture_for(session: Session, advisory: Advisory, *, simplify: bool = True) 
     if 34 in arrival:
         return Posture.WATCH
     return Posture.QUIET
+
+
+def posture_for(session: Session, advisory: Advisory, *, simplify: bool = True) -> Posture:
+    """The rules above, against one advisory."""
+    return posture_from(
+        warning_codes_here(session, advisory, simplify=simplify),
+        arrival_hours(session, advisory, simplify=simplify),
+    )

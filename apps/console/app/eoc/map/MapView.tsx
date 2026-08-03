@@ -19,7 +19,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { Snapshot } from "../map";
 import { lighthouseFlavor, pruneLayers, readTokens, retarget } from "./flavor";
-import { dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from "./layers";
+import { applyFrame, dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from "./layers";
 
 /* MapLibre, wired by hand.
  *
@@ -34,10 +34,26 @@ import { dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from "./layers";
  * just looks offline until the day it matters.
  */
 
-/* Served by app/map/[file]/route.ts rather than from public/ — see that
- * file for why the framework's static handler cannot be trusted with Range. */
-const REGION_TILES = "/map/caribbean-z11.pmtiles";
-const ISLAND_TILES = "/map/jamaica-z15.pmtiles";
+/* Where the basemap comes from, and it is two places.
+ *
+ * The archives are 138 MB of fetched-not-committed build output, so a deploy
+ * has no way to produce them and production served 404s for every tile and
+ * every sprite — silently, because the panel falls back to the SVG map and a
+ * static but correct map does not look like a failure. They are published to a
+ * public bucket instead, which serves HTTP Range natively.
+ *
+ * NEXT_PUBLIC_TILES_URL points at that bucket. Read as a literal member
+ * expression because Next inlines these at build time and a computed key is not
+ * inlined — the variable would be undefined in the browser and the failure
+ * would be, again, a map of the open sea.
+ *
+ * Unset means local: the archives come from app/map/[file]/route.ts rather than
+ * public/, because Next's static handler answers the first Range request with
+ * the whole 98 MB body. That route stays, and offline development with it. */
+const TILES_BASE = (process.env.NEXT_PUBLIC_TILES_URL ?? "").replace(/\/+$/, "");
+
+const REGION_ARCHIVE = "caribbean-z11.pmtiles";
+const ISLAND_ARCHIVE = "jamaica-z15.pmtiles";
 
 /* Where the region hands over to the island. Jamaica fills the frame by here,
  * so nobody sees the seam. */
@@ -51,12 +67,27 @@ const COVERED: [[number, number], [number, number]] = [
   [-92.0, 7.0],
   [-57.0, 28.0],
 ];
-const GLYPHS = "/tiles/assets/fonts/{fontstack}/{range}.pbf";
+/* Glyphs and sprites live beside the archives. The fontstack directories have
+ * spaces in their names ("Noto Sans Regular") — the templates are handed to
+ * MapLibre intact and it encodes them, so nothing here builds those URLs by
+ * hand. Committed locally: about a megabyte, and without them the map renders
+ * and silently loses every place name. */
+const ASSETS = "assets/fonts/{fontstack}/{range}.pbf";
 
-// MapLibre 6 rejects a relative sprite URL outright. Resolved against the
-// current origin rather than hard-coded, so this still works offline from a
-// file server, a laptop, or Vercel.
-const SPRITE_PATH = "/tiles/assets/sprites/black";
+// MapLibre 6 rejects a relative sprite URL outright, so both arms are absolute.
+const SPRITE = "assets/sprites/black";
+
+/** The four asset URLs, resolved against the bucket or the local origin. */
+function assetUrls(origin: string) {
+  const local = !TILES_BASE;
+  return {
+    region: local ? `${origin}/map/${REGION_ARCHIVE}` : `${TILES_BASE}/${REGION_ARCHIVE}`,
+    island: local ? `${origin}/map/${ISLAND_ARCHIVE}` : `${TILES_BASE}/${ISLAND_ARCHIVE}`,
+    glyphs: local ? `${origin}/tiles/${ASSETS}` : `${TILES_BASE}/${ASSETS}`,
+    sprite: local ? `${origin}/tiles/${SPRITE}` : `${TILES_BASE}/${SPRITE}`,
+    local,
+  };
+}
 
 // Esri is the online-only satellite fallback: their licence permits live tile
 // use with attribution but prohibits caching outside ArcGIS, so it can never be
@@ -92,17 +123,37 @@ function configureMapLibre() {
 }
 
 export type MapViewProps = {
-  snapshot: Snapshot;
+  /** The current advisory. Changes on every step of the replay. */
+  snapshot: Snapshot | null;
+  /** Homes in the largest district. The circle scale is a share of it, and it
+   *  is static across the storm — so it belongs to the map's construction and
+   *  not to the frame. Passed as a number so the init effect has a primitive
+   *  dependency that does not change when the advisory does. */
+  maxDistrict: number;
   satellite: boolean;
   onZoomChange?: (zoom: number) => void;
   /** Reported upward so the panel can fall back to the SVG map. */
   onFail?: (reason: string) => void;
 };
 
-export default function MapView({ snapshot, satellite, onZoomChange, onFail }: MapViewProps) {
+export default function MapView({ snapshot, maxDistrict, satellite, onZoomChange, onFail }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+
+  /* The frame the map was built with, read once at init and never a dependency
+   * of it. Scrubbing must not rebuild the map: a new MapLibreMap per advisory
+   * refetches the basemap, drops the viewport and flickers the whole panel on
+   * every step. Frames arrive through setData in the effect below. */
+  const latest = useRef(snapshot);
+  latest.current = snapshot;
+
+  /* Our own load flag rather than isStyleLoaded(). That method also returns
+   * false while tiles are still arriving, long after the `load` event has
+   * fired — so a frame applied on `once("load")` after the event would wait for
+   * a callback that is never coming, and the map would sit on an old advisory
+   * with nothing in the console to say why. */
+  const ready = useRef(false);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -115,7 +166,7 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
     // ask the element that is actually inside the themed subtree.
     const tokens = readTokens(container.current);
     const colours = readMapColours(container.current);
-    const maxDistrict = Math.max(...snapshot.districts.map((d) => d.n), 1);
+    const url = assetUrls(window.location.origin);
 
     let instance: MapLibreMap;
     try {
@@ -133,15 +184,15 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
         attributionControl: false,
         style: {
           version: 8,
-          glyphs: GLYPHS,
-          sprite: `${window.location.origin}${SPRITE_PATH}`,
+          glyphs: url.glyphs,
+          sprite: url.sprite,
           sources: {
             // Explicit tile templates rather than `url:`, so MapLibre never
             // waits on a TileJSON round trip through the protocol. The bounds
             // and zoom ranges are things we already know.
             region: {
               type: "vector",
-              tiles: [`pmtiles://${window.location.origin}${REGION_TILES}/{z}/{x}/{y}`],
+              tiles: [`pmtiles://${url.region}/{z}/{x}/{y}`],
               minzoom: 0,
               maxzoom: 11,
               bounds: [-92.0, 7.0, -57.0, 28.0],
@@ -149,13 +200,13 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
             },
             island: {
               type: "vector",
-              tiles: [`pmtiles://${window.location.origin}${ISLAND_TILES}/{z}/{x}/{y}`],
+              tiles: [`pmtiles://${url.island}/{z}/{x}/{y}`],
               minzoom: 0,
               maxzoom: 15,
               bounds: [-78.6, 17.6, -75.9, 18.7],
               attribution: "© OpenStreetMap",
             },
-            ...dataSources(snapshot),
+            ...dataSources(latest.current),
           },
           layers: [
             ...retarget(
@@ -193,6 +244,12 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
     instance.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
 
     instance.on("zoom", () => onZoomChange?.(instance.getZoom()));
+    instance.on("load", () => {
+      ready.current = true;
+      // Whatever advisory is selected by now, not the one this map was built
+      // with. The replay can be scrubbed while the basemap is still coming up.
+      applyFrame(instance, latest.current);
+    });
     instance.on("error", (e) => {
       // Every map error gets logged. MapLibre swallows style failures into this
       // event and renders an empty canvas, which looks exactly like a map of
@@ -200,8 +257,13 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
       // demo. A blank map must never be silent.
       const message = String(e?.error?.message ?? e?.error ?? "unknown");
       console.error("[map]", message, e?.error);
-      if (message.includes(".pmtiles") || message.includes("pmtiles")) {
-        const reason = "basemap tiles not staged — run data/tiles/fetch_basemap.py";
+      if (message.includes("pmtiles")) {
+        // Names the source that is actually configured. Telling somebody on a
+        // deploy to run a local fetch script is a wrong instruction, which is
+        // worse than none.
+        const reason = url.local
+          ? "basemap tiles not staged — run data/tiles/fetch_basemap.py"
+          : `basemap tiles unreachable at ${TILES_BASE}`;
         setFailed(reason);
         onFail?.(reason);
       }
@@ -215,10 +277,20 @@ export default function MapView({ snapshot, satellite, onZoomChange, onFail }: M
       (window as unknown as { lhMap?: MapLibreMap }).lhMap = instance;
     }
     return () => {
+      ready.current = false;
       instance.remove();
       map.current = null;
     };
-  }, [snapshot, onZoomChange, onFail]);
+  }, [maxDistrict, onZoomChange, onFail]);
+
+  /* Every step of the replay lands here: setData on sources that already exist.
+   * No transition and no easing — a playing timeline is a state change, not a
+   * decoration, and rule M1 reserves movement for a summons. */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || !ready.current) return;
+    applyFrame(instance, snapshot);
+  }, [snapshot]);
 
   // Satellite toggles as a layer, not a restyle: rebuilding the style would
   // drop the data layers and the current viewport with them.

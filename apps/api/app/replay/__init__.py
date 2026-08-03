@@ -5,6 +5,6 @@ whatever else was in progress.
 """
 
 from app.replay.driver import Applied, ReplayDriver, ReplayState
-from app.replay.posture import posture_for
+from app.replay.posture import posture_for, posture_from
 
-__all__ = ["Applied", "ReplayDriver", "ReplayState", "posture_for"]
+__all__ = ["Applied", "ReplayDriver", "ReplayState", "posture_for", "posture_from"]
