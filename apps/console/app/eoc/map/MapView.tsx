@@ -49,8 +49,14 @@ import { applyFrame, dataLayers, dataSources, readMapColours, ZOOM_SWITCH } from
  *
  * Unset means local: the archives come from app/map/[file]/route.ts rather than
  * public/, because Next's static handler answers the first Range request with
- * the whole 98 MB body. That route stays, and offline development with it. */
-const TILES_BASE = (process.env.NEXT_PUBLIC_TILES_URL ?? "").replace(/\/+$/, "");
+ * the whole 98 MB body. That route stays, and offline development with it.
+ *
+ * Trimmed before use, and that is not defensive padding. Setting this with
+ * `echo | vercel env add` stores the trailing newline, and the pmtiles protocol
+ * matches its tile URLs with a regex whose `.` does not cross a newline — so the
+ * URL silently fails to parse, every source dies with "Invalid PMTiles protocol
+ * URL", and the map renders as open sea. One invisible byte, whole map gone. */
+const TILES_BASE = (process.env.NEXT_PUBLIC_TILES_URL ?? "").trim().replace(/\/+$/, "");
 
 const REGION_ARCHIVE = "caribbean-z11.pmtiles";
 const ISLAND_ARCHIVE = "jamaica-z15.pmtiles";
