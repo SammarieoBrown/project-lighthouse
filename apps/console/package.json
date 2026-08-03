@@ -6,10 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "predev": "npm run assets",
+    "prebuild": "npm run assets",
+    "assets": "rm -rf public/tiles public/maplibre && mkdir -p public/tiles public/maplibre && cp -R ../../data/tiles/cache/caribbean-z13.pmtiles ../../data/tiles/cache/assets public/tiles/ && cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/maplibre/"
   },
   "dependencies": {
+    "@protomaps/basemaps": "^5.7.2",
+    "maplibre-gl": "^6.1.0",
     "next": "16.2.12",
+    "pmtiles": "^4.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

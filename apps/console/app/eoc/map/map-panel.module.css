@@ -1,0 +1,106 @@
+/* Map panel chrome.
+ *
+ * MapLibre ships its own control styling, which is a light-mode consumer map
+ * aesthetic and belongs to nobody's design system. It is overridden to the
+ * tokens here rather than left alone — half the pixels on this panel would
+ * otherwise be colours we did not choose.
+ */
+
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+}
+
+.controls {
+  position: absolute;
+  top: var(--lh-space-4);
+  left: var(--lh-space-4);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--lh-space-3);
+}
+
+/* Says what a mark currently means. A map that silently changes the meaning of
+ * a circle at some zoom threshold is a map that misreports at every other. */
+.scaleNote {
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lh-quiet);
+  background: color-mix(in srgb, var(--lh-ground) 82%, transparent);
+  padding: var(--lh-space-2) var(--lh-space-3);
+  border-radius: var(--lh-radius);
+}
+
+.toggle {
+  font: inherit;
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: var(--lh-space-2) var(--lh-space-4);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  background: color-mix(in srgb, var(--lh-ground) 82%, transparent);
+  color: var(--lh-quiet);
+  cursor: pointer;
+}
+
+.toggle[aria-pressed="true"] {
+  background: var(--lh-figure);
+  border-color: var(--lh-figure);
+  color: var(--lh-ground);
+}
+
+/* ---- MapLibre's own controls, brought into the system ---- */
+
+.wrap :global(.maplibregl-ctrl-group) {
+  background: color-mix(in srgb, var(--lh-ground) 82%, transparent);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  box-shadow: none;
+}
+
+.wrap :global(.maplibregl-ctrl-group button + button) {
+  border-top: 1px solid var(--lh-rule);
+}
+
+.wrap :global(.maplibregl-ctrl-group button .maplibregl-ctrl-icon) {
+  filter: invert(1);
+  opacity: 0.7;
+}
+
+.wrap :global(.maplibregl-ctrl-scale) {
+  background: transparent;
+  border: 1px solid var(--lh-rule);
+  border-top: none;
+  color: var(--lh-quiet);
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+}
+
+/* Attribution is a legal requirement for OpenStreetMap and NOAA, so it stays —
+ * quiet, but never hidden. */
+.wrap :global(.maplibregl-ctrl-attrib) {
+  background: color-mix(in srgb, var(--lh-ground) 70%, transparent);
+  color: var(--lh-quiet);
+  font-family: var(--lh-font-body);
+  font-size: var(--lh-text-micro);
+}
+
+.wrap :global(.maplibregl-ctrl-attrib a) {
+  color: var(--lh-quiet);
+}

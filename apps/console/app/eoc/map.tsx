@@ -81,6 +81,15 @@ export type District = {
   none: number;
 };
 
+export type Household = {
+  lon: number;
+  lat: number;
+  band: string;
+  parish: string;
+  community: string;
+  roof: string;
+};
+
 export type Snapshot = {
   parishes: { name: string; registry: boolean; geometry: { type: string; coordinates: unknown } }[];
   wind34: { type: string; coordinates: unknown } | null;
@@ -89,6 +98,8 @@ export type Snapshot = {
   cone: { type: string; coordinates: unknown } | null;
   track: { type: string; coordinates: number[][] } | null;
   districts: District[];
+  /** Only rendered past the zoom switch; absent in the SVG fallback. */
+  households?: Household[];
 };
 
 /* A district is coloured by the worst band covering a quarter of its homes.

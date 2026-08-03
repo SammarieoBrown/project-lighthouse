@@ -1,5 +1,6 @@
 import { LighthouseMark } from "../logo";
-import { SynopticMap, type District, type Snapshot } from "./map";
+import { type District, type Snapshot } from "./map";
+import { MapPanel } from "./map/MapPanel";
 import snapshot from "./snapshot.json";
 import styles from "./eoc.module.css";
 
@@ -85,7 +86,7 @@ function totals() {
 /* Where to send people first. A ranked list beats a table of every parish: the
  * question in an operations room is not "what is the distribution", it is
  * "where do we go", and that is the top of a list. */
-function worstHit(limit = 7): District[] {
+function worstHit(limit = 5): District[] {
   return [...SNAPSHOT.districts]
     .filter((d) => d.destroyed + d.major > 0)
     .sort((a, b) => b.destroyed * 2 + b.major - (a.destroyed * 2 + a.major))
@@ -211,7 +212,7 @@ export default function EocPrototype() {
           </div>
 
           <div className={styles.mapCanvas}>
-            <SynopticMap snapshot={SNAPSHOT} />
+            <MapPanel snapshot={SNAPSHOT} />
           </div>
 
           <div className={styles.legend}>
@@ -293,13 +294,17 @@ export default function EocPrototype() {
             </div>
             {feed(advisory.number).map((row, i) => (
               <div className={styles.tline} key={i}>
-                <span className={styles.tlineTime}>{row.at}</span>
-                <span className={styles.tlineSubject}>
-                  <span className={styles.tlineWho}>{row.who} </span>
+                <span className={styles.tlineEvent}>
                   {row.what}
+                  {/* Only when a person decided. Everything else is automatic,
+                      and a column saying so on every row is noise that hides
+                      the one line where a human was required. */}
+                  {row.disposer ? (
+                    <span className={styles.tlineDisposer}>{row.disposer}</span>
+                  ) : null}
                 </span>
-                <span className={row.disposer ? styles.tlineDisposer : styles.tlineAuto}>
-                  {row.disposer ?? "auto"}
+                <span className={styles.tlineMeta}>
+                  {row.at} · {row.who}
                 </span>
               </div>
             ))}

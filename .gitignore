@@ -15,6 +15,18 @@ next-env.d.ts
 
 # browser-automation scratch output
 .playwright-mcp/
+
+# Map tiles are staged into the console's public dir at build time from
+# data/tiles/cache, which is the checksummed copy. Two copies in git would
+# double the repo for no gain, and the staged one has no manifest.
+apps/console/public/tiles/
+apps/console/public/maplibre/
+
+# The basemap archive is 69 MB and rebuildable in twelve seconds from a pinned
+# upstream build, so it is fetched rather than committed. Its checksum still
+# lives in data/tiles/cache/manifest.sha256, which is committed — the point of
+# the manifest is that your copy matches, not that git carries it.
+data/tiles/cache/*.pmtiles
 # os / editor
 .DS_Store
 .idea/

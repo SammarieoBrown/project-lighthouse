@@ -30,8 +30,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-import manifest  # noqa: E402  — sibling module, not an installed package
+sys.path.insert(0, str(Path(__file__).parents[1]))
+import manifest  # noqa: E402  — shared by every cache, not an installed package
 
 CACHE = manifest.CACHE
 JAMAICA = CACHE / "jamaica"

@@ -160,6 +160,7 @@
 .panelHead {
   display: flex;
   background: transparent;
+  padding-block: var(--lh-space-3);
   align-items: baseline;
   gap: var(--lh-space-4);
   padding: var(--lh-space-2) var(--lh-space-5);
@@ -236,7 +237,7 @@
  * top of the column. Removed rather than defended. */
 .gate {
   border-bottom: 1px solid var(--lh-rule);
-  padding: var(--lh-space-4) var(--lh-space-5);
+  padding: var(--lh-space-5);
 }
 
 .gateRole {
@@ -307,28 +308,29 @@
   }
 }
 
+/* A ruled row per line turned this column into a spreadsheet. Rules belong to
+ * Register III, and this is a ranked list — so it separates by space, and the
+ * only hairline left is the one dividing this panel from the next. */
 .counts {
   border-bottom: 1px solid var(--lh-rule);
+  padding: var(--lh-space-4) 0 var(--lh-space-5);
 }
 
 .countRow {
   display: grid;
-  grid-template-columns: 1fr 7ch 7ch;
-  gap: var(--lh-space-3);
+  grid-template-columns: 1fr 6ch 6ch;
+  gap: var(--lh-space-4);
   padding: var(--lh-space-2) var(--lh-space-5);
-  border-bottom: 1px solid var(--lh-rule);
   font-size: var(--lh-text-fine);
   align-items: baseline;
 }
 
-.countRow:last-child { border-bottom: 0; }
-
 .countRow.head {
-  border-bottom-color: var(--lh-rule);
   color: var(--lh-quiet);
   font-size: var(--lh-text-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  padding-bottom: var(--lh-space-3);
 }
 
 .countValue {
@@ -343,24 +345,50 @@
 }
 
 /* The transition line, compressed. Same object as the audit trail and the
- * donor journey, at the operator's level of detail. */
+ * donor journey, at the operator's level of detail.
+ *
+ * Two lines rather than three columns. The event is what an operator reads; the
+ * time and the agent are provenance and belong underneath it, quiet. And the
+ * old third column said "auto" on nearly every row — a full column of repeated
+ * noise whose only job was to make the rare human decision stand out. Silence
+ * does that better: a disposer appears only when a person decided. */
 .tline {
   display: grid;
-  grid-template-columns: 6ch minmax(0, 1fr) 11ch;
-  gap: var(--lh-space-3);
-  padding: var(--lh-space-2) var(--lh-space-5);
-  border-bottom: 1px solid var(--lh-rule);
-  font-family: var(--lh-font-data);
-  font-variant-numeric: tabular-nums;
+  gap: var(--lh-space-1);
+  padding: var(--lh-space-3) var(--lh-space-5);
   font-size: var(--lh-text-fine);
-  align-items: baseline;
+  line-height: var(--lh-leading-base);
 }
 
-.tlineTime { color: var(--lh-quiet); }
-.tlineWho { color: var(--lh-quiet); }
-.tlineSubject { color: var(--lh-figure); }
-.tlineDisposer { color: var(--lh-figure); text-align: right; }
-.tlineAuto { color: var(--lh-quiet); text-align: right; }
+.tlineEvent {
+  color: var(--lh-figure);
+  display: flex;
+  align-items: baseline;
+  gap: var(--lh-space-3);
+  justify-content: space-between;
+}
+
+.tlineMeta {
+  font-family: var(--lh-font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.04em;
+}
+
+/* Only rendered when a human disposed. That is the whole point of the field. */
+.tlineDisposer {
+  flex: none;
+  font-family: var(--lh-font-display);
+  font-weight: 700;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lh-ground);
+  background: var(--lh-figure);
+  padding: 1px var(--lh-space-2);
+  border-radius: var(--lh-radius);
+}
 
 /* ---------- controller — Register II ---------- */
 
