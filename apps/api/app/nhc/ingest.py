@@ -86,7 +86,7 @@ def _geojson_geography(session: Session, geometry: dict | None) -> str | None:
 def _raw_payload(
     advisory: ForecastAdvisory,
     probabilities: WindProbabilities | None,
-    watch_codes: list[str],
+    watch_codes: list[dict],
     sources: dict[str, str],
 ) -> dict:
     """Everything parsed, kept whole.
@@ -119,7 +119,10 @@ def _raw_payload(
             }
             for location in (probabilities.locations if probabilities else ())
         },
-        "watches_warnings": sorted(set(watch_codes)),
+        # Distinct codes for a quick read, and the segments with their geometry
+        # so "is there a hurricane warning *here*" is answerable at all.
+        "watch_codes": sorted({w["code"] for w in watch_codes}),
+        "watches_warnings": watch_codes,
         "source": sources,
     }
 
@@ -176,10 +179,17 @@ def ingest_storm(
             track = _geojson_geography(session, lines[0].geometry) if lines else None
             # Absent once every watch has been discontinued — an empty list is
             # the correct reading of "no warnings in effect".
+            #
+            # Kept **with their geometry**. A watch/warning bundle covers the
+            # whole storm, so at advisory 1 the hurricane watch is for
+            # Hispaniola and has nothing to say about Jamaica. Storing bare
+            # codes throws away the only thing that makes them answerable — it
+            # put the replay on READY five days out because somewhere, someone
+            # was under a watch.
             watch_codes = [
-                f.attributes["TCWW"]
+                {"code": f.attributes["TCWW"], "geometry": f.geometry}
                 for f in read_layer(gis, "_ww_wwlin", required=False)
-                if f.attributes.get("TCWW")
+                if f.attributes.get("TCWW") and f.geometry
             ]
 
         row = existing.get((number, False))

@@ -196,7 +196,14 @@ def test_raw_keeps_the_source_and_the_probabilities(melissa, session_module):
     assert raw["source"]["fstadv"] == "al132025.fstadv.025.txt"
     assert raw["pressure_mb"] == 908
     assert raw["storm_type"] == "HURRICANE"
-    assert "HWR" in raw["watches_warnings"]
+    assert "HWR" in raw["watch_codes"]
+
+    # Segments keep their geometry, because a watch/warning bundle covers the
+    # whole storm. Without it, "is there a hurricane warning here" can only be
+    # answered "somewhere, yes" — which put the replay on READY five days out.
+    segments = raw["watches_warnings"]
+    assert segments and all("code" in s and "geometry" in s for s in segments)
+    assert any(s["geometry"]["type"] in ("LineString", "MultiLineString") for s in segments)
 
     montego = raw["probabilities"]["MONTEGO BAY"]
     assert montego["64"]["cumulative"]["36"] == 63
