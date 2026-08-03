@@ -16,6 +16,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS_DIR = REPO_ROOT / "packages" / "contracts"
 SCHEMA_SQL = CONTRACTS_DIR / "schema.sql"
 
+#: The committed Hurricane Melissa advisory cache. Committed rather than fetched
+#: so the replay is byte-identical everywhere and makes no network calls on
+#: stage; see data/replay/README.md.
+REPLAY_CACHE = REPO_ROOT / "data" / "replay" / "cache"
+MELISSA = REPLAY_CACHE / "al132025"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
