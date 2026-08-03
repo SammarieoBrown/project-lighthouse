@@ -10,7 +10,7 @@ down and avoids holding Neon awake purely to ask whether anything happened.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
@@ -97,6 +97,25 @@ def fail(session: Session, job: AgentJob, error: str) -> None:
     session.flush()
 
 
+def park(session: Session, job: AgentJob, reason: str, *, retry_after_s: int = 60) -> None:
+    """Put a job back without spending a retry.
+
+    For work that is not failing, only unhandled — the replay deliberately
+    enqueues jobs for agents that have not been written yet, so the backlog is
+    waiting for them the moment they land. Running that through ``fail`` burns
+    five attempts against a handler that was never going to answer and marks the
+    job DEAD, which is the opposite of waiting.
+
+    ``run_after`` keeps the worker from spinning on the same unhandled job.
+    """
+    job.last_error = reason[:2000]
+    job.locked_by = None
+    job.locked_at = None
+    job.status = JobStatus.QUEUED
+    job.run_after = datetime.now(UTC) + timedelta(seconds=retry_after_s)
+    session.flush()
+
+
 def pending_count(session: Session) -> int:
     """Backlog depth. Surfaced on the console so a queue that is falling behind
     is visible rather than inferred (NFR-P-02: degrade by delay, never by loss)."""
@@ -105,4 +124,4 @@ def pending_count(session: Session) -> int:
     ).scalar_one()
 
 
-__all__ = ["enqueue", "claim_job", "complete", "fail", "pending_count", "CHANNEL"]
+__all__ = ["enqueue", "claim_job", "complete", "fail", "park", "pending_count", "CHANNEL"]

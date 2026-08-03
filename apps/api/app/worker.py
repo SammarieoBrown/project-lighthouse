@@ -1,9 +1,10 @@
 """Worker entrypoint — ``python -m app.worker``.
 
 Claims jobs with ``FOR UPDATE SKIP LOCKED`` and dispatches them to agent
-handlers. Phase 0 ships the loop with no agents registered: an unknown job type
-parks the job rather than crashing the worker, so Matthew can land agents one at
-a time without the loop needing to change.
+handlers. An unknown job type parks the job rather than crashing the worker, so
+agents land one at a time without the loop needing to change — and so the
+replay can enqueue work for an agent that does not exist yet and have it waiting
+when it does.
 
 Each job runs in its own transaction. A handler that raises leaves the job
 retryable and the database untouched.
@@ -65,11 +66,21 @@ def run_once(worker_id: str) -> bool:
             return False
         job_id, job_type, payload = job.id, job.job_type, dict(job.payload)
 
-    try:
-        handler = HANDLERS.get(job_type)
-        if handler is None:
-            raise LookupError(f"no handler registered for {job_type}")
+    handler = HANDLERS.get(job_type)
+    if handler is None:
+        # Not a failure — unhandled. The replay enqueues work for agents that
+        # have not been written yet so the backlog is waiting when they land,
+        # and running that through the retry path would burn five attempts
+        # against a handler that was never going to answer, then mark the job
+        # DEAD. Park it instead and say so once.
+        log.info("no handler for %s yet — parking job %s", job_type, job_id)
+        with session_scope() as session:
+            unhandled = session.get(AgentJob, job_id)
+            if unhandled is not None:
+                queue.park(session, unhandled, f"no handler registered for {job_type}")
+        return True
 
+    try:
         with session_scope() as session:
             handler(session, payload)
             done = session.get(AgentJob, job_id)
@@ -86,9 +97,24 @@ def run_once(worker_id: str) -> bool:
     return True
 
 
+def load_handlers() -> dict[str, Callable[[Session, dict], None]]:
+    """Import the agents so their decorators run.
+
+    Imported here rather than at module scope because every handler imports
+    ``register`` from this module, and doing it at the top would be a circular
+    import. The cost of getting this wrong is quiet: the worker starts, claims
+    jobs, finds no handler, and parks every one of them.
+    """
+    from app import agents  # noqa: F401  — importing registers the handlers
+
+    return HANDLERS
+
+
 def main() -> None:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
+    load_handlers()
+    log.info("handlers registered: %s", ", ".join(sorted(HANDLERS)) or "none")
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
 
