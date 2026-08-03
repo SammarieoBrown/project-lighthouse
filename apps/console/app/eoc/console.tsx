@@ -272,7 +272,7 @@ export function EocConsole() {
                 built exactly once. Its district scale is fixed at construction
                 and a second build would refetch the basemap. */}
             {state.status === "loading" ? null : (
-              <MapPanel snapshot={snapshot} maxDistrict={maxDistrict} />
+              <MapPanel snapshot={snapshot} maxDistrict={maxDistrict} advisoryIndex={index} />
             )}
           </div>
 

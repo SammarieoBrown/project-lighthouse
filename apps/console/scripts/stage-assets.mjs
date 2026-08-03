@@ -53,11 +53,20 @@ for (const file of ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"]) {
 // --- basemap + glyphs: optional ---
 const cache = join(repo, "data/tiles/cache");
 const archives = ["caribbean-z11.pmtiles", "jamaica-z15.pmtiles"];
+// Ours, and separately optional. A clone that has not built it should still
+// get a working basemap — only the structures view goes missing, and the
+// panel says so. Bundling it with the two above would mean one absent file
+// silently downgrades the whole map to the SVG fallback.
+const extras = ["structures-z15.pmtiles"];
 const assets = join(cache, "assets");
 const present = archives.filter((name) => existsSync(join(cache, name)));
 
 if (present.length === archives.length) {
   for (const name of archives) cpSync(join(cache, name), join(archiveDir, name));
+  for (const name of extras) {
+    if (existsSync(join(cache, name))) cpSync(join(cache, name), join(archiveDir, name));
+    else console.warn(`stage-assets: ${name} absent — the structures view will be empty.`);
+  }
   if (existsSync(assets)) cpSync(assets, join(publicTiles, "assets"), { recursive: true });
   console.log(`stage-assets: basemap staged (${archives.join(", ")})`);
 } else {

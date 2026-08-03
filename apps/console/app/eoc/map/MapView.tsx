@@ -62,6 +62,10 @@ const TILES_BASE = (process.env.NEXT_PUBLIC_TILES_URL ?? "").trim().replace(/\/+
 
 const REGION_ARCHIVE = "caribbean-z11.pmtiles";
 const ISLAND_ARCHIVE = "jamaica-z15.pmtiles";
+/* Ours, not Protomaps'. Every building on the island carrying the advisory at
+ * which it first enters each wind band — the only way to colour a footprint by
+ * the storm, since a basemap building has no attribute to join on. */
+const STRUCTURES_ARCHIVE = "structures-z15.pmtiles";
 
 /* Where the region hands over to the island. Jamaica fills the frame by here,
  * so nobody sees the seam. */
@@ -91,6 +95,9 @@ function assetUrls(origin: string) {
   return {
     region: local ? `${origin}/map/${REGION_ARCHIVE}` : `${TILES_BASE}/${REGION_ARCHIVE}`,
     island: local ? `${origin}/map/${ISLAND_ARCHIVE}` : `${TILES_BASE}/${ISLAND_ARCHIVE}`,
+    structures: local
+      ? `${origin}/map/${STRUCTURES_ARCHIVE}`
+      : `${TILES_BASE}/${STRUCTURES_ARCHIVE}`,
     glyphs: local ? `${origin}/tiles/${ASSETS}` : `${TILES_BASE}/${ASSETS}`,
     sprite: local ? `${origin}/tiles/${SPRITE}` : `${TILES_BASE}/${SPRITE}`,
     local,
@@ -159,12 +166,19 @@ export type MapViewProps = {
    *  dependency that does not change when the advisory does. */
   maxDistrict: number;
   base: BaseView;
+  /** Index of the selected advisory. The structures layer colours a building
+   *  by comparing its first-entry index against this, so it is a number and
+   *  not the frame — one paint expression per step, never a per-feature
+   *  update across 1.8 million buildings. */
+  advisoryIndex: number;
   onZoomChange?: (zoom: number) => void;
   /** Reported upward so the panel can fall back to the SVG map. */
   onFail?: (reason: string) => void;
 };
 
-export default function MapView({ snapshot, maxDistrict, base, onZoomChange, onFail }: MapViewProps) {
+export default function MapView({
+  snapshot, maxDistrict, base, advisoryIndex, onZoomChange, onFail,
+}: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -359,6 +373,75 @@ export default function MapView({ snapshot, maxDistrict, base, onZoomChange, onF
 
     if (ready.current) apply();
     else instance.once("load", apply);
+  }, [base]);
+
+  /* Our own building tileset, added only when asked for.
+   *
+   * Lazy on purpose: it is the largest archive on the map and most sessions
+   * never open the structures view, so the source is created on first entry
+   * rather than at init. Left in place afterwards — a second visit should not
+   * refetch what is already in the browser.
+   *
+   * The colour is a paint expression over each building's first-entry index,
+   * so a step of the replay costs one setPaintProperty rather than a feature
+   * state per building. Absent keys mean the storm never reached it, and
+   * `has` keeps that distinct from "reached it at advisory 0". */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance || base !== "structures") return;
+
+    const paint = (): unknown => {
+      const c = readMapColours(container.current ?? undefined);
+      const reached = (key: string) => ["all", ["has", key], ["<=", ["get", key], advisoryIndex]];
+      return [
+        "case",
+        reached("f64"), c.hazard64,
+        reached("f50"), c.hazard50,
+        reached("f34"), c.hazard34,
+        buildingWeights(readTokens(container.current ?? undefined)).subject,
+      ];
+    };
+
+    const apply = () => {
+      if (!instance.getSource("lh-structures")) {
+        instance.addSource("lh-structures", {
+          type: "vector",
+          url: `pmtiles://${assetUrls(window.location.origin).structures}`,
+          attribution: "Buildings © Google, Microsoft, OpenStreetMap",
+        });
+      }
+      if (!instance.getLayer("lh-structures")) {
+        // Beneath the hazard bands so the forecast still reads over the top,
+        // and beneath the storm centre so the eye is never hidden by a town.
+        instance.addLayer(
+          {
+            id: "lh-structures",
+            type: "fill",
+            source: "lh-structures",
+            "source-layer": "structures",
+            paint: { "fill-color": paint() as never, "fill-opacity": 0.95 },
+          },
+          "lh-cone-fill",
+        );
+      } else {
+        instance.setPaintProperty("lh-structures", "fill-color", paint() as never);
+      }
+    };
+
+    if (ready.current) apply();
+    else instance.once("load", apply);
+  }, [base, advisoryIndex]);
+
+  // The structures layer is hidden rather than removed when the view changes,
+  // so its tiles survive a round trip through the other two bases.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance?.getLayer("lh-structures")) return;
+    instance.setLayoutProperty(
+      "lh-structures",
+      "visibility",
+      base === "structures" ? "visible" : "none",
+    );
   }, [base]);
 
   // Satellite toggles as a layer, not a restyle: rebuilding the style would

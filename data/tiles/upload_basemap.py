@@ -40,7 +40,9 @@ CACHE = HERE / "cache"
 ASSETS = CACHE / "assets"
 REPO = HERE.parents[1]
 
-ARCHIVES = ("caribbean-z11.pmtiles", "jamaica-z15.pmtiles")
+#: structures-z15 is ours, built by app.registry.building_tiles from the
+#: footprint parquet. The other two come from Protomaps via fetch_basemap.py.
+ARCHIVES = ("caribbean-z11.pmtiles", "jamaica-z15.pmtiles", "structures-z15.pmtiles")
 
 CONTENT_TYPES = {
     ".pmtiles": "application/octet-stream",

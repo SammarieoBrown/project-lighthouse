@@ -44,10 +44,12 @@ const NOTHING: Snapshot = {
 export function MapPanel({
   snapshot,
   maxDistrict,
+  advisoryIndex,
 }: {
   /** The selected advisory, or null when there is no replay to read. */
   snapshot: Snapshot | null;
   maxDistrict: number;
+  advisoryIndex: number;
 }) {
   const [base, setBase] = useState<BaseView>("map");
   const [zoom, setZoom] = useState(7.4);
@@ -90,6 +92,7 @@ export function MapPanel({
         snapshot={snapshot}
         maxDistrict={maxDistrict}
         base={base}
+        advisoryIndex={advisoryIndex}
         onZoomChange={onZoomChange}
         onFail={onFail}
       />

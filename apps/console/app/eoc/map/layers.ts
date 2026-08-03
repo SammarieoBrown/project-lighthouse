@@ -32,11 +32,14 @@ export const ZOOM_SWITCH = 12.5;
  * only view where the buildings are the subject rather than the backdrop. */
 export type BaseView = "map" | "satellite" | "structures";
 
-/* Buildings live only in the island archive and Protomaps carries them from
- * about z14. The region archive stops at z11 and has none, so below this the
- * structures view has nothing to show and must say so rather than presenting an
- * empty screen as an answer. */
-export const STRUCTURES_MIN_ZOOM = 13.5;
+/* Where our own structures tileset begins. It is built z9–15, so the wide
+ * shot — a whole parish of settlement at once — works, which is the entire
+ * reason we build it rather than styling the basemap's buildings. Those start
+ * at about z14 and carry no attribute to colour by.
+ *
+ * Below z9 there is genuinely nothing to draw, and the panel says so rather
+ * than offering an empty screen as an answer. */
+export const STRUCTURES_MIN_ZOOM = 9;
 
 export type MapColours = {
   hazard34: string;
