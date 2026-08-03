@@ -120,8 +120,12 @@
 }
 
 /* Time to Relief reads as a dash, not a zero. Nothing has been delivered yet,
- * and a zero would be a measurement of something that has not happened. */
-.readingValue[data-empty="true"] {
+ * and a zero would be a measurement of something that has not happened. The
+ * same treatment carries every other reading with nothing behind it: a missing
+ * probability, a screen with no advisory selected. Quiet has no hue, which is
+ * the point — absence is a state, not a severity. */
+.readingValue[data-empty="true"],
+.postureValue[data-empty="true"] {
   color: var(--lh-quiet);
 }
 
@@ -427,6 +431,30 @@
   background: var(--lh-figure);
   color: var(--lh-ground);
   border-color: var(--lh-figure);
+}
+
+/* Nothing to play. Dimmed, which is what dimming is for — rule C4 reserves it
+ * for disabled and gives staleness a treatment of its own. */
+.transportButton:disabled {
+  color: var(--lh-quiet);
+  border-color: var(--lh-rule);
+  cursor: default;
+}
+
+/* The rate label changes width as it cycles, and a control that shoves the
+ * scrub bar sideways when pressed is movement with no state behind it. Held at
+ * the widest setting instead. */
+.rate {
+  min-width: 11ch;
+  text-align: center;
+}
+
+/* Why there is no timeline, in the slot the timeline would have occupied. */
+.absent {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--lh-text-fine);
+  color: var(--lh-quiet);
 }
 
 /* The scrub bar is also the story: a stacked bar per advisory showing how many
