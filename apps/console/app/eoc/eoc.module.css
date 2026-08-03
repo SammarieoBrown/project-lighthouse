@@ -20,21 +20,29 @@
   overflow: hidden;
 }
 
-/* ---------- chrome — Register II ---------- */
+/* ---------- chrome — Register II ----------
+ *
+ * Signage carries hierarchy through weight and width, not boxes. The first
+ * version put a rule between every reading and a two-pixel edge above and
+ * below, and the whole screen came out looking like a spreadsheet — which is
+ * Register III's language, borrowed by a panel that is not Register III.
+ * Separation here is space and type size. The only rules left are the ones that
+ * mark a boundary between registers.
+ */
 
 .chrome {
   display: flex;
   align-items: stretch;
-  gap: 0;
-  border-bottom: 2px solid var(--lh-figure);
+  gap: var(--lh-space-6);
+  padding-right: var(--lh-space-5);
+  border-bottom: 1px solid var(--lh-rule);
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: var(--lh-space-3);
-  padding: var(--lh-space-3) var(--lh-space-5);
-  border-right: 1px solid var(--lh-rule);
+  padding: var(--lh-space-4) var(--lh-space-5);
 }
 
 .brandName {
@@ -50,12 +58,11 @@
 /* The posture block is the largest thing on the screen on purpose. It is the
  * one value that changes what everybody in the room does next. */
 .posture {
-  padding: var(--lh-space-3) var(--lh-space-6);
-  border-right: 1px solid var(--lh-rule);
+  padding: var(--lh-space-4) 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-width: 22ch;
+  min-width: 16ch;
 }
 
 .postureLabel {
@@ -84,15 +91,14 @@
   display: flex;
   flex: 1;
   align-items: stretch;
+  gap: var(--lh-space-7);
 }
 
 .reading {
-  padding: var(--lh-space-3) var(--lh-space-5);
-  border-right: 1px solid var(--lh-rule);
+  padding: var(--lh-space-4) 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-width: 11ch;
 }
 
 .readingValue {
@@ -105,11 +111,12 @@
 
 .readingLabel {
   font-size: var(--lh-text-micro);
+  max-width: 21ch;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lh-quiet);
   margin-top: var(--lh-space-2);
-  white-space: nowrap;
+  line-height: 1.3;
 }
 
 /* Time to Relief reads as a dash, not a zero. Nothing has been delivered yet,
@@ -120,7 +127,7 @@
 
 .stale {
   margin-left: auto;
-  padding: var(--lh-space-3) var(--lh-space-5);
+  padding: var(--lh-space-4) 0;
   text-align: right;
   font-family: var(--lh-font-data);
   font-size: var(--lh-text-micro);
@@ -152,6 +159,7 @@
 
 .panelHead {
   display: flex;
+  background: transparent;
   align-items: baseline;
   gap: var(--lh-space-4);
   padding: var(--lh-space-2) var(--lh-space-5);
@@ -316,6 +324,7 @@
 .countRow:last-child { border-bottom: 0; }
 
 .countRow.head {
+  border-bottom-color: var(--lh-rule);
   color: var(--lh-quiet);
   font-size: var(--lh-text-micro);
   letter-spacing: 0.08em;
@@ -356,7 +365,7 @@
 /* ---------- controller — Register II ---------- */
 
 .controller {
-  border-top: 2px solid var(--lh-figure);
+  border-top: 1px solid var(--lh-rule);
   background: var(--lh-ground);
   position: relative;
   z-index: 1;

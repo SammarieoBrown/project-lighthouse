@@ -42,7 +42,7 @@ const BANDS = [
   { key: "DESTROYED", label: "Destroyed", colour: "var(--lh-critical)" },
   { key: "MAJOR", label: "Major", colour: "var(--lh-elevated)" },
   { key: "MINOR", label: "Minor", colour: "var(--lh-watch)" },
-  { key: "NONE", label: "No damage predicted", colour: "transparent" },
+  { key: "NONE", label: "No damage expected", colour: "transparent" },
 ] as const;
 
 function counts() {
@@ -69,6 +69,35 @@ function byParish(band: string) {
  */
 type FeedRow = { at: string; who: string; what: string; disposer: string | null };
 
+/* NHC ships watch and warning state as four-letter codes. They are the right
+ * thing to store and the wrong thing to show: an operator reading a screen at
+ * 3am should not be translating HWR in their head. Strongest first — the whole
+ * point of a warning is that it outranks a watch.
+ *
+ * Rule from the design doc, and it applies to every surface: name things by
+ * what people recognise, never by how the system is built. */
+const WATCH_WARNING: [string, string][] = [
+  ["HWR", "Hurricane warning"],
+  ["HWA", "Hurricane watch"],
+  ["TWR", "Tropical storm warning"],
+  ["TWA", "Tropical storm watch"],
+];
+
+function strongestWarning(codes: string[]): string | null {
+  const held = new Set(codes);
+  for (const [code, plain] of WATCH_WARNING) {
+    if (held.has(code)) return plain;
+  }
+  return null;
+}
+
+const POSTURE_PLAIN: Record<string, string> = {
+  QUIET: "Quiet",
+  WATCH: "Watch",
+  READY: "Ready",
+  ACT: "Act",
+};
+
 function feed(uptoAdvisory: string): FeedRow[] {
   const rows: FeedRow[] = [];
   let posture: string | null = null;
@@ -81,27 +110,34 @@ function feed(uptoAdvisory: string): FeedRow[] {
     if (t.posture !== posture) {
       rows.push({
         at,
-        who: "Sentinel",
-        what: `posture ${posture ?? "—"} → ${t.posture} · adv ${t.n}`,
+        who: "Forecast Sentinel",
+        what: posture
+          ? `Posture raised to ${POSTURE_PLAIN[t.posture]} · advisory ${t.n}`
+          : `Posture set to ${POSTURE_PLAIN[t.posture]} · advisory ${t.n}`,
         disposer: t.posture === "ACT" ? "Director" : null,
       });
       posture = t.posture;
     }
 
-    const nowCodes = (t.watch_codes ?? []).join(",");
-    if (nowCodes !== codes) {
-      if (nowCodes) {
-        rows.push({ at, who: "Sentinel", what: `NHC ${nowCodes} in effect · adv ${t.n}`, disposer: null });
+    const strongest = strongestWarning(t.watch_codes ?? []) ?? "";
+    if (strongest !== codes) {
+      if (strongest) {
+        rows.push({
+          at,
+          who: "Forecast Sentinel",
+          what: `${strongest} in effect for these parishes · advisory ${t.n}`,
+          disposer: null,
+        });
       }
-      codes = nowCodes;
+      codes = strongest;
     }
 
     // A jump worth an operator's attention, not every recalculation.
     if (t.destroyed - destroyed >= 25 || (destroyed === 0 && t.destroyed > 0)) {
       rows.push({
         at,
-        who: "RiskMapper",
-        what: `${t.destroyed} households now predicted destroyed · adv ${t.n}`,
+        who: "Risk Mapper",
+        what: `${t.destroyed} homes now expected to be destroyed · advisory ${t.n}`,
         disposer: null,
       });
     }
@@ -142,20 +178,20 @@ export default function EocPrototype() {
 
         <div className={styles.readings}>
           <div className={styles.reading}>
-            <span className={styles.readingValue}>{position.max_wind_kt}</span>
-            <span className={styles.readingLabel}>kt sustained</span>
+            <span className={styles.readingValue}>{position.max_wind_kt} kt</span>
+            <span className={styles.readingLabel}>Sustained wind</span>
           </div>
           <div className={styles.reading}>
-            <span className={styles.readingValue}>{advisory.pressure_mb}</span>
-            <span className={styles.readingLabel}>mb</span>
+            <span className={styles.readingValue}>{advisory.pressure_mb} mb</span>
+            <span className={styles.readingLabel}>Central pressure</span>
           </div>
           <div className={styles.reading}>
             <span className={styles.readingValue}>{montego}%</span>
-            <span className={styles.readingLabel}>64kt Montego Bay</span>
+            <span className={styles.readingLabel}>Hurricane wind at Montego Bay</span>
           </div>
           <div className={styles.reading}>
             <span className={styles.readingValue}>{band.DESTROYED + band.MAJOR}</span>
-            <span className={styles.readingLabel}>households major+</span>
+            <span className={styles.readingLabel}>Homes at major risk or worse</span>
           </div>
           <div className={styles.reading}>
             {/* Not zero. Nothing has been delivered, and a zero would be a
@@ -163,7 +199,7 @@ export default function EocPrototype() {
             <span className={styles.readingValue} data-empty="true">
               —
             </span>
-            <span className={styles.readingLabel}>time to relief</span>
+            <span className={styles.readingLabel}>Time to relief · none yet</span>
           </div>
         </div>
 
@@ -178,9 +214,10 @@ export default function EocPrototype() {
       <div className={styles.body}>
         <section className={styles.mapPanel}>
           <div className={styles.panelHead}>
-            <span>Synoptic · wind field and registry</span>
+            <span>Forecast wind and registered homes</span>
             <span>
-              <b>{SNAPSHOT.households.length}</b> households · St Elizabeth, Westmoreland
+              <b>{SNAPSHOT.households.length}</b> homes registered in St Elizabeth and Westmoreland ·
+              12 other parishes not yet covered
             </span>
           </div>
 
@@ -203,7 +240,7 @@ export default function EocPrototype() {
               </span>
             ))}
             <span className={styles.legendItem}>
-              Contours · 34 / 50 / 64 kt forecast wind field
+              Rings · wind reaching 34, 50 and 64 knots
             </span>
           </div>
         </section>
@@ -231,7 +268,7 @@ export default function EocPrototype() {
 
           <div className={styles.counts}>
             <div className={`${styles.countRow} ${styles.head}`}>
-              <span>Predicted damage</span>
+              <span>Expected damage</span>
               <span className={styles.countValue}>St Eliz</span>
               <span className={styles.countValue}>West</span>
             </div>
@@ -251,7 +288,7 @@ export default function EocPrototype() {
 
           <div className={styles.feed}>
             <div className={styles.panelHead}>
-              <span>Register · transition line</span>
+              <span>What happened, and who decided it</span>
             </div>
             {feed(advisory.number).map((row, i) => (
               <div className={styles.tline} key={i}>

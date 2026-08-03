@@ -14,10 +14,14 @@
 
 type Ring = [number, number][];
 
-/* Framed on the two parishes plus the storm centre to their south. Wider than
- * this and the registry becomes a speck in an ocean of contour; tighter and the
- * thing bearing down on it is off screen. */
-const VIEW = { minLon: -78.85, maxLon: -77.05, minLat: 16.35, maxLat: 18.75 };
+/* All of Jamaica, plus the storm centre to its south.
+ *
+ * Framed on the two registry parishes alone, the island read as an unplaceable
+ * blob — you could not tell what country you were looking at. The rest of
+ * Jamaica is drawn as context precisely because it has no registry: the shape
+ * of the coverage gap is information an operator needs, and hiding it would
+ * make a two-parish pilot look like national coverage. */
+const VIEW = { minLon: -78.9, maxLon: -75.9, minLat: 16.2, maxLat: 18.9 };
 const W = 1000;
 const H = (W * (VIEW.maxLat - VIEW.minLat)) / (VIEW.maxLon - VIEW.minLon);
 
@@ -42,6 +46,25 @@ function pathOf(rings: Ring[]): string {
       return `M ${points.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(" L ")} Z`;
     })
     .join(" ");
+}
+
+/* Bounding box of the largest ring, in screen space.
+ *
+ * Labels go outside it, not on the centroid. A parish name set over a parish
+ * packed with five hundred household dots is unreadable however heavy the halo
+ * — and the dots are the data, so the label moves rather than them. */
+function boxOf(rings: Ring[]): { x0: number; y0: number; x1: number; y1: number; cx: number } | null {
+  const largest = rings.reduce<Ring | null>(
+    (best, r) => (best === null || r.length > best.length ? r : best),
+    null,
+  );
+  if (!largest) return null;
+  const points = largest.map((c) => project(c as [number, number]));
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
+  return { x0, y0: Math.min(...ys), x1, y1: Math.max(...ys), cx: (x0 + x1) / 2 };
 }
 
 /* Topmost point of the largest ring — where a contour label goes on a chart. */
@@ -85,7 +108,7 @@ export type Household = {
 };
 
 export type Snapshot = {
-  parishes: { name: string; geometry: { type: string; coordinates: unknown } }[];
+  parishes: { name: string; registry: boolean; geometry: { type: string; coordinates: unknown } }[];
   wind34: { type: string; coordinates: unknown } | null;
   wind50: { type: string; coordinates: unknown } | null;
   wind64: { type: string; coordinates: unknown } | null;
@@ -159,18 +182,56 @@ export function SynopticMap({ snapshot }: { snapshot: Snapshot }) {
         strokeOpacity="0.7"
       />
 
-      {/* Parishes — the ground truth the registry sits in. */}
+      {/* Parishes. The two we hold a registry for are drawn solid; the other
+          twelve are outline only, because a parish we cannot see into is not
+          the same as a parish with nobody at risk. */}
       {snapshot.parishes.map((p) => (
         <path
           key={p.name}
           d={pathOf(ringsOf(p.geometry))}
-          fill="var(--lh-panel)"
-          fillOpacity="0.9"
+          fill={p.registry ? "var(--lh-panel)" : "var(--lh-ground)"}
+          fillOpacity={p.registry ? 0.95 : 0.55}
           stroke="var(--lh-figure)"
-          strokeWidth="1.25"
-          strokeOpacity="0.85"
+          strokeWidth={p.registry ? 1.25 : 0.75}
+          strokeOpacity={p.registry ? 0.9 : 0.3}
         />
       ))}
+
+      {/* Name the parishes we cover. A map that does not say where you are
+          looking is a shape, and the first question anybody asks of this screen
+          is which parishes these are. */}
+      {snapshot.parishes
+        .filter((p) => p.registry)
+        .map((p) => {
+          const box = boxOf(ringsOf(p.geometry));
+          if (!box) return null;
+          // Westmoreland sits above its neighbour, so its name goes above and
+          // St Elizabeth's below. Both clear of the dots.
+          const above = p.name === "Westmoreland";
+          return (
+            <text
+              key={`label-${p.name}`}
+              x={box.cx}
+              y={above ? box.y0 - 12 : box.y1 + 24}
+              fontSize="15"
+              fill="var(--lh-figure)"
+              /* Knocked out of what is behind it. A place name sitting in a
+                 field of household dots is unreadable, and the halo is what
+                 every printed chart has used for the same reason. */
+              stroke="var(--lh-ground)"
+              strokeWidth="5"
+              strokeLinejoin="round"
+              paintOrder="stroke"
+              fontFamily="var(--lh-font-display)"
+              fontWeight="700"
+              textAnchor="middle"
+              letterSpacing="0.6"
+              style={{ textTransform: "uppercase" }}
+            >
+              {p.name.replace("Saint ", "St ")}
+            </text>
+          );
+        })}
 
       {/* Households. Unaffected first so the ones that matter draw on top. */}
       {["NONE", "MINOR", "MAJOR", "DESTROYED"].map((band) => (
@@ -184,7 +245,7 @@ export function SynopticMap({ snapshot }: { snapshot: Snapshot }) {
                   key={i}
                   cx={x}
                   cy={y}
-                  r={band === "NONE" ? 2.5 : 4}
+                  r={band === "NONE" ? 2 : 3.25}
                   fill={BAND_FILL[band]}
                   stroke={band === "NONE" ? "var(--lh-quiet)" : "none"}
                   strokeWidth="1"
