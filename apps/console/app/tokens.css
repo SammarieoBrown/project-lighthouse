@@ -143,6 +143,27 @@
    * text. On this ground the two coincide; on the light ground they do not,
    * and collapsing them there would either fail the floor or turn amber into
    * brown. Same meaning, two jobs. */
+  /* HAZARD RAMP — Register I only, and a stated exception to rule C1.
+   *
+   * Wind field bands are hazard extent, not severity, and every weather chart
+   * ever printed colours them. Drawn in tone alone they were invisible; drawn
+   * in the meaning hues they would take red away from the one thing that means
+   * a human must act now.
+   *
+   * So they get their own scale, and it is cool where the meaning hues are
+   * warm. Hazard reads blue, impact reads red and amber, and the two layers
+   * separate at a glance on a map that has to carry both — which is the reason
+   * we shift off NHC's own yellow-orange-red ramp. Their chart shows one layer.
+   * Ours shows two.
+   *
+   * Scoped to the map canvas and used nowhere else. That scoping is the whole
+   * exception: outside Register I these values do not appear, and inside it the
+   * meaning hues are reserved for the household marks.
+   */
+  --lh-hazard-34: #3f6c96;
+  --lh-hazard-50: #5590c9;
+  --lh-hazard-64: #7fb8f0;
+
   --lh-critical: #e4574a;        /* act now — ACT posture, URGENT triage, blocking gate */
   --lh-critical-text: #e4574a;
   --lh-elevated: #e8a33d;        /* attend soon — READY posture, HIGH triage, open approval */

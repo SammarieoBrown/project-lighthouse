@@ -449,3 +449,17 @@
   text-transform: uppercase;
   color: var(--lh-quiet);
 }
+
+/* Worst-hit list: place over parish, no rule between them. */
+.countPlace {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.countParish {
+  font-size: var(--lh-text-micro);
+  color: var(--lh-quiet);
+  letter-spacing: 0.04em;
+}

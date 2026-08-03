@@ -1,95 +1,55 @@
 import { LighthouseMark } from "../logo";
-import { SynopticMap, type Snapshot } from "./map";
+import { SynopticMap, type District, type Snapshot } from "./map";
 import snapshot from "./snapshot.json";
 import styles from "./eoc.module.css";
 
 /* EOC console — Act 1, design prototype.
  *
- * Everything on this screen is real: the parish outlines, the wind field, the
- * 500 households and their predicted bands all come from the replay at Melissa
- * advisory 25, exported from the database. Nothing is wired to the API yet, and
- * the controls do not move the replay — this exists to decide what the screen
- * looks like before the plumbing goes in, so that the plumbing only has to be
- * done once.
+ * Everything is real: parish outlines, the wind field, 2,000 registered homes
+ * across all fourteen parishes and their expected damage, exported from the
+ * replay at Melissa advisory 25. Nothing is wired to the API yet and the
+ * transport controls do not move anything — this exists to settle the screen
+ * before the plumbing goes in, so the plumbing is only done once.
  *
- * Reviewed against docs/design/lighthouse-design-rules.md. One register per
- * panel; four hues, meaning-named; one moving element, and it is the open human
- * gate. If any of that has drifted, the screen is wrong, not the rules.
+ * Reviewed against docs/design/lighthouse-design-rules.md.
  */
 
 export const metadata = {
   title: "Lighthouse — EOC console",
-  description: "Act 1 design prototype: posture, wind field, household risk.",
+  description: "Act 1 design prototype: posture, wind field, expected damage.",
+};
+
+type Timeline = {
+  n: string;
+  at: string;
+  destroyed: number;
+  major: number;
+  minor: number;
+  none: number;
+  posture: string;
+  watch_codes: string[];
 };
 
 const SNAPSHOT = snapshot as unknown as Snapshot & {
-  timeline: {
-    n: string; at: string;
-    destroyed: number; major: number; minor: number; none: number;
-    posture: string; watch_codes: string[];
-  }[];
+  timeline: Timeline[];
   advisory: {
     number: string;
     issued_at: string;
     pressure_mb: number;
-    watch_codes: string[];
     positions: { lat: number; lon: number; max_wind_kt: number; gust_kt: number }[];
     probabilities: Record<string, Record<string, { cumulative: Record<string, number> }>>;
   };
 };
 
-const BANDS = [
-  { key: "DESTROYED", label: "Destroyed", colour: "var(--lh-critical)" },
-  { key: "MAJOR", label: "Major", colour: "var(--lh-elevated)" },
-  { key: "MINOR", label: "Minor", colour: "var(--lh-watch)" },
-  { key: "NONE", label: "No damage expected", colour: "transparent" },
-] as const;
-
-function counts() {
-  const out: Record<string, number> = { DESTROYED: 0, MAJOR: 0, MINOR: 0, NONE: 0 };
-  for (const h of SNAPSHOT.households) out[h.band] = (out[h.band] ?? 0) + 1;
-  return out;
-}
-
-function byParish(band: string) {
-  const out: Record<string, number> = {};
-  for (const h of SNAPSHOT.households) {
-    if (h.band === band) out[h.parish] = (out[h.parish] ?? 0) + 1;
-  }
-  return out;
-}
-
-/* The feed is built from the same replay the map is drawn from, so what is
- * listed is what actually happened rather than plausible-looking filler.
- *
- * It emits on *change*, not on tick. One line per advisory saying "assessed
- * 500" forty-one times is a feed nobody reads, and a feed nobody reads is where
- * the line that mattered goes unnoticed. An operator wants the four moments the
- * posture moved and the handful of times the number in danger jumped.
- */
-type FeedRow = { at: string; who: string; what: string; disposer: string | null };
-
-/* NHC ships watch and warning state as four-letter codes. They are the right
- * thing to store and the wrong thing to show: an operator reading a screen at
- * 3am should not be translating HWR in their head. Strongest first — the whole
- * point of a warning is that it outranks a watch.
- *
- * Rule from the design doc, and it applies to every surface: name things by
- * what people recognise, never by how the system is built. */
+/* NHC ships watch and warning state as four-letter codes. Right to store, wrong
+ * to show: nobody should be translating HWR in their head at 3am. Strongest
+ * first, because the point of a warning is that it outranks a watch. */
 const WATCH_WARNING: [string, string][] = [
   ["HWR", "Hurricane warning"],
   ["HWA", "Hurricane watch"],
   ["TWR", "Tropical storm warning"],
   ["TWA", "Tropical storm watch"],
 ];
-
-function strongestWarning(codes: string[]): string | null {
-  const held = new Set(codes);
-  for (const [code, plain] of WATCH_WARNING) {
-    if (held.has(code)) return plain;
-  }
-  return null;
-}
 
 const POSTURE_PLAIN: Record<string, string> = {
   QUIET: "Quiet",
@@ -98,10 +58,49 @@ const POSTURE_PLAIN: Record<string, string> = {
   ACT: "Act",
 };
 
-function feed(uptoAdvisory: string): FeedRow[] {
+function strongestWarning(codes: string[]): string | null {
+  const held = new Set(codes);
+  for (const [code, plain] of WATCH_WARNING) if (held.has(code)) return plain;
+  return null;
+}
+
+/* Fixed locale, because the server renders in whatever locale Node was started
+ * with and the browser hydrates in the user's — and the two disagreeing about a
+ * thousands separator is a hydration mismatch that regenerates the whole tree. */
+const nf = new Intl.NumberFormat("en-JM");
+
+function totals() {
+  return SNAPSHOT.districts.reduce(
+    (a, d) => ({
+      homes: a.homes + d.n,
+      destroyed: a.destroyed + d.destroyed,
+      major: a.major + d.major,
+      minor: a.minor + d.minor,
+      none: a.none + d.none,
+    }),
+    { homes: 0, destroyed: 0, major: 0, minor: 0, none: 0 },
+  );
+}
+
+/* Where to send people first. A ranked list beats a table of every parish: the
+ * question in an operations room is not "what is the distribution", it is
+ * "where do we go", and that is the top of a list. */
+function worstHit(limit = 7): District[] {
+  return [...SNAPSHOT.districts]
+    .filter((d) => d.destroyed + d.major > 0)
+    .sort((a, b) => b.destroyed * 2 + b.major - (a.destroyed * 2 + a.major))
+    .slice(0, limit);
+}
+
+/* The feed emits on change, not on tick. Forty-one lines saying "assessed
+ * 2,000" is a feed nobody reads, and a feed nobody reads is where the line that
+ * mattered goes unnoticed. */
+type FeedRow = { at: string; who: string; what: string; disposer: string | null };
+
+function feed(upto: string): FeedRow[] {
   const rows: FeedRow[] = [];
   let posture: string | null = null;
-  let codes = "";
+  let warning = "";
   let destroyed = 0;
 
   for (const t of SNAPSHOT.timeline) {
@@ -111,61 +110,50 @@ function feed(uptoAdvisory: string): FeedRow[] {
       rows.push({
         at,
         who: "Forecast Sentinel",
-        what: posture
-          ? `Posture raised to ${POSTURE_PLAIN[t.posture]} · advisory ${t.n}`
-          : `Posture set to ${POSTURE_PLAIN[t.posture]} · advisory ${t.n}`,
+        what: `${posture ? "Posture raised to" : "Posture set to"} ${POSTURE_PLAIN[t.posture]}`,
         disposer: t.posture === "ACT" ? "Director" : null,
       });
       posture = t.posture;
     }
 
     const strongest = strongestWarning(t.watch_codes ?? []) ?? "";
-    if (strongest !== codes) {
+    if (strongest !== warning) {
       if (strongest) {
-        rows.push({
-          at,
-          who: "Forecast Sentinel",
-          what: `${strongest} in effect for these parishes · advisory ${t.n}`,
-          disposer: null,
-        });
+        rows.push({ at, who: "Forecast Sentinel", what: `${strongest} in effect`, disposer: null });
       }
-      codes = strongest;
+      warning = strongest;
     }
 
-    // A jump worth an operator's attention, not every recalculation.
-    if (t.destroyed - destroyed >= 25 || (destroyed === 0 && t.destroyed > 0)) {
+    if (t.destroyed - destroyed >= 60 || (destroyed === 0 && t.destroyed > 0)) {
       rows.push({
         at,
         who: "Risk Mapper",
-        what: `${t.destroyed} homes now expected to be destroyed · advisory ${t.n}`,
+        what: `${nf.format(t.destroyed)} homes now expected to be destroyed`,
         disposer: null,
       });
     }
     destroyed = t.destroyed;
 
-    if (t.n === uptoAdvisory) break;
+    if (t.n === upto) break;
   }
-
   return rows.reverse();
 }
 
 export default function EocPrototype() {
-  const band = counts();
+  const t = totals();
   const advisory = SNAPSHOT.advisory;
   const position = advisory.positions[0];
   const issued = new Date(advisory.issued_at);
-  const current = SNAPSHOT.timeline.findIndex((t) => t.n === advisory.number);
+  const current = SNAPSHOT.timeline.findIndex((x) => x.n === advisory.number);
   const montego = advisory.probabilities["MONTEGO BAY"]?.["64"]?.cumulative?.["48"];
 
   return (
-    // The console is dark because an EOC is read in a dim room during a storm,
-    // often with the lights down and a projector running. That is a product
-    // decision, so the surface states it rather than asking the viewer.
+    // The console is dark because an EOC is read in a dim room during a storm.
+    // A product decision, so the surface states it rather than asking.
     <main className={styles.screen} data-theme="dark">
-      {/* ------------ chrome: Register II ------------ */}
       <header className={styles.chrome}>
         <div className={styles.brand}>
-          <LighthouseMark size={26} title="Lighthouse" />
+          <LighthouseMark size={24} title="Lighthouse" />
           <span className={styles.brandName}>Lighthouse</span>
         </div>
 
@@ -190,12 +178,14 @@ export default function EocPrototype() {
             <span className={styles.readingLabel}>Hurricane wind at Montego Bay</span>
           </div>
           <div className={styles.reading}>
-            <span className={styles.readingValue}>{band.DESTROYED + band.MAJOR}</span>
+            <span className={styles.readingValue}>
+              {nf.format(t.destroyed + t.major)}
+            </span>
             <span className={styles.readingLabel}>Homes at major risk or worse</span>
           </div>
           <div className={styles.reading}>
-            {/* Not zero. Nothing has been delivered, and a zero would be a
-                measurement of something that has not happened. */}
+            {/* Not zero. Nothing has been delivered, and a zero would measure
+                something that has not happened. */}
             <span className={styles.readingValue} data-empty="true">
               —
             </span>
@@ -203,21 +193,20 @@ export default function EocPrototype() {
           </div>
         </div>
 
-        {/* Staleness is a first-class state, not an afterthought. */}
         <div className={styles.stale}>
-          <span>Advisory {advisory.number} · {issued.toISOString().slice(0, 16).replace("T", " ")}Z</span>
+          <span>
+            Advisory {advisory.number} · {issued.toISOString().slice(0, 16).replace("T", " ")}Z
+          </span>
           <span>Live · next advisory 21:00Z</span>
         </div>
       </header>
 
-      {/* ------------ body ------------ */}
       <div className={styles.body}>
         <section className={styles.mapPanel}>
           <div className={styles.panelHead}>
-            <span>Forecast wind and registered homes</span>
+            <span>Forecast wind and expected damage</span>
             <span>
-              <b>{SNAPSHOT.households.length}</b> homes registered in St Elizabeth and Westmoreland ·
-              12 other parishes not yet covered
+              <b>{nf.format(t.homes)}</b> homes registered across all 14 parishes
             </span>
           </div>
 
@@ -226,21 +215,29 @@ export default function EocPrototype() {
           </div>
 
           <div className={styles.legend}>
-            {BANDS.map((b) => (
-              <span key={b.key} className={styles.legendItem}>
-                <span
-                  className={styles.legendDot}
-                  style={{
-                    background: b.colour,
-                    border: b.key === "NONE" ? "1px solid var(--lh-quiet)" : "none",
-                  }}
-                />
-                {b.label}
-                <span className={styles.legendCount}>{band[b.key]}</span>
-              </span>
-            ))}
             <span className={styles.legendItem}>
-              Rings · wind reaching 34, 50 and 64 knots
+              <span className={styles.legendDot} style={{ background: "var(--lh-critical)" }} />
+              Mostly destroyed
+              <span className={styles.legendCount}>{nf.format(t.destroyed)} homes</span>
+            </span>
+            <span className={styles.legendItem}>
+              <span className={styles.legendDot} style={{ background: "var(--lh-elevated)" }} />
+              Major damage
+              <span className={styles.legendCount}>{nf.format(t.major)} homes</span>
+            </span>
+            <span className={styles.legendItem}>
+              <span
+                className={styles.legendDot}
+                style={{ border: "1px solid var(--lh-quiet)" }}
+              />
+              Minor or none
+              <span className={styles.legendCount}>
+                {nf.format(t.minor + t.none)} homes
+              </span>
+            </span>
+            <span className={styles.legendItem}>Circle size · homes registered there</span>
+            <span className={styles.legendItem} style={{ color: "var(--lh-hazard-50)" }}>
+              Blue bands · wind reaching 34, 50 and 64 knots
             </span>
           </div>
         </section>
@@ -251,10 +248,12 @@ export default function EocPrototype() {
             <span className={`${styles.gateRole} ${styles.gatePending}`}>
               Director · awaiting approval
             </span>
-            <h2 className={styles.gateAsk}>Send alert cascade to 432 households</h2>
+            <h2 className={styles.gateAsk}>
+              Send alert cascade to {nf.format(t.destroyed + t.major)} homes
+            </h2>
             <p className={styles.gateDetail}>
               Hurricane warning in effect. Patois and English, WhatsApp with SMS
-              fallback. Proposed by AlertAgent from advisory {advisory.number}.
+              fallback. Proposed from advisory {advisory.number}.
             </p>
             <div className={styles.gateActions}>
               <button type="button" className={styles.gateButton}>
@@ -268,22 +267,24 @@ export default function EocPrototype() {
 
           <div className={styles.counts}>
             <div className={`${styles.countRow} ${styles.head}`}>
-              <span>Expected damage</span>
-              <span className={styles.countValue}>St Eliz</span>
-              <span className={styles.countValue}>West</span>
+              <span>Worst hit right now</span>
+              <span className={styles.countValue}>Destr.</span>
+              <span className={styles.countValue}>Major</span>
             </div>
-            {BANDS.map((b) => {
-              const p = byParish(b.key);
-              return (
-                <div className={styles.countRow} key={b.key}>
-                  <span style={{ color: b.key === "NONE" ? "var(--lh-quiet)" : b.colour }}>
-                    {b.label}
-                  </span>
-                  <span className={styles.countValue}>{p["Saint Elizabeth"] ?? 0}</span>
-                  <span className={styles.countValue}>{p["Westmoreland"] ?? 0}</span>
-                </div>
-              );
-            })}
+            {worstHit().map((d) => (
+              <div className={styles.countRow} key={`${d.parish}-${d.district}`}>
+                <span className={styles.countPlace}>
+                  {d.district}
+                  <span className={styles.countParish}>{d.parish.replace("Saint ", "St ")}</span>
+                </span>
+                <span className={styles.countValue} style={{ color: "var(--lh-critical)" }}>
+                  {d.destroyed || "—"}
+                </span>
+                <span className={styles.countValue} style={{ color: "var(--lh-elevated)" }}>
+                  {d.major || "—"}
+                </span>
+              </div>
+            ))}
           </div>
 
           <div className={styles.feed}>
@@ -298,7 +299,7 @@ export default function EocPrototype() {
                   {row.what}
                 </span>
                 <span className={row.disposer ? styles.tlineDisposer : styles.tlineAuto}>
-                  {row.disposer ?? "— auto"}
+                  {row.disposer ?? "auto"}
                 </span>
               </div>
             ))}
@@ -306,7 +307,6 @@ export default function EocPrototype() {
         </aside>
       </div>
 
-      {/* ------------ controller: Register II ------------ */}
       <footer className={styles.controller}>
         <div className={styles.transport}>
           <button type="button" className={styles.transportButton} aria-pressed="false">
@@ -320,26 +320,26 @@ export default function EocPrototype() {
           </button>
         </div>
 
-        {/* The scrub bar is the story: households by predicted band, per
-            advisory, left to right. The shape of the escalation is the control. */}
+        {/* The scrub bar is the story: homes by expected damage per advisory,
+            left to right, so the shape of the escalation is the control. */}
         <div className={styles.timeline} role="group" aria-label="Replay timeline">
-          {SNAPSHOT.timeline.map((t, i) => {
-            const total = t.destroyed + t.major + t.minor + t.none || 1;
+          {SNAPSHOT.timeline.map((x, i) => {
+            const total = x.destroyed + x.major + x.minor + x.none || 1;
             return (
               <button
                 type="button"
-                key={t.n}
+                key={x.n}
                 className={styles.tick}
                 data-current={i === current}
-                aria-label={`Advisory ${t.n}: ${t.destroyed} destroyed, ${t.major} major`}
-                title={`Advisory ${t.n}`}
+                aria-label={`Advisory ${x.n}: ${x.destroyed} destroyed, ${x.major} major`}
+                title={`Advisory ${x.n}`}
               >
-                <span className={styles.tickNone} style={{ height: `${(t.none / total) * 100}%` }} />
-                <span className={styles.tickMinor} style={{ height: `${(t.minor / total) * 100}%` }} />
-                <span className={styles.tickMajor} style={{ height: `${(t.major / total) * 100}%` }} />
+                <span className={styles.tickNone} style={{ height: `${(x.none / total) * 100}%` }} />
+                <span className={styles.tickMinor} style={{ height: `${(x.minor / total) * 100}%` }} />
+                <span className={styles.tickMajor} style={{ height: `${(x.major / total) * 100}%` }} />
                 <span
                   className={styles.tickDestroyed}
-                  style={{ height: `${(t.destroyed / total) * 100}%` }}
+                  style={{ height: `${(x.destroyed / total) * 100}%` }}
                 />
               </button>
             );
@@ -348,7 +348,7 @@ export default function EocPrototype() {
 
         <div className={styles.clock}>
           {issued.toISOString().slice(11, 16)}Z
-          <span className={styles.clockLabel}>Storm time · adv {advisory.number} of 41</span>
+          <span className={styles.clockLabel}>Storm time · advisory {advisory.number} of 41</span>
         </div>
       </footer>
     </main>
