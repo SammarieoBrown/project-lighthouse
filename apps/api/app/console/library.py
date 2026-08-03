@@ -55,8 +55,12 @@ def _describe(session: Session, external_ref: str) -> dict[str, Any]:
             """
             SELECT e.name,
                    count(*) FILTER (WHERE NOT a.observed) AS advisories,
-                   min(a.issued_at) AS first_at,
-                   max(a.issued_at) AS last_at,
+                   -- Forecast rows only. The best-track row's issued_at is set
+                   -- to now() at ingest, because a post-season reanalysis has
+                   -- no advisory time of its own — leave it in and Melissa's
+                   -- date range ends today rather than in October 2025.
+                   min(a.issued_at) FILTER (WHERE NOT a.observed) AS first_at,
+                   max(a.issued_at) FILTER (WHERE NOT a.observed) AS last_at,
                    bool_or(coalesce((a.raw->>'hindcast')::boolean, false)) AS hindcast,
                    bool_or(a.raw->>'size_source' = 'modelled') AS modelled_size
             FROM hazard_event e

@@ -1,0 +1,28 @@
+{
+  "default": "al132025",
+  "generated_at": "2026-08-03T18:28:09.575951Z",
+  "storms": [
+    {
+      "advisories": 41,
+      "bytes": 1297180,
+      "file": "al132025.json",
+      "from": "2025-10-21T15:00:00Z",
+      "id": "al132025",
+      "kind": "advisory",
+      "name": "Hurricane Melissa",
+      "size_source": "measured",
+      "to": "2025-10-31T15:00:00Z"
+    },
+    {
+      "advisories": 49,
+      "bytes": 892075,
+      "file": "al081988.json",
+      "from": "1988-09-08T18:00:00Z",
+      "id": "al081988",
+      "kind": "hindcast",
+      "name": "Hurricane Gilbert 1988",
+      "size_source": "modelled",
+      "to": "1988-09-20T00:00:00Z"
+    }
+  ]
+}
