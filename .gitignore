@@ -44,3 +44,5 @@ data/tiles/cache/*.pmtiles
 # python build artefacts
 *.egg-info/
 .pytest_cache/
+.vercel
+.env*.local
