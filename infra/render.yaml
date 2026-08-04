@@ -36,6 +36,10 @@ services:
           envVarKey: RENDER_EXTERNAL_URL
       - key: INTAKE_HAZARD_EXTERNAL_REF
         value: al132025
+      # Explicit demo-only executor. It never contacts a payment provider and
+      # every resulting receipt states that no real funds moved.
+      - key: DISBURSEMENT_EXECUTOR_MODE
+        value: simulated
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
@@ -73,3 +77,26 @@ services:
           envVarKey: RENDER_EXTERNAL_URL
       - key: INTAKE_HAZARD_EXTERNAL_REF
         value: al132025
+      - key: TWILIO_ACCOUNT_SID
+        fromService:
+          type: web
+          name: project-lighthouse-api
+          envVarKey: TWILIO_ACCOUNT_SID
+      - key: TWILIO_API_KEY_SID
+        sync: false
+      - key: TWILIO_API_KEY_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: lighthouse-media
+      - key: INTAKE_TRANSCRIPTION_PROVIDER
+        value: cloudflare_workers_ai
+      - key: INTAKE_TRANSCRIPTION_MODEL
+        value: "@cf/openai/whisper-large-v3-turbo"
+      - key: CLOUDFLARE_AI_API_TOKEN
+        sync: false

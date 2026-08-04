@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -166,6 +167,27 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
                     {"schema": migrated_schema},
                 ).scalars()
             )
+            verification_indexes = set(
+                connection.execute(
+                    text(
+                        "SELECT indexname FROM pg_indexes "
+                        "WHERE schemaname = :schema AND tablename = 'verification'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+            verification_guard = connection.execute(
+                text(
+                    """
+                    SELECT pg_get_functiondef(p.oid)
+                      FROM pg_proc p
+                      JOIN pg_namespace n ON n.oid = p.pronamespace
+                     WHERE n.nspname = :schema
+                       AND p.proname = 'verification_snapshot_guard'
+                    """
+                ),
+                {"schema": migrated_schema},
+            ).scalar_one()
     finally:
         engine.dispose()
 
@@ -205,6 +227,11 @@ def test_alembic_upgrade_reaches_head_with_current_contract(migrated_schema: str
         "approval_recent_reauth_chk",
         "approval_request_pair_chk",
     } <= approval_constraints
+    assert "verification_overrides_uidx" in verification_indexes
+    assert (
+        "verification override must bind latest agent review evidence"
+        in verification_guard
+    )
 
 
 def test_alembic_incremental_0003_to_0004_creates_digest_markers(
@@ -254,3 +281,218 @@ def test_alembic_incremental_0003_to_0004_creates_digest_markers(
         # Leave the shared migration fixture at head even when an assertion fails.
         command.upgrade(config, "head")
         engine.dispose()
+
+
+def test_0009_refuses_agent_rows_that_claim_override_authority() -> None:
+    schema = f"lh_verification_migration_{uuid.uuid4().hex[:10]}"
+    admin = create_engine(get_settings().sqlalchemy_url, poolclass=NullPool, future=True)
+    config = _alembic_config()
+    config.attributes["schema"] = schema
+    event_id, storm_file_id, claim_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    parent_id, forged_id = uuid.uuid4(), uuid.uuid4()
+    signals = {
+        name: {"present": False, "score": None, "evidence": {}}
+        for name in (
+            "hazard_sufficiency",
+            "satellite_change",
+            "neighbour_corroboration",
+            "registry_match",
+            "media_integrity",
+        )
+    }
+
+    try:
+        with admin.begin() as connection:
+            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+        command.upgrade(config, "head")
+        command.downgrade(config, "0008_act3_settlement")
+
+        isolated = create_engine(
+            get_settings().sqlalchemy_url,
+            poolclass=NullPool,
+            future=True,
+            connect_args={"options": f"-csearch_path={schema},public"},
+        )
+        try:
+            with isolated.begin() as connection:
+                connection.execute(
+                    text("INSERT INTO hazard_event (id, name) VALUES (:id, 'test')"),
+                    {"id": event_id},
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO storm_file (
+                          id, phone_hash, state, structure, people, synthetic
+                        ) VALUES (
+                          :id, :phone_hash, 'AFFECTED', '{}'::jsonb, '{}'::jsonb, true
+                        )
+                        """
+                    ),
+                    {
+                        "id": storm_file_id,
+                        "phone_hash": f"migration-{storm_file_id.hex}",
+                    },
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO claim (
+                          id, claim_ref, storm_file_id, hazard_event_id, channel
+                        ) VALUES (
+                          :id, :claim_ref, :storm_file_id, :event_id, 'test'
+                        )
+                        """
+                    ),
+                    {
+                        "id": claim_id,
+                        "claim_ref": f"MIG-{claim_id.hex[:12]}",
+                        "storm_file_id": storm_file_id,
+                        "event_id": event_id,
+                    },
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO verification (
+                          id, claim_id, signals, confidence, verdict, actor_kind,
+                          agent_name, model_version, threshold_version, rationale,
+                          capped, created_at
+                        ) VALUES (
+                          :parent_id, :claim_id, CAST(:signals AS jsonb), 0.2,
+                          'REVIEW', 'AGENT', 'verification_agent', 'test-v1',
+                          'threshold-v1', 'parent', true, '2026-08-03T12:00:00Z'
+                        )
+                        """
+                    ),
+                    {
+                        "parent_id": parent_id,
+                        "claim_id": claim_id,
+                        "signals": json.dumps(signals),
+                    },
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO verification (
+                          id, claim_id, signals, confidence, verdict, actor_kind,
+                          agent_name, model_version, threshold_version, rationale,
+                          capped, overrides_id, created_at
+                        ) VALUES (
+                          :forged_id, :claim_id, CAST(:signals AS jsonb), 0.2,
+                          'REVIEW', 'AGENT', 'verification_agent', 'test-v1',
+                          'threshold-v1', 'forged agent override', true,
+                          :parent_id, '2026-08-03T12:00:01Z'
+                        )
+                        """
+                    ),
+                    {
+                        "forged_id": forged_id,
+                        "parent_id": parent_id,
+                        "claim_id": claim_id,
+                        "signals": json.dumps(signals),
+                    },
+                )
+        finally:
+            isolated.dispose()
+
+        with pytest.raises(RuntimeError, match="invalid_agent_rows=1"):
+            command.upgrade(config, "head")
+    finally:
+        with admin.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        admin.dispose()
+
+
+def test_act3_settlement_migration_installs_receipt_guards(
+    migrated_schema: str,
+) -> None:
+    """Prove the deployed migration path has the same hard gates as 0001."""
+    config = _alembic_config()
+    config.attributes["schema"] = migrated_schema
+    command.upgrade(config, "head")
+    engine = create_engine(get_settings().sqlalchemy_url, poolclass=NullPool, future=True)
+
+    try:
+        with engine.connect() as connection:
+            batch_columns = {
+                row.column_name: row.is_nullable
+                for row in connection.execute(
+                    text(
+                        "SELECT column_name, is_nullable "
+                        "FROM information_schema.columns "
+                        "WHERE table_schema = :schema "
+                        "AND table_name = 'disbursement_batch'"
+                    ),
+                    {"schema": migrated_schema},
+                )
+            }
+            disbursement_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = :schema "
+                        "AND table_name = 'disbursement'"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+            indexes = set(
+                connection.execute(
+                    text(
+                        "SELECT indexname FROM pg_indexes "
+                        "WHERE schemaname = :schema "
+                        "AND tablename IN ('disbursement', 'ledger_entry')"
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+            triggers = set(
+                connection.execute(
+                    text(
+                        """
+                        SELECT tgname FROM pg_trigger
+                         WHERE tgrelid IN (
+                           to_regclass(format(
+                             '%I.%I', CAST(:schema AS text), 'disbursement_batch'
+                           )),
+                           to_regclass(format(
+                             '%I.%I', CAST(:schema AS text), 'disbursement'
+                           )),
+                           to_regclass(format(
+                             '%I.%I', CAST(:schema AS text), 'ledger_entry'
+                           ))
+                         ) AND NOT tgisinternal
+                        """
+                    ),
+                    {"schema": migrated_schema},
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    assert batch_columns["approval_id"] == "NO"
+    assert batch_columns["snapshot_hash"] == "NO"
+    assert {
+        "executor_provider",
+        "snapshot_hash",
+        "execution_requested_by",
+        "execution_idempotency_key",
+        "execution_request_hash",
+        "provider_confirmation_hash",
+    } <= disbursement_columns
+    assert {
+        "disbursement_allocation_uidx",
+        "disbursement_batch_uidx",
+        "disbursement_execution_idempotency_uidx",
+        "ledger_disbursement_batch_signed_subject_uidx",
+        "ledger_disbursement_executed_subject_uidx",
+        "ledger_disbursement_confirmed_subject_uidx",
+    } <= indexes
+    assert {
+        "disbursement_batch_signed_guard_trigger",
+        "disbursement_lifecycle_guard_trigger",
+        "ledger_disbursement_receipt_guard_trigger",
+        "disbursement_batch_receipt_complete_trigger",
+        "disbursement_receipt_complete_trigger",
+    } <= triggers

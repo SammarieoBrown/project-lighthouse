@@ -344,7 +344,7 @@ def test_authenticated_claim_reads_are_redacted(monkeypatch, session):
     assert "uri" not in detail_body["evidence"][0]
 
 
-def test_voice_note_persists_audio_without_external_fetch(session):
+def test_voice_note_files_then_defers_verification_to_durable_media_job(session):
     _active_event(session)
     from app.intake.service import enqueue_twilio_inbound
     from app.intake.twilio import parse_inbound
@@ -384,8 +384,22 @@ def test_voice_note_persists_audio_without_external_fetch(session):
     ).one()
     assert evidence.kind == "AUDIO"
     assert evidence.uri == media_url
+    assert evidence.payload["media_state"] == "PENDING_FETCH"
     assert evidence.payload["transcription_state"] == "PENDING"
-    assert result.verification_state == "QUEUED"
+    assert result.verification_state == "MEDIA_PENDING"
+    assert session.scalar(
+        select(func.count()).select_from(AgentJob).where(
+            AgentJob.job_type == str(AgentName.VERIFICATION_AGENT),
+            AgentJob.payload["claim_id"].astext == str(claim.id),
+        )
+    ) == 0
+    media_job = session.scalar(
+        select(AgentJob).where(
+            AgentJob.job_type == "intake_media_enrichment",
+            AgentJob.payload["claim_id"].astext == str(claim.id),
+        )
+    )
+    assert media_job is not None and media_job.status is JobStatus.QUEUED
 
 
 def test_configured_event_ref_wins_when_multiple_hazards_are_open(session):

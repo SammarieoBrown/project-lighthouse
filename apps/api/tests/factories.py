@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from lighthouse_contracts import (
@@ -24,6 +24,13 @@ from lighthouse_contracts import (
 
 from app import ledger
 from app.approvals import allocation_ledger_payload
+from app.disbursements import (
+    BatchSignRequest,
+    SimulatedExecutionRequest,
+    execute_simulated_disbursement,
+    sign_disbursement_batch,
+)
+from app.human_auth import AuthenticatedHuman
 from app.models import (
     Allocation,
     AllocationPlan,
@@ -33,6 +40,7 @@ from app.models import (
     Disbursement,
     DisbursementBatch,
     HazardEvent,
+    HumanCredential,
     StormFile,
     Verification,
 )
@@ -40,6 +48,7 @@ from app.public_taxonomy import (
     canonical_public_need_category,
     canonical_public_parish,
 )
+from app.settlement_executor import SimulatedDemoExecutor
 
 
 def make_user(session: Session, role: AppRole = AppRole.FINANCE_OFFICER) -> AppUser:
@@ -121,6 +130,30 @@ def make_verification(
                 "media_integrity",
             )
         }
+    resolved_created_at = created_at or datetime.now(UTC)
+    overrides_id = None
+    if actor is not None:
+        if verdict not in {Verdict.APPROVED, Verdict.REJECTED}:
+            raise ValueError("human verification fixtures must adjudicate REVIEW/FLAGGED")
+        parent = Verification(
+            claim_id=claim.id,
+            signals=signals,
+            confidence=confidence,
+            verdict=Verdict.REVIEW,
+            actor_kind=ActorKind.AGENT,
+            actor_id=None,
+            agent_name=str(AgentName.VERIFICATION_AGENT),
+            model_version="test-verification-v1",
+            threshold_version="test-threshold-v1",
+            rationale="Synthetic agent evidence queued for fixture review.",
+            capped=capped,
+            created_at=resolved_created_at - timedelta(microseconds=1),
+        )
+        session.add(parent)
+        session.flush()
+        session.refresh(parent)
+        overrides_id = parent.id
+
     verification = Verification(
         claim_id=claim.id,
         signals=signals,
@@ -133,7 +166,8 @@ def make_verification(
         threshold_version="test-threshold-v1",
         rationale="Synthetic test evidence met the configured threshold.",
         capped=capped,
-        **({"created_at": created_at} if created_at is not None else {}),
+        overrides_id=overrides_id,
+        created_at=resolved_created_at,
     )
     session.add(verification)
     session.flush()
@@ -144,20 +178,22 @@ def make_verification(
     return verification
 
 
-def settle_with_signature(
-    session: Session, claim: Claim, finance: AppUser, amount: float = 45000.0
-) -> Disbursement:
-    """Walk the money path properly: allocate, sign, disburse, confirm.
-
-    Written the long way on purpose. The signature is not a formality to be
-    stubbed — it is the thing under test, and a shortcut here would hide the
-    exact bug this schema exists to make impossible.
-    """
+def approve_allocation_with_signature(
+    session: Session, claim: Claim, amount: float = 45000.0
+) -> Allocation:
+    """Create one exact Director-signed allocation and its ledger receipt."""
     if Decimal(str(amount)) != Decimal("45000.00"):
         raise ValueError("the release fixture only supports the fixed JMD 45000 grant")
 
     director = make_user(session, AppRole.DIRECTOR)
-    verification = make_verification(session, claim)
+    verification = session.scalar(
+        select(Verification)
+        .where(Verification.claim_id == claim.id)
+        .order_by(Verification.created_at.desc(), Verification.id.desc())
+        .limit(1)
+    )
+    if verification is None:
+        verification = make_verification(session, claim)
     session.execute(
         text(
             "SET CONSTRAINTS signed_plan_complete_trigger, "
@@ -224,37 +260,44 @@ def settle_with_signature(
             "allocation_ledger_complete_trigger IMMEDIATE"
         )
     )
+    return allocation
 
-    batch = DisbursementBatch(
-        channel=DisbursementChannel.BANK, total=Decimal("45000.00")
+
+def settle_with_signature(
+    session: Session, claim: Claim, finance: AppUser, amount: float = 45000.0
+) -> Disbursement:
+    """Walk the real demo path: allocate, sign, execute, confirm, and settle."""
+    allocation = approve_allocation_with_signature(session, claim, amount)
+    now = datetime.now(UTC)
+    credential = HumanCredential(
+        user_id=finance.id,
+        token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+        reauthenticated_at=now,
+        expires_at=now + timedelta(minutes=5),
     )
-    session.add(batch)
+    session.add(credential)
     session.flush()
-
-    approval = Approval(
-        gate=GateKind.DISBURSEMENT_BATCH,
-        subject_type="disbursement_batch",
-        subject_id=batch.id,
-        approved_by=finance.id,
-        role_at_time=AppRole.FINANCE_OFFICER,
-        reauth_at=datetime.now(UTC),
-        note="test signature",
-    )
-    session.add(approval)
-    session.flush()
-
-    batch.approval_id = approval.id
-
-    disb = Disbursement(
+    human = AuthenticatedHuman(user=finance, credential=credential)
+    signed = sign_disbursement_batch(
+        session,
+        human=human,
         allocation_id=allocation.id,
-        batch_id=batch.id,
-        approval_id=approval.id,
-        channel=DisbursementChannel.BANK,
-        status=DisbursementStatus.CONFIRMED,
-        simulated=True,
-        executed_at=datetime.now(UTC),
-        confirmed_at=datetime.now(UTC),
+        request=BatchSignRequest(
+            channel=DisbursementChannel.BANK,
+            executor_provenance="SIMULATED_DEMO",
+            note="test Finance signature",
+        ),
+        idempotency_key=f"test-sign-{uuid.uuid4()}",
     )
-    session.add(disb)
-    session.flush()
-    return disb
+    executed = execute_simulated_disbursement(
+        session,
+        human=human,
+        disbursement_id=signed.disbursement.id,
+        request=SimulatedExecutionRequest(
+            executor_provenance="SIMULATED_DEMO",
+            acknowledge_no_real_money=True,
+        ),
+        idempotency_key=f"test-execute-{uuid.uuid4()}",
+        executor=SimulatedDemoExecutor(),
+    )
+    return executed.disbursement

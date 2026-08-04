@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,10 +37,34 @@ class Settings(BaseSettings):
 
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
+    # Media downloads should use a restricted API key in production. The
+    # Account SID/AuthToken pair remains the webhook-signing secret and is only
+    # accepted by the fetcher in local/demo environments.
+    twilio_api_key_sid: str | None = None
+    twilio_api_key_secret: str | None = None
     twilio_whatsapp_from: str | None = None
     # Explicitly binds live inbound claims to one hazard. Production commonly
     # has several historical/open rows, so choosing "latest" is not safe.
     intake_hazard_external_ref: str | None = None
+
+    # Private, content-addressed intake media. These are worker-only values;
+    # the console and webhook edge never need object-store credentials.
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str = "lighthouse-media"
+
+    # Disabled is a deliberate local default: a worker may not silently make
+    # a paid inference call just because some unrelated API credential exists.
+    intake_transcription_provider: str = "disabled"
+    intake_transcription_model: str = "@cf/openai/whisper-large-v3-turbo"
+    cloudflare_ai_api_token: str | None = None
+
+    # Money execution is fail-closed.  The only implementation in this release
+    # is an in-process demo simulator; it never contacts a bank, mobile-money
+    # rail, voucher issuer, or other payment provider.  Operators must opt in
+    # explicitly rather than getting simulated confirmations by accident.
+    disbursement_executor_mode: Literal["disabled", "simulated"] = "disabled"
 
     @property
     def sqlalchemy_url(self) -> str:

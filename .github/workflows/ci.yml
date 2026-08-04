@@ -131,6 +131,12 @@ jobs:
         working-directory: apps/console
         run: npm run typecheck
 
+      - name: Console and simulator tests
+        working-directory: apps/console
+        run: |
+          npm run test:console
+          npm run test:simulator
+
       # next/font fetches and self-hosts the three families at build time, so a
       # green build here is also proof the type system still resolves.
       - name: Build

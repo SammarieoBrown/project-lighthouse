@@ -87,8 +87,13 @@ export function StormSimulator() {
   const [playing, setPlaying] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [showWindThresholds, setShowWindThresholds] = useState(false);
+  const [showImpactOverlay, setShowImpactOverlay] = useState(false);
   const [mapFailure, setMapFailure] = useState<string | null>(null);
   const [particleState, setParticleState] = useState<{ status: "ready" | "unavailable"; reason?: string }>(
+    { status: "ready" },
+  );
+  const [weatherState, setWeatherState] = useState<{ status: "ready" | "unavailable"; reason?: string }>(
     { status: "ready" },
   );
   const [imageryManifest, setImageryManifest] = useState<ImageryManifest | null>(null);
@@ -521,12 +526,14 @@ export function StormSimulator() {
               parishes={inventory.replay.parishes}
               communities={impact.communities}
               drawing={drawing}
-              playing={playing}
               reducedMotion={reducedMotion}
+              showWindThresholds={showWindThresholds}
+              showImpactOverlay={showImpactOverlay}
               imageryTemplate={imagery?.tiles}
               onTrackChange={(track) => updateScenario({ track })}
               onFailure={setMapFailure}
               onParticleStatus={(status, reason) => setParticleState({ status, reason })}
+              onWeatherStatus={(status, reason) => setWeatherState({ status, reason })}
               onImageryStatus={setImageryStatus}
             />
           ) : (
@@ -539,10 +546,19 @@ export function StormSimulator() {
           <div className={styles.mapStatus}>
             <span>{drawing ? "Click to add · drag a point to revise" : "Track locked · select Edit track to revise"}</span>
             <span>
+              {imageryStatus === "ready"
+                ? "Observed GOES image · modelled precipitation hidden"
+                : weatherState.status === "ready"
+                  ? reducedMotion
+                    ? "MODELLED PRECIPITATION + WIND · STATIC · NOT OBSERVED"
+                    : "MODELLED PRECIPITATION + WIND · ANIMATED · NOT OBSERVED"
+                  : `Modelled precipitation unavailable${weatherState.reason ? ` · ${weatherState.reason}` : ""}`}
+            </span>
+            <span>
               {particleState.status === "ready" && !reducedMotion
-                ? "Synthesised particle wind"
+                ? "Continuous modelled flow · selected hour and impact figures stay fixed"
                 : reducedMotion
-                  ? "Particle motion stopped by system preference"
+                  ? "Modelled wind direction · motion stopped by system preference"
                   : `Particle wind unavailable${particleState.reason ? ` · ${particleState.reason}` : ""}`}
             </span>
             <span>
@@ -554,12 +570,42 @@ export function StormSimulator() {
             </span>
           </div>
 
+          <div className={styles.mapLayerControl} role="group" aria-label="Analytical map layers">
+            <button
+              type="button"
+              aria-pressed={showWindThresholds}
+              onClick={() => setShowWindThresholds((value) => !value)}
+            >
+              {showWindThresholds ? "Hide wind thresholds" : "Show wind thresholds"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={showImpactOverlay}
+              onClick={() => setShowImpactOverlay((value) => !value)}
+            >
+              {showImpactOverlay ? "Hide impact overlay" : "Show impact overlay"}
+            </button>
+          </div>
+
           <div className={styles.mapKey} aria-label="Simulation map key">
-            <span><i className={styles.wind34} />34 kt</span>
-            <span><i className={styles.wind50} />50 kt</span>
-            <span><i className={styles.wind64} />64 kt</span>
-            <span><i className={styles.major} />Major+ ≥25%</span>
-            <span><i className={styles.destroyed} />Destroyed ≥25%</span>
+            {imageryStatus === "ready" ? (
+              <span><i className={styles.observedWeather} />Observed GOES image</span>
+            ) : <>
+              <span><i className={styles.radarLight} />Light</span>
+              <span><i className={styles.radarModerate} />Moderate</span>
+              <span><i className={styles.radarHeavy} />Heavy</span>
+              <span><i className={styles.radarExtreme} />Extreme</span>
+              <span><i className={styles.windFlow} />Wind flow · modelled kt</span>
+            </>}
+            {showWindThresholds ? <>
+              <span><i className={styles.wind34} />34 kt</span>
+              <span><i className={styles.wind50} />50 kt</span>
+              <span><i className={styles.wind64} />64 kt</span>
+            </> : null}
+            {showImpactOverlay ? <>
+              <span><i className={styles.major} />Major+ ≥25%</span>
+              <span><i className={styles.destroyed} />Destroyed ≥25%</span>
+            </> : null}
           </div>
         </section>
 

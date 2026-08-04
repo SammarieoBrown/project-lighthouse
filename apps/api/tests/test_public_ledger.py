@@ -11,12 +11,17 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from lighthouse_contracts import AppRole, ClaimStatus, StormFileState
+from lighthouse_contracts import ClaimStatus, StormFileState
 
 from app import ledger, public_ledger
 from app.models import LedgerEntry
 from app.web import app
-from factories import make_claim, make_event, make_storm_file, make_user, settle_with_signature
+from factories import (
+    approve_allocation_with_signature,
+    make_claim,
+    make_event,
+    make_storm_file,
+)
 
 
 VALID_PAYLOAD = {
@@ -35,8 +40,10 @@ VALID_PAYLOAD = {
 @pytest.fixture(autouse=True)
 def _clean_chain_verification_cache():
     ledger.clear_verify_chain_cache()
+    public_ledger.clear_aggregate_cache()
     yield
     ledger.clear_verify_chain_cache()
+    public_ledger.clear_aggregate_cache()
 
 
 def _client(monkeypatch: pytest.MonkeyPatch, session) -> TestClient:
@@ -59,13 +66,11 @@ def _append_public(session, **payload_overrides):
         make_event(session),
         status=ClaimStatus.VERIFIED,
     )
-    disbursement = settle_with_signature(
-        session, claim, make_user(session, AppRole.FINANCE_OFFICER)
-    )
+    allocation = approve_allocation_with_signature(session, claim)
     return session.scalar(
         select(LedgerEntry).where(
             LedgerEntry.action == "allocation.approved",
-            LedgerEntry.subject_id == disbursement.allocation_id,
+            LedgerEntry.subject_id == allocation.id,
         )
     )
 
@@ -151,6 +156,7 @@ def test_publication_revalidates_redacted_taxonomy_and_fails_closed(
     row = SimpleNamespace(
         seq=99,
         subject_id=uuid.uuid4(),
+        action="allocation.approved",
         ts=_append_public(session).ts,
         payload={**VALID_PAYLOAD, "parish": "Household of Jane Doe"},
     )

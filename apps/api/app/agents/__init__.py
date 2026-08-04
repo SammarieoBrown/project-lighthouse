@@ -5,6 +5,10 @@ they never dispose. Nothing in here writes an approval or moves money — those
 paths require a human signature and the database enforces it.
 """
 
-from app.agents import intake_agent, risk_mapper  # noqa: F401  — register handlers
+from app.agents import (  # noqa: F401  — register handlers
+    intake_agent,
+    risk_mapper,
+    verification_agent,
+)
 
-__all__ = ["intake_agent", "risk_mapper"]
+__all__ = ["intake_agent", "risk_mapper", "verification_agent"]

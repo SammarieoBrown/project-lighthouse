@@ -1,14 +1,15 @@
 """Transactional claim intake service.
 
-The webhook persists only a provider-minimal job and a Storm File identity.  A
-worker then turns that job into a claim, evidence, ledger entries, and a queued
-verification in one transaction.  No external media, transcription, or
-messaging call occurs on this stripped production path.
+The webhook persists only a provider-minimal job and a Storm File identity. A
+worker files the claim immediately. Text-only reports proceed to verification;
+media reports first pass through a separate durable enrichment job so a raw,
+unhashed provider URL can never be mistaken for verified media evidence.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,9 +31,36 @@ from lighthouse_contracts import (
 )
 
 from app import ledger, queue, statemachine
+from app.config import get_settings
 from app.models import AgentJob, Claim, HazardEvent, StormFile
 
+from .extraction import extract_claim_fields
+from .media import (
+    MAX_AUDIO_BYTES,
+    MAX_MEDIA_BYTES,
+    TWILIO_MEDIA_JOB_TYPE,
+    MediaBoundaryError,
+    MediaFetcher,
+    MediaStore,
+    R2MediaStore,
+    TwilioMediaFetcher,
+    image_perceptual_hash,
+    is_audio_content_type,
+    is_image_content_type,
+    is_supported_content_type,
+)
+from .transcription import (
+    CloudflareWhisperTranscriber,
+    Transcriber,
+    TranscriptionResult,
+)
 from .twilio import TwilioDeliveryStatus, TwilioInbound, safety_of_life_matches
+
+
+MAX_MEDIA_JOB_BYTES = 2 * MAX_MEDIA_BYTES
+MAX_AUDIO_ITEMS_PER_JOB = 3
+MAX_AUDIO_BYTES_PER_STORM_FILE_24H = 3 * MAX_AUDIO_BYTES
+_SAFE_TERMINAL_ERROR = re.compile(r"^handler_error:[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
 class IntakeEventUnavailable(RuntimeError):
@@ -66,6 +94,15 @@ class DeliveryStatusEnqueueResult:
     created: bool
 
 
+@dataclass(frozen=True, slots=True)
+class MediaEnrichmentResult:
+    claim_id: UUID
+    media_count: int
+    transcript_count: int
+    verification_state: str
+    duplicate: bool = False
+
+
 _INSERT_EVIDENCE = text(
     """
     INSERT INTO evidence (id, claim_id, kind, uri, payload, sha256, phash)
@@ -73,25 +110,16 @@ _INSERT_EVIDENCE = text(
     """
 ).bindparams(bindparam("payload", type_=JSONB))
 
-_DAMAGE_RULES: tuple[tuple[str, str], ...] = (
-    ("roof", "roof_damage"),
-    ("flood", "flooding"),
-    ("water come in", "flooding"),
-    ("wall", "wall_damage"),
-    ("destroyed", "structural_damage"),
-    ("house gone", "structural_damage"),
-)
-
-_NEED_RULES: tuple[tuple[str, str], ...] = (
-    ("tarpaulin", "tarpaulin"),
-    ("tarp", "tarpaulin"),
-    ("water", "water"),
-    ("food", "food"),
-    ("shelter", "shelter"),
-    ("insulin", "insulin"),
-    ("medicine", "medicine"),
-    ("medical", "medical_support"),
-)
+_UPDATE_EVIDENCE = text(
+    """
+    UPDATE evidence
+       SET uri = :uri,
+           payload = :payload,
+           sha256 = :sha256,
+           phash = :phash
+     WHERE id = :evidence_id AND claim_id = :claim_id
+    """
+).bindparams(bindparam("payload", type_=JSONB))
 
 
 def phone_hash(phone: str) -> str:
@@ -302,6 +330,29 @@ def _existing_claim_for_message(session: Session, sid: str) -> Claim | None:
     return session.get(Claim, claim_id) if claim_id is not None else None
 
 
+def _minimize_intake_job(session: Session, *, sid: str, claim: Claim) -> None:
+    """Erase provider body/media capabilities once durable claim rows exist."""
+    job = session.scalar(
+        select(AgentJob)
+        .where(
+            AgentJob.job_type == str(AgentName.INTAKE_AGENT),
+            AgentJob.payload["provider_message_sid"].astext == sid,
+        )
+        .order_by(AgentJob.created_at, AgentJob.id)
+        .limit(1)
+    )
+    if job is None:
+        return
+    job.payload = {
+        "provider": "twilio",
+        "provider_message_sid": sid,
+        "storm_file_id": str(claim.storm_file_id),
+        "claim_id": str(claim.id),
+        "retention_state": "MINIMIZED_AFTER_CLAIM",
+    }
+    session.flush()
+
+
 def _claim_ref(session: Session, *, storm_file: StormFile, sid: str, event_id: UUID) -> str:
     parish_prefixes = {
         "st elizabeth": "SE",
@@ -324,13 +375,8 @@ def _claim_ref(session: Session, *, storm_file: StormFile, sid: str, event_id: U
 
 
 def _extract_text(text_value: str) -> tuple[str | None, list[str]]:
-    lowered = text_value.casefold()
-    damage = next((value for needle, value in _DAMAGE_RULES if needle in lowered), None)
-    needs: list[str] = []
-    for needle, value in _NEED_RULES:
-        if needle in lowered and value not in needs:
-            needs.append(value)
-    return damage, needs
+    extracted = extract_claim_fields(text_value)
+    return extracted.damage_type, list(extracted.reported_needs)
 
 
 def _insert_evidence(
@@ -341,6 +387,7 @@ def _insert_evidence(
     uri: str | None,
     payload: dict,
     sha256: str | None = None,
+    phash: str | None = None,
 ) -> UUID:
     evidence_id = uuid.uuid4()
     session.execute(
@@ -352,19 +399,57 @@ def _insert_evidence(
             "uri": uri,
             "payload": payload,
             "sha256": sha256,
-            "phash": None,
+            "phash": phash,
         },
     )
     return evidence_id
 
 
 def _media_kind(content_type: str | None) -> EvidenceKind | None:
-    value = (content_type or "").casefold()
-    if value.startswith("audio/") or value == "application/ogg":
+    if is_audio_content_type(content_type):
         return EvidenceKind.AUDIO
-    if value.startswith("image/"):
+    if is_image_content_type(content_type):
         return EvidenceKind.PHOTO
     return None
+
+
+def _pipeline_state(session: Session, claim_id: UUID) -> str:
+    verification = session.scalar(
+        select(AgentJob)
+        .where(
+            AgentJob.job_type == str(AgentName.VERIFICATION_AGENT),
+            AgentJob.payload["claim_id"].astext == str(claim_id),
+        )
+        .order_by(AgentJob.created_at.desc(), AgentJob.id.desc())
+        .limit(1)
+    )
+    if verification is not None:
+        return {
+            JobStatus.QUEUED: "QUEUED",
+            JobStatus.RUNNING: "RUNNING",
+            JobStatus.DONE: "COMPLETED",
+            JobStatus.FAILED: "FAILED",
+            JobStatus.DEAD: "FAILED",
+        }[verification.status]
+
+    media_job = session.scalar(
+        select(AgentJob)
+        .where(
+            AgentJob.job_type == TWILIO_MEDIA_JOB_TYPE,
+            AgentJob.payload["claim_id"].astext == str(claim_id),
+        )
+        .order_by(AgentJob.created_at.desc(), AgentJob.id.desc())
+        .limit(1)
+    )
+    if media_job is None:
+        return "FAILED"
+    return {
+        JobStatus.QUEUED: "MEDIA_PENDING",
+        JobStatus.RUNNING: "MEDIA_PROCESSING",
+        JobStatus.DONE: "MEDIA_FAILED",
+        JobStatus.FAILED: "MEDIA_FAILED",
+        JobStatus.DEAD: "MEDIA_FAILED",
+    }[media_job.status]
 
 
 def process_intake_job(session: Session, payload: dict) -> IntakeResult:
@@ -381,12 +466,13 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
             text("SELECT count(*) FROM evidence WHERE claim_id = :claim_id"),
             {"claim_id": existing.id},
         ).scalar_one()
+        _minimize_intake_job(session, sid=sid, claim=existing)
         return IntakeResult(
             claim_id=existing.id,
             claim_ref=existing.claim_ref,
             storm_file_id=existing.storm_file_id,
             evidence_count=count,
-            verification_state="QUEUED",
+            verification_state=_pipeline_state(session, existing.id),
             duplicate=True,
         )
 
@@ -404,7 +490,22 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
     if not isinstance(media, list):
         raise ValueError("intake media must be a list")
 
-    supported_media = [item for item in media if _media_kind(item.get("content_type"))]
+    supported_media: list[dict] = []
+    for item in media:
+        if not isinstance(item, dict):
+            raise ValueError("intake media item must be an object")
+        if not is_supported_content_type(str(item.get("content_type") or "")):
+            continue
+        try:
+            index = int(item["index"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("intake media index is invalid") from exc
+        url = str(item.get("url") or "")
+        if not 0 <= index <= 9 or not url:
+            raise ValueError("intake media identity is invalid")
+        supported_media.append(
+            {"index": index, "url": url, "content_type": str(item["content_type"])}
+        )
     if not body and not supported_media:
         raise UnsupportedInboundMedia("message has no supported text, audio, or image evidence")
 
@@ -436,9 +537,9 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
         lang=None,
         channel="whatsapp",
         sol=bool(sol_keywords),
-        # This stripped intake performs no follow-up dialogue or transcription.
-        # Filing partial is explicit and safer than presenting missing fields as
-        # a complete extraction.
+        # Language is unknown until a voice note is transcribed or a future
+        # text-language step runs. Unknown stays partial; extraction completion
+        # is not the same thing as verification.
         partial=True,
     )
     session.add(claim)
@@ -460,10 +561,11 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
         )
         evidence_count += 1
 
+    media_evidence: list[tuple[UUID, EvidenceKind]] = []
     for item in supported_media:
         kind = _media_kind(item.get("content_type"))
         assert kind is not None
-        _insert_evidence(
+        evidence_id = _insert_evidence(
             session,
             claim_id=claim.id,
             kind=kind,
@@ -473,20 +575,41 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
                 "provider_message_sid": sid,
                 "media_index": int(item.get("index", 0)),
                 "content_type": item.get("content_type"),
+                "media_state": "PENDING_FETCH",
                 "transcription_state": "PENDING" if kind is EvidenceKind.AUDIO else None,
+                "phash_state": "PENDING" if kind is EvidenceKind.PHOTO else None,
             },
         )
+        media_evidence.append((evidence_id, kind))
         evidence_count += 1
 
+    verification_state = "MEDIA_PENDING" if media_evidence else "QUEUED"
     statemachine.record_claim_creation(
         session,
         claim,
+        enqueue_verification=not media_evidence,
         payload={
             "provider_message_sid": sid,
             "evidence_count": evidence_count,
-            "verification_state": "QUEUED",
+            "verification_state": verification_state,
         },
     )
+    for evidence_id, kind in media_evidence:
+        voice_priority = kind is EvidenceKind.AUDIO
+        queue.enqueue(
+            session,
+            job_type=TWILIO_MEDIA_JOB_TYPE,
+            # Audio-only reports cannot be screened for safety-of-life until
+            # transcription. Each attachment is an independent bounded job so
+            # one slow object cannot outlive the worker lease or duplicate all
+            # other provider calls on retry.
+            priority=SOL_PRIORITY if claim.sol or voice_priority else 0,
+            payload={
+                "claim_id": str(claim.id),
+                "evidence_ids": [str(evidence_id)],
+                "voice_priority": voice_priority,
+            },
+        )
     if sol_keywords:
         ledger.append(
             session,
@@ -497,13 +620,388 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
             agent=AgentName.INTAKE_AGENT,
         )
 
+    _minimize_intake_job(session, sid=sid, claim=claim)
+
     return IntakeResult(
         claim_id=claim.id,
         claim_ref=claim.claim_ref,
         storm_file_id=storm_file.id,
         evidence_count=evidence_count,
-        verification_state="QUEUED",
+        verification_state=verification_state,
     )
+
+
+def _ensure_verification_queued(session: Session, claim: Claim) -> None:
+    existing = session.scalar(
+        select(AgentJob.id)
+        .where(
+            AgentJob.job_type == str(AgentName.VERIFICATION_AGENT),
+            AgentJob.payload["claim_id"].astext == str(claim.id),
+        )
+        .limit(1)
+    )
+    if existing is None:
+        statemachine.enqueue_claim_verification(session, claim)
+
+
+def _media_pipeline_complete(session: Session, claim_id: UUID) -> bool:
+    pending = session.execute(
+        text(
+            """
+            SELECT count(*)
+              FROM evidence
+             WHERE claim_id = :claim_id
+               AND kind::text IN ('AUDIO', 'PHOTO')
+               AND COALESCE(payload->>'media_state', 'PENDING_FETCH')
+                     NOT IN ('STORED', 'FAILED')
+            """
+        ),
+        {"claim_id": claim_id},
+    ).scalar_one()
+    return int(pending) == 0
+
+
+def process_media_job(
+    session: Session,
+    payload: dict,
+    *,
+    fetcher: MediaFetcher | None = None,
+    store: MediaStore | None = None,
+    transcriber: Transcriber | None = None,
+) -> MediaEnrichmentResult:
+    """Fetch, store, transcribe, and extract before verification is queued.
+
+    Database mutation is atomic. External R2 writes are content-addressed, so a
+    database retry can safely write the same object key again without creating
+    a second piece of evidence or trusting a stale provider URL.
+    """
+    try:
+        claim_id = UUID(str(payload["claim_id"]))
+    except (KeyError, ValueError) as exc:
+        raise ValueError("media job has invalid claim identity") from exc
+    raw_evidence_ids = payload.get("evidence_ids")
+    if not isinstance(raw_evidence_ids, list) or not 1 <= len(raw_evidence_ids) <= 10:
+        raise ValueError("media job has invalid evidence identities")
+    try:
+        evidence_ids = [UUID(str(value)) for value in raw_evidence_ids]
+    except ValueError as exc:
+        raise ValueError("media job has invalid evidence identities") from exc
+    if len(set(evidence_ids)) != len(evidence_ids):
+        raise ValueError("media job has duplicate evidence identities")
+
+    _advisory_lock(session, "intake-media-claim", str(claim_id))
+    claim = session.get(Claim, claim_id)
+    if claim is None:
+        raise LookupError("media job claim no longer exists")
+    rows = session.execute(
+        text(
+            """
+            SELECT id, kind::text AS kind, uri, payload, sha256, phash
+              FROM evidence
+             WHERE claim_id = :claim_id
+               AND id = ANY(CAST(:evidence_ids AS uuid[]))
+             ORDER BY CASE kind::text WHEN 'AUDIO' THEN 0 ELSE 1 END,
+                      (payload->>'media_index')::int, id
+             FOR UPDATE
+            """
+        ),
+        {"claim_id": claim_id, "evidence_ids": evidence_ids},
+    ).mappings().all()
+    if {row["id"] for row in rows} != set(evidence_ids):
+        raise LookupError("media job evidence no longer exists")
+    if any(row["kind"] not in {str(EvidenceKind.AUDIO), str(EvidenceKind.PHOTO)} for row in rows):
+        raise ValueError("media job references non-media evidence")
+    audio_count = sum(row["kind"] == str(EvidenceKind.AUDIO) for row in rows)
+    if audio_count > MAX_AUDIO_ITEMS_PER_JOB:
+        raise MediaBoundaryError("media job exceeds the bounded voice-note count")
+
+    already_complete = all(
+        row["sha256"]
+        and str(row["uri"] or "").startswith("r2://")
+        and isinstance(row["payload"], dict)
+        and row["payload"].get("media_state") == "STORED"
+        and (
+            row["payload"].get("transcription_state") == "COMPLETE"
+            if row["kind"] == str(EvidenceKind.AUDIO)
+            else bool(row["phash"])
+            or row["payload"].get("phash_state") == "UNSUPPORTED"
+        )
+        for row in rows
+    )
+    if already_complete:
+        pipeline_complete = _media_pipeline_complete(session, claim.id)
+        if pipeline_complete:
+            _ensure_verification_queued(session, claim)
+        return MediaEnrichmentResult(
+            claim_id=claim.id,
+            media_count=len(rows),
+            transcript_count=sum(row["kind"] == str(EvidenceKind.AUDIO) for row in rows),
+            verification_state="QUEUED" if pipeline_complete else "MEDIA_PENDING",
+            duplicate=True,
+        )
+
+    settings = None
+    if fetcher is None or store is None or (
+        transcriber is None
+        and any(row["kind"] == str(EvidenceKind.AUDIO) for row in rows)
+    ):
+        settings = get_settings()
+    fetcher = fetcher or TwilioMediaFetcher.from_settings(settings)
+    store = store or R2MediaStore.from_settings(settings)
+    if transcriber is None and any(
+        row["kind"] == str(EvidenceKind.AUDIO) for row in rows
+    ):
+        transcriber = CloudflareWhisperTranscriber.from_settings(settings)
+
+    historical_audio_bytes = session.execute(
+        text(
+            """
+            SELECT COALESCE(sum(
+              CASE WHEN e.payload->>'size_bytes' ~ '^[0-9]{1,9}$'
+                   THEN (e.payload->>'size_bytes')::bigint ELSE 0 END
+            ), 0)::bigint
+              FROM evidence e
+              JOIN claim prior_claim ON prior_claim.id = e.claim_id
+             WHERE prior_claim.storm_file_id = :storm_file_id
+               AND e.kind::text = 'AUDIO'
+               AND e.id <> ALL(CAST(:evidence_ids AS uuid[]))
+               AND e.created_at >= now() - interval '24 hours'
+            """
+        ),
+        {
+            "storm_file_id": claim.storm_file_id,
+            "evidence_ids": evidence_ids,
+        },
+    ).scalar_one()
+
+    transcripts: list[tuple[int, TranscriptionResult]] = []
+    aggregate_bytes = 0
+    new_audio_bytes = 0
+    for row in rows:
+        evidence_payload = row["payload"]
+        if not isinstance(evidence_payload, dict):
+            raise ValueError("media evidence payload is invalid")
+        provider_url = str(row["uri"] or "")
+        message_sid = str(evidence_payload.get("provider_message_sid") or "")
+        declared_type = str(evidence_payload.get("content_type") or "")
+        fetched = fetcher.fetch(
+            provider_url,
+            message_sid=message_sid,
+            expected_content_type=declared_type,
+        )
+        aggregate_bytes += fetched.size_bytes
+        if aggregate_bytes > MAX_MEDIA_JOB_BYTES:
+            raise MediaBoundaryError("media job exceeds the aggregate byte boundary")
+        if row["kind"] == str(EvidenceKind.AUDIO):
+            new_audio_bytes += fetched.size_bytes
+            if (
+                historical_audio_bytes + new_audio_bytes
+                > MAX_AUDIO_BYTES_PER_STORM_FILE_24H
+            ):
+                raise MediaBoundaryError(
+                    "voice-note transcription quota is exhausted for this Storm File"
+                )
+        stored = store.put(fetched)
+        if (
+            stored.sha256 != fetched.sha256
+            or stored.size_bytes != fetched.size_bytes
+            or stored.content_type != fetched.content_type
+            or not stored.uri.startswith("r2://")
+        ):
+            raise MediaBoundaryError("private media store returned inconsistent identity")
+        phash = image_perceptual_hash(fetched) if row["kind"] == str(EvidenceKind.PHOTO) else None
+        transcript = (
+            transcriber.transcribe(fetched)
+            if row["kind"] == str(EvidenceKind.AUDIO) and transcriber is not None
+            else None
+        )
+        old_payload = evidence_payload
+        media_index = int(old_payload.get("media_index", 0))
+        updated_payload = {
+            "provider": "twilio",
+            "provider_message_sid": old_payload.get("provider_message_sid"),
+            "media_index": media_index,
+            "content_type": stored.content_type,
+            "size_bytes": stored.size_bytes,
+            "media_state": "STORED",
+            "storage_backend": "r2",
+            "storage_schema": "content-addressed-sha256-v1",
+            "transcription_state": "COMPLETE" if transcript is not None else None,
+            "phash_state": (
+                "COMPUTED"
+                if phash is not None
+                else "UNSUPPORTED"
+                if row["kind"] == str(EvidenceKind.PHOTO)
+                else None
+            ),
+        }
+        if transcript is not None:
+            updated_payload["transcription_provider"] = transcript.provider
+            updated_payload["transcription_model"] = transcript.model
+            updated_payload["transcription_language"] = transcript.lang
+            transcripts.append((media_index, transcript))
+        session.execute(
+            _UPDATE_EVIDENCE,
+            {
+                "evidence_id": row["id"],
+                "claim_id": claim.id,
+                "uri": stored.uri,
+                "payload": updated_payload,
+                "sha256": stored.sha256,
+                "phash": phash,
+            },
+        )
+        if transcript is not None:
+            _insert_evidence(
+                session,
+                claim_id=claim.id,
+                kind=EvidenceKind.TRANSCRIPT,
+                uri=None,
+                sha256=hashlib.sha256(transcript.text.encode("utf-8")).hexdigest(),
+                payload={
+                    "source_evidence_id": str(row["id"]),
+                    "provider": transcript.provider,
+                    "model": transcript.model,
+                    "lang": transcript.lang,
+                    "content_type": "text/plain; charset=utf-8",
+                },
+            )
+
+        # Do not retain decoded/provider bytes across attachments. At most one
+        # bounded object and its ASR request are resident at a time.
+        del fetched
+
+    if transcripts:
+        transcripts.sort(key=lambda item: item[0])
+        asr_text = "\n".join(item.text for _, item in transcripts)
+        typed_text = claim.transcript
+        claim.transcript = asr_text
+        if typed_text and typed_text != asr_text:
+            claim.transcript_alt = typed_text
+        languages = {item.lang for _, item in transcripts if item.lang}
+        claim.lang = next(iter(languages)) if len(languages) == 1 else "mul" if languages else None
+
+    extraction_text = "\n".join(
+        value for value in (claim.transcript, claim.transcript_alt) if value
+    )
+    extracted = extract_claim_fields(extraction_text)
+    if claim.damage_type is None:
+        claim.damage_type = extracted.damage_type
+    merged_needs = list(claim.reported_needs or [])
+    for need in extracted.reported_needs:
+        if need not in merged_needs:
+            merged_needs.append(need)
+    claim.reported_needs = merged_needs
+    claim.partial = not extracted.is_complete(
+        transcript=claim.transcript,
+        lang=claim.lang,
+    )
+
+    sol_keywords = safety_of_life_matches(extraction_text)
+    if sol_keywords and not claim.sol:
+        claim.sol = True
+        ledger.append(
+            session,
+            action=str(Event.CLAIM_SOL_RAISED),
+            subject_type="claim",
+            subject_id=claim.id,
+            payload={"keywords": sol_keywords, "priority": SOL_PRIORITY},
+            agent=AgentName.INTAKE_AGENT,
+        )
+    session.flush()
+    pipeline_complete = _media_pipeline_complete(session, claim.id)
+    if pipeline_complete:
+        _ensure_verification_queued(session, claim)
+    return MediaEnrichmentResult(
+        claim_id=claim.id,
+        media_count=len(rows),
+        transcript_count=len(transcripts),
+        verification_state="QUEUED" if pipeline_complete else "MEDIA_PENDING",
+    )
+
+
+def reconcile_media_failure(session: Session, payload: dict) -> None:
+    """Scrub exhausted provider capabilities and continue to conservative review."""
+    try:
+        claim_id = UUID(str(payload["claim_id"]))
+        evidence_ids = [UUID(str(value)) for value in payload["evidence_ids"]]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("media reconciliation has invalid identities") from exc
+    if not evidence_ids or len(evidence_ids) > 10 or len(set(evidence_ids)) != len(evidence_ids):
+        raise ValueError("media reconciliation has invalid evidence identities")
+    error_code = str(payload.get("terminal_error_code") or "")
+    if not _SAFE_TERMINAL_ERROR.fullmatch(error_code):
+        error_code = "handler_error:MediaEnrichmentFailed"
+
+    _advisory_lock(session, "intake-media-claim", str(claim_id))
+    claim = session.get(Claim, claim_id)
+    if claim is None:
+        raise LookupError("media reconciliation claim no longer exists")
+    rows = session.execute(
+        text(
+            """
+            SELECT id, kind::text AS kind, payload
+              FROM evidence
+             WHERE claim_id = :claim_id
+               AND id = ANY(CAST(:evidence_ids AS uuid[]))
+             ORDER BY id
+             FOR UPDATE
+            """
+        ),
+        {"claim_id": claim_id, "evidence_ids": evidence_ids},
+    ).mappings().all()
+    if {row["id"] for row in rows} != set(evidence_ids):
+        raise LookupError("media reconciliation evidence no longer exists")
+
+    reconciled: list[str] = []
+    for row in rows:
+        old = row["payload"] if isinstance(row["payload"], dict) else {}
+        if old.get("media_state") == "STORED":
+            continue
+        safe_payload = {
+            "provider": "twilio",
+            "provider_message_sid": old.get("provider_message_sid"),
+            "media_index": int(old.get("media_index", 0)),
+            "content_type": old.get("content_type"),
+            "media_state": "FAILED",
+            "failure_code": error_code,
+            "transcription_state": (
+                "FAILED" if row["kind"] == str(EvidenceKind.AUDIO) else None
+            ),
+            "phash_state": (
+                "FAILED" if row["kind"] == str(EvidenceKind.PHOTO) else None
+            ),
+        }
+        session.execute(
+            _UPDATE_EVIDENCE,
+            {
+                "evidence_id": row["id"],
+                "claim_id": claim.id,
+                "uri": None,
+                "payload": safe_payload,
+                "sha256": None,
+                "phash": None,
+            },
+        )
+        reconciled.append(str(row["id"]))
+
+    claim.partial = True
+    if reconciled:
+        ledger.append(
+            session,
+            action="intake.media_failed",
+            subject_type="claim",
+            subject_id=claim.id,
+            payload={
+                "evidence_ids": reconciled,
+                "failure_code": error_code,
+                "verification_disposition": "CONTINUE_WITH_MISSING_SIGNAL",
+            },
+            agent=AgentName.INTAKE_AGENT,
+        )
+    session.flush()
+    if _media_pipeline_complete(session, claim.id):
+        _ensure_verification_queued(session, claim)
 
 
 __all__ = [
@@ -511,11 +1009,14 @@ __all__ = [
     "DeliveryStatusEnqueueResult",
     "IntakeEventUnavailable",
     "IntakeResult",
+    "MediaEnrichmentResult",
     "UnsupportedInboundMedia",
     "enqueue_twilio_inbound",
     "enqueue_twilio_delivery_status",
     "ensure_storm_file",
     "phone_hash",
     "process_intake_job",
+    "process_media_job",
+    "reconcile_media_failure",
     "resolve_hazard_event",
 ]

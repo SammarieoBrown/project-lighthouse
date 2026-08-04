@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LighthouseMark } from "../logo";
 import styles from "./operations.module.css";
+import { SettlementWorkbench } from "./settlement-workbench";
 
 type Claim = {
   id: string;
@@ -31,8 +32,10 @@ type ClaimDetail = Claim & {
     sha256: string | null;
   }>;
   verification: null | {
+    id: string;
     confidence: number;
     verdict: string;
+    capped: boolean;
     signals: Partial<Record<VerificationSignalName, VerificationSignal>>;
     created_at: string;
   };
@@ -41,6 +44,8 @@ type ClaimDetail = Claim & {
 type VerificationSignal = {
   present: boolean;
   score?: number;
+  note?: string;
+  evidence?: Record<string, unknown>;
 };
 
 const VERIFICATION_SIGNAL_NAMES = [
@@ -74,6 +79,16 @@ type LedgerEntry = {
     currency?: string | null;
     payer_route?: string | null;
   };
+  settlement?: {
+    resource?: string;
+    amount?: string | number | null;
+    currency?: string | null;
+    payer_route?: string | null;
+    channel?: string | null;
+    executor_provenance?: string | null;
+    simulated?: boolean;
+  };
+  money_movement?: { status?: string };
 };
 
 type ApprovalResult = {
@@ -117,6 +132,14 @@ type LedgerChain = {
   head_hash: string | null;
 };
 
+type LedgerAggregate = {
+  scope: "CONFIRMED_SIMULATED_RELIEF_ONLY";
+  count: number;
+  amount: string | number;
+  currency: "JMD";
+  no_real_money_moved: true;
+};
+
 type LoadState = "locked" | "loading" | "ready" | "error";
 
 const money = new Intl.NumberFormat("en-JM", {
@@ -138,6 +161,23 @@ function shortHash(value: string | null | undefined): string {
   return value ? `${value.slice(0, 10)}…${value.slice(-6)}` : "—";
 }
 
+function evidenceSummary(value: Record<string, unknown> | undefined): string | null {
+  if (!value) return null;
+  const parts: string[] = [];
+  for (const [key, raw] of Object.entries(value)) {
+    if (parts.length >= 8) break;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const nested = evidenceSummary(raw as Record<string, unknown>);
+      if (nested) parts.push(nested);
+    } else if (Array.isArray(raw)) {
+      if (raw.length) parts.push(`${key.replaceAll("_", " ")}: ${raw.join(", ")}`);
+    } else if (["string", "number", "boolean"].includes(typeof raw)) {
+      parts.push(`${key.replaceAll("_", " ")}: ${String(raw)}`);
+    }
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
+
 async function jsonOrDetail(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
@@ -155,18 +195,24 @@ export function ReliefOperations() {
   const [claimsState, setClaimsState] = useState<LoadState>("locked");
   const [ledgerState, setLedgerState] = useState<LoadState>("loading");
   const [ledgerChain, setLedgerChain] = useState<LedgerChain | null>(null);
+  const [ledgerAggregate, setLedgerAggregate] = useState<LedgerAggregate | null>(null);
   const [claimsError, setClaimsError] = useState<string | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [claimDetail, setClaimDetail] = useState<ClaimDetail | null>(null);
   const [detailState, setDetailState] = useState<LoadState>("loading");
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRefresh, setDetailRefresh] = useState(0);
   const [operatorToken, setOperatorToken] = useState("");
   const [activeToken, setActiveToken] = useState("");
   const [note, setNote] = useState("");
   const [approving, setApproving] = useState(false);
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const claimsRequest = useRef(0);
   const approvalIntent = useRef<{ signature: string; key: string } | null>(null);
 
@@ -212,17 +258,20 @@ export function ReliefOperations() {
       const body = (await jsonOrDetail(response)) as {
         entries?: LedgerEntry[];
         chain?: LedgerChain;
+        aggregate?: LedgerAggregate;
       };
       if (!body.chain?.valid) {
         throw new Error("Full ledger integrity check failed; public records are withheld.");
       }
       setLedger(Array.isArray(body.entries) ? body.entries : []);
       setLedgerChain(body.chain ?? null);
+      setLedgerAggregate(body.aggregate ?? null);
       setLedgerState("ready");
       setLedgerError(null);
     } catch (error) {
       setLedger([]);
       setLedgerChain(null);
+      setLedgerAggregate(null);
       setLedgerState("error");
       setLedgerError(error instanceof Error ? error.message : "Ledger is unavailable.");
     }
@@ -268,7 +317,7 @@ export function ReliefOperations() {
         }
       });
     return () => controller.abort();
-  }, [selectedId, activeToken]);
+  }, [selectedId, activeToken, detailRefresh]);
 
   const selected = useMemo(
     () => claims.find((claim) => claim.id === selectedId) ?? null,
@@ -277,13 +326,11 @@ export function ReliefOperations() {
   const verificationSignals = claimDetail?.verification
     ? VERIFICATION_SIGNAL_NAMES.map((name) => [name, claimDetail.verification?.signals[name]] as const)
     : [];
-  const completeVerification = Boolean(
+  const hasCompleteSignalBundle = Boolean(
     selected
     && claimDetail?.id === selected.id
-    && claimDetail.status === "VERIFIED"
     && detailState === "ready"
     && claimDetail.verification
-    && ["AUTO_VERIFIED", "APPROVED"].includes(claimDetail.verification.verdict)
     && VERIFICATION_SIGNAL_NAMES.every((name) => {
       const signal = claimDetail.verification?.signals[name];
       return Boolean(
@@ -293,6 +340,20 @@ export function ReliefOperations() {
           || (typeof signal.score === "number" && signal.score >= 0 && signal.score <= 1)),
       );
     }),
+  );
+  const completeVerification = Boolean(
+    hasCompleteSignalBundle
+    && claimDetail?.status === "VERIFIED"
+    && claimDetail.verification
+    && ["AUTO_VERIFIED", "APPROVED"].includes(claimDetail.verification.verdict),
+  );
+  const reviewReady = Boolean(
+    selected?.status === "FILED"
+    && claimDetail?.verification
+    && ["REVIEW", "FLAGGED"].includes(claimDetail.verification.verdict)
+    && hasCompleteSignalBundle
+    && activeToken
+    && reviewNote.trim().length >= 10,
   );
   const approvalReady = Boolean(
     selected?.status === "VERIFIED" && activeToken && completeVerification,
@@ -350,6 +411,42 @@ export function ReliefOperations() {
     ? claims.find((claim) => claim.id === approval.allocation.claim_id) ?? null
     : null;
 
+  const reviewClaim = useCallback(async (verdict: "APPROVED" | "REJECTED") => {
+    if (!selected || !reviewReady || !activeToken) return;
+    setReviewing(true);
+    setReviewError(null);
+    setReviewNotice(null);
+    try {
+      const response = await fetch(
+        `/api/lighthouse/v1/claims/${encodeURIComponent(selected.id)}/verification/review`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${activeToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            verification_id: claimDetail?.verification?.id,
+            verdict,
+            rationale: reviewNote.trim(),
+          }),
+        },
+      );
+      const result = (await jsonOrDetail(response)) as { idempotent_replay?: boolean };
+      setReviewNote("");
+      setReviewNotice(
+        `${verdict === "APPROVED" ? "Claim verified" : "Claim rejected"} by Review Clerk`
+        + (result.idempotent_replay ? " · existing decision replayed safely" : " · immutable decision recorded"),
+      );
+      await loadClaims(activeToken);
+      setDetailRefresh((value) => value + 1);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Review decision failed.");
+    } finally {
+      setReviewing(false);
+    }
+  }, [activeToken, claimDetail, loadClaims, reviewNote, reviewReady, selected]);
+
   return (
     <main className={styles.screen} data-theme="dark">
       <header className={styles.header}>
@@ -389,8 +486,8 @@ export function ReliefOperations() {
           <span>Safety-of-life priority</span>
         </div>
         <div>
-          <strong>{ledgerState === "ready" ? ledger.length : "—"}</strong>
-          <span>Public allocation records shown</span>
+          <strong>{ledgerState === "ready" ? ledgerAggregate?.count ?? 0 : "—"}</strong>
+          <span>Simulated confirmations · no real funds</span>
         </div>
       </section>
 
@@ -499,7 +596,7 @@ export function ReliefOperations() {
               </dl>
               {detailState === "loading" ? (
                 <p className={styles.empty}>Reading redacted evidence…</p>
-              ) : claimDetail?.verification && completeVerification ? (
+              ) : claimDetail?.verification && hasCompleteSignalBundle ? (
                 <div className={styles.verification}>
                   <div className={styles.verificationHead}>
                     <span>Verification</span>
@@ -507,9 +604,14 @@ export function ReliefOperations() {
                   </div>
                   <div className={styles.signals}>
                     {verificationSignals.map(([name, signal]) => {
+                      const evidence = evidenceSummary(signal?.evidence);
                       return (
                         <div key={name}>
-                          <span>{name.replaceAll("_", " ")}</span>
+                          <span>
+                            {name.replaceAll("_", " ")}
+                            {signal?.note ? <small>{signal.note}</small> : null}
+                            {evidence ? <small>{evidence}</small> : null}
+                          </span>
                           <b>
                             {!signal?.present
                               ? "Absent"
@@ -540,6 +642,48 @@ export function ReliefOperations() {
                 <p className={styles.limit}>
                   Verification evidence is still pending; this claim cannot be approved yet.
                 </p>
+              ) : null}
+              {claimDetail?.verification
+              && ["REVIEW", "FLAGGED"].includes(claimDetail.verification.verdict)
+              && selected.status === "FILED" ? (
+                <div className={styles.reviewGate}>
+                  <span className={styles.eyebrow}>Act 2 · Review Clerk decision</span>
+                  <p className={styles.limit}>
+                    The agent did not auto-verify this claim. Review all five signals and record a
+                    reason. This decision does not allocate or move relief.
+                  </p>
+                  <label className={styles.field}>
+                    <span>Review reason · required</span>
+                    <textarea
+                      value={reviewNote}
+                      onChange={(event) => setReviewNote(event.target.value)}
+                      minLength={10}
+                      maxLength={500}
+                      disabled={reviewing}
+                      placeholder="Evidence reviewed; explain the approval or rejection."
+                    />
+                  </label>
+                  <div className={styles.gateActions}>
+                    <button
+                      type="button"
+                      className={styles.approveButton}
+                      disabled={!reviewReady || reviewing}
+                      onClick={() => void reviewClaim("APPROVED")}
+                    >
+                      {reviewing ? "Recording…" : "Approve claim"}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.approveButton} ${styles.rejectButton}`}
+                      disabled={!reviewReady || reviewing}
+                      onClick={() => void reviewClaim("REJECTED")}
+                    >
+                      Reject claim
+                    </button>
+                  </div>
+                  {reviewNotice ? <p className={styles.successLine} role="status">{reviewNotice}</p> : null}
+                  {reviewError ? <p className={styles.error} role="alert">{reviewError}</p> : null}
+                </div>
               ) : null}
               <label className={styles.field}>
                 <span>Decision note · optional</span>
@@ -583,6 +727,8 @@ export function ReliefOperations() {
         </aside>
       </div>
 
+      <SettlementWorkbench onLedgerChanged={loadLedger} />
+
       <section className={styles.ledger}>
         <div className={styles.sectionHead}>
           <div>
@@ -604,19 +750,26 @@ export function ReliefOperations() {
         ) : (
           <div className={styles.ledgerTable}>
             <div className={styles.ledgerHead} aria-hidden="true">
-              <span>Seq</span><span>Action</span><span>Allocation</span><span>Recorded (UTC)</span><span>Hash</span>
+              <span>Seq</span><span>Action</span><span>Relief</span><span>Recorded (UTC)</span><span>Hash</span>
             </div>
             {[...ledger].reverse().map((entry) => {
-              const allocation = entry.allocation ?? entry;
-              const amount = allocation.amount == null ? null : Number(allocation.amount);
+              const release = entry.allocation ?? entry.settlement ?? entry;
+              const amount = release.amount == null ? null : Number(release.amount);
               const recorded = entry.recorded_at ?? entry.ts;
               return (
                 <div className={styles.ledgerRow} key={`${entry.seq}:${entry.hash}`}>
                   <span className={styles.data}>{entry.seq}</span>
-                  <span>{entry.action}</span>
                   <span>
-                    {amount == null ? allocation.resource ?? "—" : money.format(amount)}
-                    <small>{allocation.payer_route?.replaceAll("_", " ") ?? "Public identity withheld"}</small>
+                    {entry.action.replaceAll(".", " · ")}
+                    <small>{entry.money_movement?.status?.replaceAll("_", " ") ?? "Audited milestone"}</small>
+                  </span>
+                  <span>
+                    {amount == null ? release.resource ?? "—" : money.format(amount)}
+                    <small>
+                      {entry.settlement
+                        ? `${entry.settlement.channel?.replaceAll("_", " ") ?? "Channel withheld"} · SIMULATED`
+                        : release.payer_route?.replaceAll("_", " ") ?? "Public identity withheld"}
+                    </small>
                   </span>
                   <span className={styles.data}>
                     {entry.recorded_on

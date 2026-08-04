@@ -23,8 +23,10 @@ from . import ledger, queue
 from .approvals import router as approvals_router
 from .config import get_settings
 from .db import session_scope
+from .disbursements import router as disbursements_router
 from .intake import router as intake_router
 from .public_ledger import router as public_ledger_router
+from .verification_reviews import router as verification_reviews_router
 
 log = logging.getLogger("lighthouse.web")
 
@@ -32,7 +34,7 @@ _MAX_APPROVAL_BODY_BYTES = 16 * 1024
 
 
 class BoundedApprovalBodyMiddleware:
-    """Bound the public approval request before FastAPI buffers or parses it."""
+    """Bound human-decision bodies before FastAPI buffers or parses them."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -40,11 +42,20 @@ class BoundedApprovalBodyMiddleware:
     @staticmethod
     def _applies(scope: Scope) -> bool:
         path = str(scope.get("path", ""))
-        return (
-            scope.get("type") == "http"
-            and scope.get("method") == "POST"
-            and path.startswith("/v1/claims/")
-            and path.endswith("/allocations/approve")
+        if scope.get("type") != "http" or scope.get("method") != "POST":
+            return False
+        return any(
+            (
+                path.startswith(prefix)
+                and path.endswith(suffix)
+                and len(path) > len(prefix) + len(suffix)
+            )
+            for prefix, suffix in (
+                ("/v1/claims/", "/allocations/approve"),
+                ("/v1/claims/", "/verification/review"),
+                ("/v1/allocations/", "/disbursements/sign"),
+                ("/v1/disbursements/", "/execute"),
+            )
         )
 
     @staticmethod
@@ -175,4 +186,6 @@ async def unhandled(_: Request, exc: Exception) -> JSONResponse:
 app.include_router(router)
 app.include_router(intake_router)
 app.include_router(approvals_router)
+app.include_router(disbursements_router)
+app.include_router(verification_reviews_router)
 app.include_router(public_ledger_router)

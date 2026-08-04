@@ -22,7 +22,7 @@ Full setup runbook, including the Twilio webhook configuration and the asyncpg `
 
 In Render, create a Blueprint from
 `SammarieoBrown/project-lighthouse`, branch `main`, with Blueprint path
-`infra/render.yaml`. Supply these four web-service values when prompted:
+`infra/render.yaml`. Supply these web-service values when prompted:
 
 - `DATABASE_URL`: the **direct, production-branch** Neon URI. Do not paste the
   repo-root `.env` value; that value is deliberately the development branch.
@@ -30,10 +30,27 @@ In Render, create a Blueprint from
 - `TWILIO_AUTH_TOKEN`
 - `TWILIO_WHATSAPP_FROM`
 
+Supply the worker-only media values as well:
+
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: credentials
+  scoped to Object Read & Write on the private `lighthouse-media` bucket only.
+- `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`: a restricted Messaging API
+  credential used only by the worker for protected media retrieval.
+- `CLOUDFLARE_AI_API_TOKEN`: scoped to Workers AI. The Blueprint explicitly
+  enables `cloudflare_workers_ai`; without this token, claims remain filed and
+  the durable media job visibly retries/fails rather than skipping transcription.
+
 The Blueprint binds live intake to `INTAKE_HAZARD_EXTERNAL_REF=al132025`. That
 is the exact external reference of the single open production event (Hurricane
 Melissa) verified before this config was written. Change it deliberately when
 the active demo/event changes; the comparison is case-sensitive.
+
+The web service also opts into `DISBURSEMENT_EXECUTOR_MODE=simulated` for the
+Act 3 demo. This enables only the in-process `LIGHTHOUSE_DEMO_EXECUTOR_V1`; it
+does not configure or contact a real payment provider, and every receipt is
+published as simulated with no real funds moved. Remove that setting (or set it
+to `disabled`) outside the rehearsed demo until an authenticated provider
+integration has been separately reviewed.
 
 The worker inherits `DATABASE_URL` from the web service, so the credential has
 one source of truth. Alembic runs once as the paid web service's pre-deploy

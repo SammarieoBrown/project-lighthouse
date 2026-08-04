@@ -355,9 +355,10 @@ class DisbursementBatch(Base):
         _enum(DisbursementChannel, "disbursement_channel")
     )
     total: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
-    approval_id: Mapped[uuid.UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("approval.id"), nullable=True
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("approval.id", ondelete="RESTRICT")
     )
+    snapshot_hash: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 
@@ -388,7 +389,15 @@ class Disbursement(Base):
         default=DisbursementStatus.PENDING,
     )
     simulated: Mapped[bool] = mapped_column(Boolean, default=True)
+    executor_provider: Mapped[str] = mapped_column(Text)
+    snapshot_hash: Mapped[str] = mapped_column(Text)
+    execution_requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("app_user.id"), nullable=True
+    )
+    execution_idempotency_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_request_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_confirmation_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

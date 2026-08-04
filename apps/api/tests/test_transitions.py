@@ -32,6 +32,7 @@ from factories import (
     make_event,
     make_storm_file,
     make_user,
+    make_verification,
     settle_with_signature,
 )
 
@@ -61,25 +62,27 @@ def test_storm_file_walks_all_five_states_and_chain_validates(session):
     assert sf.state is StormFileState.AFFECTED
 
     # T6/C2 — evidence checks out
+    verification = make_verification(session, claim)
     statemachine.transition_claim(
-        session, claim, ClaimStatus.VERIFIED, agent=AgentName.VERIFICATION_AGENT
+        session,
+        claim,
+        ClaimStatus.VERIFIED,
+        agent=AgentName.VERIFICATION_AGENT,
+        payload={"verification_id": str(verification.id)},
     )
     statemachine.transition(
-        session, sf, StormFileState.VERIFIED, agent=AgentName.VERIFICATION_AGENT
+        session,
+        sf,
+        StormFileState.VERIFIED,
+        agent=AgentName.VERIFICATION_AGENT,
+        payload={"verification_id": str(verification.id)},
     )
     assert sf.state is StormFileState.VERIFIED
     assert claim.verified_at is not None
 
-    # A Finance Officer signs, money moves, the payment is confirmed
+    # A Finance Officer signs, and the explicitly simulated executor records a
+    # demo confirmation. The service performs C6/T8 atomically with that proof.
     settle_with_signature(session, claim, finance)
-
-    # T8/C6 — and only now can the file settle
-    statemachine.transition(
-        session, sf, StormFileState.SETTLED, agent=AgentName.LEDGER_AGENT
-    )
-    statemachine.transition_claim(
-        session, claim, ClaimStatus.SETTLED, agent=AgentName.LEDGER_AGENT
-    )
 
     assert sf.state is StormFileState.SETTLED
     assert claim.settled_at is not None

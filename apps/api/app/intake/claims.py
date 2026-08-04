@@ -9,6 +9,7 @@ media URIs, or raw evidence payloads.
 from __future__ import annotations
 
 import math
+import re
 import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status
@@ -19,6 +20,7 @@ from lighthouse_contracts import AgentName, AppRole, ClaimStatus, JobStatus, Ver
 
 from app.db import session_scope
 from app.human_auth import authenticate_human
+from app.intake.media import TWILIO_MEDIA_JOB_TYPE
 from app.models import AgentJob, Claim, Verification
 
 router = APIRouter(prefix="/api", tags=["claims"])
@@ -32,6 +34,29 @@ _VERIFICATION_SIGNAL_NAMES = frozenset(
         "media_integrity",
     }
 )
+_SAFE_SIGNAL_EVIDENCE_FIELDS = frozenset(
+    {
+        "source",
+        "source_count",
+        "observed_advisories_evaluated",
+        "highest_wind_band_kt",
+        "cloud_fraction",
+        "radius_metres",
+        "independent_households",
+        "matching_damage_households",
+        "synthetic_provenance",
+        "damage_category",
+        "matched_component",
+        "media_count",
+        "ready_count",
+        "pending_reasons",
+        "content_hash_count",
+        "perceptual_hash_count",
+        "forensic_processor_count",
+        "selected",
+    }
+)
+_SAFE_REASON = re.compile(r"^[a-z0-9_]{1,64}$")
 
 
 def _verification_state(session: Session, claim: Claim) -> str:
@@ -63,7 +88,24 @@ def _verification_state(session: Session, claim: Claim) -> str:
         .limit(1)
     )
     if job is None:
-        return "FAILED"
+        media_job = session.scalar(
+            select(AgentJob)
+            .where(
+                AgentJob.job_type == TWILIO_MEDIA_JOB_TYPE,
+                AgentJob.payload["claim_id"].astext == str(claim.id),
+            )
+            .order_by(AgentJob.created_at.desc(), AgentJob.id.desc())
+            .limit(1)
+        )
+        if media_job is None:
+            return "FAILED"
+        return {
+            JobStatus.QUEUED: "MEDIA_PENDING",
+            JobStatus.RUNNING: "MEDIA_PROCESSING",
+            JobStatus.DONE: "MEDIA_FAILED",
+            JobStatus.FAILED: "MEDIA_FAILED",
+            JobStatus.DEAD: "MEDIA_FAILED",
+        }[media_job.status]
     return {
         JobStatus.QUEUED: "QUEUED",
         JobStatus.RUNNING: "RUNNING",
@@ -74,14 +116,18 @@ def _verification_state(session: Session, claim: Claim) -> str:
 
 
 def _summary(session: Session, row) -> dict:
-    claim = session.get(Claim, row.id)
-    if claim is None:  # Same transaction; only defensive.
-        raise RuntimeError("claim disappeared while serialising")
+    if "verification_state" in row._mapping:
+        verification_state = row.verification_state
+    else:
+        claim = session.get(Claim, row.id)
+        if claim is None:  # Same transaction; only defensive.
+            raise RuntimeError("claim disappeared while serialising")
+        verification_state = _verification_state(session, claim)
     return {
         "id": row.id,
         "claim_ref": row.claim_ref,
         "status": str(row.status),
-        "verification_state": _verification_state(session, claim),
+        "verification_state": verification_state,
         "damage_type": row.damage_type,
         "reported_needs": list(row.reported_needs or []),
         "parish": row.parish,
@@ -107,18 +153,90 @@ def list_redacted_claims(
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
                    c.channel, c.filed_at,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
-                     AS evidence_count
+                     AS evidence_count,
+                   CASE
+                     WHEN c.status::text IN ('VERIFIED', 'SETTLED') THEN 'VERIFIED'
+                     WHEN latest_verification.verdict IN ('AUTO_VERIFIED', 'APPROVED')
+                       THEN 'VERIFIED'
+                     WHEN latest_verification.verdict = 'REVIEW' THEN 'REVIEW'
+                     WHEN latest_verification.verdict IN ('FLAGGED', 'REJECTED')
+                       THEN 'FLAGGED'
+                     WHEN latest_verification.id IS NOT NULL THEN 'COMPLETED'
+                     WHEN verification_job.status = 'QUEUED' THEN 'QUEUED'
+                     WHEN verification_job.status = 'RUNNING' THEN 'RUNNING'
+                     WHEN verification_job.status = 'DONE' THEN 'COMPLETED'
+                     WHEN verification_job.id IS NOT NULL THEN 'FAILED'
+                     WHEN media_job.status = 'QUEUED' THEN 'MEDIA_PENDING'
+                     WHEN media_job.status = 'RUNNING' THEN 'MEDIA_PROCESSING'
+                     ELSE 'FAILED'
+                   END AS verification_state
             FROM claim c
             JOIN storm_file sf ON sf.id = c.storm_file_id
+            LEFT JOIN LATERAL (
+              SELECT v.id, v.verdict::text AS verdict
+                FROM verification v
+               WHERE v.claim_id = c.id
+               ORDER BY v.created_at DESC, v.id DESC
+               LIMIT 1
+            ) latest_verification ON TRUE
+            LEFT JOIN LATERAL (
+              SELECT j.id, j.status::text AS status
+                FROM agent_job j
+               WHERE j.job_type = :verification_job_type
+                 AND j.payload->>'claim_id' = c.id::text
+               ORDER BY j.created_at DESC, j.id DESC
+               LIMIT 1
+            ) verification_job ON TRUE
+            LEFT JOIN LATERAL (
+              SELECT j.id, j.status::text AS status
+                FROM agent_job j
+               WHERE j.job_type = :media_job_type
+                 AND j.payload->>'claim_id' = c.id::text
+               ORDER BY j.created_at DESC, j.id DESC
+               LIMIT 1
+            ) media_job ON TRUE
             WHERE (CAST(:event_id AS uuid) IS NULL
                    OR c.hazard_event_id = CAST(:event_id AS uuid))
             ORDER BY c.sol DESC, c.filed_at DESC, c.id
             LIMIT :limit
             """
         ),
-        {"event_id": hazard_event_id, "limit": limit},
+        {
+            "event_id": hazard_event_id,
+            "limit": limit,
+            "verification_job_type": str(AgentName.VERIFICATION_AGENT),
+            "media_job_type": TWILIO_MEDIA_JOB_TYPE,
+        },
     ).all()
     return [_summary(session, row) for row in rows]
+
+
+def _safe_signal_evidence(value: object, *, depth: int = 0) -> dict:
+    """Expose decision context while withholding household and evidence IDs."""
+    if not isinstance(value, dict) or depth > 1:
+        return {}
+    safe: dict[str, object] = {}
+    for name, raw in value.items():
+        if name not in _SAFE_SIGNAL_EVIDENCE_FIELDS:
+            continue
+        if name == "selected":
+            nested = _safe_signal_evidence(raw, depth=depth + 1)
+            if nested:
+                safe[name] = nested
+        elif isinstance(raw, bool):
+            safe[name] = raw
+        elif isinstance(raw, int) and not isinstance(raw, bool) and abs(raw) <= 1_000_000:
+            safe[name] = raw
+        elif isinstance(raw, float) and math.isfinite(raw) and abs(raw) <= 1_000_000:
+            safe[name] = raw
+        elif isinstance(raw, str) and len(raw) <= 120:
+            safe[name] = raw
+        elif name == "pending_reasons" and isinstance(raw, list):
+            safe[name] = [
+                reason for reason in raw[:10]
+                if isinstance(reason, str) and _SAFE_REASON.fullmatch(reason)
+            ]
+    return safe
 
 
 def _safe_signals(signals: object) -> dict:
@@ -141,6 +259,12 @@ def _safe_signals(signals: object) -> dict:
         ):
             signal["score"] = float(score)
         if signal:
+            note = value.get("note")
+            if isinstance(note, str) and 0 < len(note) <= 240:
+                signal["note"] = note
+            evidence = _safe_signal_evidence(value.get("evidence"))
+            if evidence:
+                signal["evidence"] = evidence
             safe[name] = signal
     return safe
 
@@ -195,8 +319,10 @@ def get_redacted_claim(session: Session, claim_id: uuid.UUID) -> dict | None:
     )
     detail["verification"] = (
         {
+            "id": latest.id,
             "confidence": float(latest.confidence),
             "verdict": str(latest.verdict),
+            "capped": latest.capped,
             "signals": _safe_signals(latest.signals),
             "created_at": latest.created_at,
         }

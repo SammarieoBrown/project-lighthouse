@@ -24,6 +24,7 @@ the executable copy.
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -36,6 +37,7 @@ from lighthouse_contracts import (
     SOL_PRIORITY,
     ActorKind,
     AgentName,
+    AppRole,
     ClaimStatus,
     DisbursementStatus,
     Event,
@@ -45,7 +47,15 @@ from lighthouse_contracts import (
 from lighthouse_contracts.events import FOLLOW_ON
 
 from . import ledger, queue
-from .models import Allocation, Claim, Disbursement, LedgerEntry, StormFile
+from .models import (
+    Allocation,
+    AppUser,
+    Claim,
+    Disbursement,
+    LedgerEntry,
+    StormFile,
+    Verification,
+)
 
 
 class IllegalTransition(Exception):
@@ -54,6 +64,10 @@ class IllegalTransition(Exception):
 
 class GateNotSatisfied(Exception):
     """A human signature that this transition requires is missing."""
+
+
+class VerificationNotSatisfied(Exception):
+    """A VERIFIED transition is not bound to an eligible immutable verdict."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +80,8 @@ class Transition:
     gate: GateKind | None = None
 
 
-#: The eight legal Storm File transitions. See transitions.md.
+#: The legal Storm File transitions. T6 and T7 share a state pair but differ
+#: by actor: automatic agent verdict versus Review Clerk adjudication.
 TRANSITIONS: tuple[Transition, ...] = (
     Transition("T1", None, StormFileState.REGISTERED,
                AgentName.INTAKE_AGENT, Event.HOUSEHOLD_REGISTERED),
@@ -82,20 +97,115 @@ TRANSITIONS: tuple[Transition, ...] = (
                AgentName.INTAKE_AGENT, Event.CLAIM_CREATED),
     Transition("T6", StormFileState.AFFECTED, StormFileState.VERIFIED,
                AgentName.VERIFICATION_AGENT, Event.CLAIM_VERIFIED),
+    Transition("T7", StormFileState.AFFECTED, StormFileState.VERIFIED,
+               None, Event.CLAIM_VERIFIED),
     Transition("T8", StormFileState.VERIFIED, StormFileState.SETTLED,
                AgentName.LEDGER_AGENT, Event.HOUSEHOLD_SETTLED,
                GateKind.DISBURSEMENT_BATCH),
 )
 
-_BY_PAIR: dict[tuple[StormFileState | None, StormFileState], Transition] = {
-    (t.src, t.dst): t for t in TRANSITIONS
+_BY_CONTEXT: dict[
+    tuple[StormFileState | None, StormFileState, ActorKind], Transition
+] = {
+    (t.src, t.dst, ActorKind.HUMAN if t.id == "T7" else ActorKind.AGENT): t
+    for t in TRANSITIONS
 }
 
 
 def find_transition(
-    src: StormFileState | None, dst: StormFileState
+    src: StormFileState | None,
+    dst: StormFileState,
+    *,
+    actor_kind: ActorKind = ActorKind.AGENT,
 ) -> Transition | None:
-    return _BY_PAIR.get((src, dst))
+    return _BY_CONTEXT.get((src, dst, actor_kind))
+
+
+_VERIFICATION_SIGNALS = frozenset(
+    {
+        "hazard_sufficiency",
+        "satellite_change",
+        "neighbour_corroboration",
+        "registry_match",
+        "media_integrity",
+    }
+)
+
+
+def _agent_signals_eligible(signals: object) -> bool:
+    if not isinstance(signals, dict) or set(signals) != _VERIFICATION_SIGNALS:
+        return False
+    for signal in signals.values():
+        if not isinstance(signal, dict) or signal.get("present") is not True:
+            return False
+        score = signal.get("score")
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(float(score))
+            or not 0.0 <= float(score) <= 1.0
+        ):
+            return False
+    return True
+
+
+def _verification_authorizes_claim(
+    session: Session,
+    claim: Claim,
+    *,
+    verification_id: object,
+    actor_kind: ActorKind,
+    actor_id: uuid.UUID | None,
+) -> Verification:
+    try:
+        parsed_id = uuid.UUID(str(verification_id))
+    except (TypeError, ValueError) as exc:
+        raise VerificationNotSatisfied(
+            "VERIFIED transition requires an immutable verification id"
+        ) from exc
+
+    verification = session.get(Verification, parsed_id)
+    latest_id = session.execute(
+        select(Verification.id)
+        .where(Verification.claim_id == claim.id)
+        .order_by(Verification.created_at.desc(), Verification.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if verification is None or verification.claim_id != claim.id or latest_id != parsed_id:
+        raise VerificationNotSatisfied(
+            "VERIFIED transition must bind the claim's latest immutable verification"
+        )
+
+    if actor_kind is ActorKind.AGENT:
+        confidence = float(verification.confidence)
+        eligible = (
+            verification.actor_kind is ActorKind.AGENT
+            and verification.actor_id is None
+            and verification.agent_name == str(AgentName.VERIFICATION_AGENT)
+            and verification.verdict.value == "AUTO_VERIFIED"
+            and math.isfinite(confidence)
+            and confidence >= 0.85
+            and not verification.capped
+            and _agent_signals_eligible(verification.signals)
+        )
+    elif actor_kind is ActorKind.HUMAN:
+        clerk = session.get(AppUser, actor_id) if actor_id is not None else None
+        eligible = (
+            verification.actor_kind is ActorKind.HUMAN
+            and verification.actor_id == actor_id
+            and verification.verdict.value == "APPROVED"
+            and verification.overrides_id is not None
+            and clerk is not None
+            and clerk.active
+            and clerk.role is AppRole.REVIEW_CLERK
+        )
+    else:
+        eligible = False
+    if not eligible:
+        raise VerificationNotSatisfied(
+            "immutable verification does not authorize this VERIFIED transition"
+        )
+    return verification
 
 
 def _gate_satisfied(session: Session, storm_file_id: uuid.UUID, gate: GateKind) -> bool:
@@ -139,7 +249,7 @@ def transition(
     the follow-on job commit together or not at all.
     """
     src = storm_file.state
-    t = find_transition(src, dst)
+    t = find_transition(src, dst, actor_kind=actor_kind)
     if t is None:
         raise IllegalTransition(
             f"{src} -> {dst} is not a legal transition (see transitions.md)"
@@ -150,6 +260,45 @@ def transition(
             f"{t.id} requires gate {t.gate}: no confirmed disbursement for "
             f"storm_file {storm_file.id}"
         )
+
+    if dst is StormFileState.VERIFIED:
+        verification_id = (payload or {}).get("verification_id")
+        try:
+            parsed_verification_id = uuid.UUID(str(verification_id))
+        except (TypeError, ValueError):
+            parsed_verification_id = None
+        verification = (
+            session.get(Verification, parsed_verification_id)
+            if parsed_verification_id is not None
+            else None
+        )
+        claim = (
+            session.get(Claim, verification.claim_id)
+            if verification is not None
+            else None
+        )
+        if claim is None or claim.storm_file_id != storm_file.id:
+            raise VerificationNotSatisfied(
+                "VERIFIED Storm File transition must bind a claim on that file"
+            )
+        _verification_authorizes_claim(
+            session,
+            claim,
+            verification_id=verification_id,
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+
+    if actor_kind is ActorKind.AGENT:
+        if agent is not None and agent is not t.agent:
+            raise IllegalTransition(
+                f"{agent} cannot perform transition {t.id}; authority belongs to {t.agent}"
+            )
+        resolved_agent = agent or t.agent
+    else:
+        if agent is not None:
+            raise IllegalTransition("human transitions cannot assert agent authority")
+        resolved_agent = None
 
     storm_file.state = dst
     storm_file.updated_at = datetime.now(UTC)
@@ -168,7 +317,7 @@ def transition(
         },
         actor_kind=actor_kind,
         actor_id=actor_id,
-        agent=agent or t.agent,
+        agent=resolved_agent,
     )
 
     if enqueue_follow_on and (next_agent := FOLLOW_ON.get(t.event)):
@@ -230,7 +379,7 @@ CLAIM_TRANSITIONS: dict[tuple[ClaimStatus | None, ClaimStatus], str] = {
 }
 
 
-def _enqueue_verification(session: Session, claim: Claim) -> None:
+def enqueue_claim_verification(session: Session, claim: Claim) -> None:
     """Send a claim to verification.
 
     INT-04: an SOL claim rides at priority 100. That changes *ordering* only —
@@ -251,6 +400,7 @@ def record_claim_creation(
     actor_kind: ActorKind = ActorKind.AGENT,
     actor_id: uuid.UUID | None = None,
     payload: dict | None = None,
+    enqueue_verification: bool = True,
 ) -> LedgerEntry:
     """C1 — a claim is filed.
 
@@ -278,7 +428,8 @@ def record_claim_creation(
         actor_id=actor_id,
         agent=AgentName.INTAKE_AGENT,
     )
-    _enqueue_verification(session, claim)
+    if enqueue_verification:
+        enqueue_claim_verification(session, claim)
     return entry
 
 
@@ -297,6 +448,19 @@ def transition_claim(
     tid = CLAIM_TRANSITIONS.get((src, dst))
     if tid is None:
         raise IllegalTransition(f"claim {src} -> {dst} is not legal (see transitions.md)")
+
+    if dst is ClaimStatus.VERIFIED:
+        _verification_authorizes_claim(
+            session,
+            claim,
+            verification_id=(payload or {}).get("verification_id"),
+            actor_kind=actor_kind,
+            actor_id=actor_id,
+        )
+        if actor_kind is ActorKind.AGENT and agent is not AgentName.VERIFICATION_AGENT:
+            raise IllegalTransition("C2 agent authority belongs to verification_agent")
+        if actor_kind is ActorKind.HUMAN and agent is not None:
+            raise IllegalTransition("human C2 transitions cannot assert agent authority")
 
     claim.status = dst
     now = datetime.now(UTC)
@@ -334,7 +498,7 @@ def transition_claim(
     if dst is ClaimStatus.FILED:
         # C5 — a rejected claim reopened on appeal (VER-06) goes back through
         # verification exactly like a new one.
-        _enqueue_verification(session, claim)
+        enqueue_claim_verification(session, claim)
 
     return entry
 

@@ -87,6 +87,15 @@ illegible as grey-on-grey; the warm meaning hues already encode impact, while
 the muted blue outlines encode forecast wind thresholds. It carries no glow,
 chrome, status, or action affordance and must not leave that map layer.
 
+One narrow colour exception is also committed for the simulator's modelled
+radar-style precipitation. `--lh-weather-*` is a discrete light-to-extreme
+sequence used only to separate modelled precipitation intensity. It is
+qualitative rather than calibrated rainfall, cannot carry impact or operational
+status, and must stay beside copy that says **MODELLED PRECIPITATION + WIND ·
+NOT OBSERVED**. When an observed GOES frame is available it replaces the
+modelled precipitation field. The sequence must not leave
+`apps/console/app/simulator/` or become product chrome.
+
 ---
 
 ## Part 2 — The positive direction
@@ -177,13 +186,14 @@ These are the ones that do not appear in any general anti-slop guide, because th
 Anything decorative that pulses makes static status look live, which is the exact failure mode that gets a real alert ignored.
 
 One narrowly bounded motion exception is committed for the **storm simulation
-surface**. Particle advection inside that map may move only while simulated time
-is advancing. It encodes the direction and relative speed of the selected
-synthetic or historical wind field; a static contour cannot carry either fact.
-The particles are synthesised model output, never observed wind, and the surface
-must name them as such. They must stop immediately when playback pauses, when
-the surface is hidden, or when `prefers-reduced-motion` is set. The exception
-must never acquire pulsing, easing, decorative turbulence, status colour,
+surface**. Modelled precipitation may evolve and wind particles may advect
+continuously at the selected simulation hour, even while the timeline is
+paused. That motion encodes the steady circulation, direction and relative
+speed of the selected model field; it does **not** advance the selected hour or
+the impact calculation. The layer is qualitative model output, never observed
+radar or wind, and the surface must name it as such. It must stop when the
+surface is hidden or when `prefers-reduced-motion` is set. The exception must
+never acquire pulsing, easing, decorative turbulence, status colour,
 attention-seeking chrome, or motion outside the map canvas. Its containment
 boundary is `apps/console/app/simulator/`; it does not relax M1 anywhere else.
 

@@ -268,6 +268,34 @@
   color: var(--lh-figure);
 }
 
+.mapLayerControl {
+  position: absolute;
+  top: calc(var(--lh-space-8) * 2.45);
+  right: var(--lh-space-3);
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: var(--lh-space-2);
+}
+
+.mapLayerControl button {
+  min-height: var(--lh-space-7);
+  padding: var(--lh-space-2) var(--lh-space-3);
+  border: calc(var(--lh-space-1) / 2) solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  background: color-mix(in srgb, var(--lh-ground) 94%, transparent);
+  color: var(--lh-figure);
+  font: inherit;
+  font-size: var(--lh-text-micro);
+  cursor: pointer;
+}
+
+.mapLayerControl button:hover,
+.mapLayerControl button[aria-pressed="true"] {
+  border-color: var(--lh-figure);
+}
+
 .mapKey {
   position: absolute;
   left: var(--lh-space-3);
@@ -299,6 +327,15 @@
 .wind34 { color: var(--lh-hazard-34); }
 .wind50 { color: var(--lh-hazard-50); }
 .wind64 { color: var(--lh-hazard-64); }
+.radarLight { color: var(--lh-weather-rain); background: var(--lh-weather-rain); }
+.radarModerate { color: var(--lh-weather-deep); background: var(--lh-weather-deep); }
+.radarHeavy { color: var(--lh-weather-severe); background: var(--lh-weather-severe); }
+.radarExtreme { color: var(--lh-weather-core); background: var(--lh-weather-core); }
+.windFlow { color: var(--lh-hazard-64); }
+.observedWeather {
+  color: var(--lh-figure);
+  background: color-mix(in srgb, var(--lh-figure) 28%, transparent);
+}
 .major { color: var(--lh-elevated); background: color-mix(in srgb, var(--lh-elevated) 35%, transparent); }
 .destroyed { color: var(--lh-critical); background: color-mix(in srgb, var(--lh-critical) 35%, transparent); }
 

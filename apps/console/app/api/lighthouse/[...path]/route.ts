@@ -7,6 +7,9 @@ const MAX_REQUEST_BYTES = 16 * 1024;
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}";
 const CLAIM_DETAIL = new RegExp(`^/api/claims/${UUID}$`);
 const APPROVAL = new RegExp(`^/v1/claims/${UUID}/allocations/approve$`);
+const REVIEW = new RegExp(`^/v1/claims/${UUID}/verification/review$`);
+const SIGN_DISBURSEMENT = new RegExp(`^/v1/allocations/${UUID}/disbursements/sign$`);
+const EXECUTE_DISBURSEMENT = new RegExp(`^/v1/disbursements/${UUID}/execute$`);
 
 function apiBase(): URL | null {
   const configured = process.env.LIGHTHOUSE_API_URL?.trim();
@@ -29,9 +32,15 @@ function allowedPath(method: string, segments: string[]): string | null {
   if (method === "GET" && (
     path === "/api/claims"
     || path === "/v1/public/ledger"
+    || path === "/v1/settlements"
     || CLAIM_DETAIL.test(path)
   )) return path;
-  if (method === "POST" && APPROVAL.test(path)) return path;
+  if (method === "POST" && (
+    APPROVAL.test(path)
+    || REVIEW.test(path)
+    || SIGN_DISBURSEMENT.test(path)
+    || EXECUTE_DISBURSEMENT.test(path)
+  )) return path;
   return null;
 }
 

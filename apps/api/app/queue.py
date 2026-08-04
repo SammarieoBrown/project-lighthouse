@@ -143,6 +143,11 @@ def fail(session: Session, job: AgentJob, error: str) -> None:
         job.finished_at = datetime.now(UTC)
     else:
         job.status = JobStatus.QUEUED
+        # Bounded exponential retry prevents a provider outage from issuing
+        # five paid/network calls back-to-back. The job remains durable and
+        # visible while the delay grows from seconds to a few minutes.
+        delay_seconds = min(300, 5 * (2 ** max(job.attempts - 1, 0)))
+        job.run_after = datetime.now(UTC) + timedelta(seconds=delay_seconds)
     session.flush()
 
 

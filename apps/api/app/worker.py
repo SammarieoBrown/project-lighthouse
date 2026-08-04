@@ -34,6 +34,7 @@ log = logging.getLogger("lighthouse.worker")
 #: Agent handlers register here. Empty in Phase 0 — the contracts exist, the
 #: implementations land in weeks 1 and 2.
 HANDLERS: dict[str, Callable[[Session, dict], None]] = {}
+TERMINAL_FAILURE_JOBS: dict[str, str] = {}
 
 _SAFE_EXCEPTION_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
@@ -46,12 +47,20 @@ def _safe_error_code(exc: BaseException) -> str:
     return f"handler_error:{name}"
 
 
-def register(agent: AgentName):
+def register(agent: AgentName | str):
     def deco(fn: Callable[[Session, dict], None]):
         HANDLERS[str(agent)] = fn
         return fn
 
     return deco
+
+
+def register_terminal_failure(source_job: AgentName | str, recovery_job: str) -> None:
+    """Durably route an exhausted job to a fail-closed reconciliation job."""
+    source = str(source_job)
+    if source in TERMINAL_FAILURE_JOBS and TERMINAL_FAILURE_JOBS[source] != recovery_job:
+        raise RuntimeError(f"terminal recovery already registered for {source}")
+    TERMINAL_FAILURE_JOBS[source] = recovery_job
 
 
 _running = True
@@ -106,6 +115,18 @@ def run_once(worker_id: str) -> bool:
             failed = session.get(AgentJob, job_id)
             if failed is not None:
                 queue.fail(session, failed, error_code)
+                recovery_job = TERMINAL_FAILURE_JOBS.get(job_type)
+                if failed.status.value == "DEAD" and recovery_job is not None:
+                    queue.enqueue(
+                        session,
+                        job_type=recovery_job,
+                        payload={
+                            **payload,
+                            "terminal_error_code": error_code,
+                            "failed_job_id": str(job_id),
+                        },
+                        priority=failed.priority,
+                    )
 
     return True
 

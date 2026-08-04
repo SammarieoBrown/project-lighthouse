@@ -164,6 +164,19 @@
   --lh-hazard-50: #5590c9;
   --lh-hazard-64: #7fb8f0;
 
+  /* MODELLED RADAR PRECIPITATION — simulator map only. These discrete colours
+   * form a radar-style light-to-extreme precipitation scale without borrowing
+   * the operational status hues. They are qualitative model output, not
+   * calibrated rainfall or observations, and must always sit beside the
+   * simulator's "MODELLED ... NOT OBSERVED" label. Observed GOES imagery
+   * replaces the modelled precipitation field. */
+  --lh-weather-rain: #36b85a;
+  --lh-weather-cold: #f4dc35;
+  --lh-weather-deep: #f39a2e;
+  --lh-weather-severe: #ef3d32;
+  --lh-weather-core: #d41486;
+  --lh-weather-extreme: #ffe7f2;
+
   /* MAPPED INVENTORY — Register I only. A structure is context, neither a
    * hazard threshold nor an impact outcome, so borrowing either scale would
    * make its colour assert the wrong thing. This cyan-blue is restricted to
@@ -196,6 +209,12 @@
   --lh-quiet: #5c645f;
   --lh-figure: #141a18;
   --lh-structure: #004f91; /* same mapped-inventory role; dark enough over light land */
+  --lh-weather-rain: #237d3d;
+  --lh-weather-cold: #7d6d11;
+  --lh-weather-deep: #945813;
+  --lh-weather-severe: #a62c23;
+  --lh-weather-core: #94105e;
+  --lh-weather-extreme: #8b4766;
 
   /* Marks first, at 3:1 or better — these stay recognisably red, amber, blue
    * and green, because a swatch that has to be explained is not carrying its
@@ -218,6 +237,12 @@
     --lh-quiet: #5c645f;
     --lh-figure: #141a18;
     --lh-structure: #004f91;
+    --lh-weather-rain: #237d3d;
+    --lh-weather-cold: #7d6d11;
+    --lh-weather-deep: #945813;
+    --lh-weather-severe: #a62c23;
+    --lh-weather-core: #94105e;
+    --lh-weather-extreme: #8b4766;
 
     --lh-critical: #cf3b2b;
     --lh-critical-text: #a8251a;
