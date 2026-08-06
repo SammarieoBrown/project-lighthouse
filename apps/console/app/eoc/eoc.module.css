@@ -193,11 +193,14 @@
   color: var(--lh-quiet);
 }
 
-/* One line, read left to right, separated by rules.
+/* Navigation and status share this corner, and they are not the same kind of
+ * thing. Both used to be one flex list joined by identical hairlines, which
+ * made the only route between the console's three screens read as the fourth
+ * and fifth entries in a sync readout.
  *
- * Stacked it was three lines of small type in the top-right corner, and
- * because the masthead row stretches to its tallest column it alone set the
- * height of the brand and the posture beside it. It is status, not a table. */
+ * They separate the way Register II separates everything else: by space and by
+ * type. Navigation is display weight and underlined; status is data font and
+ * quiet, and the hairline now only divides one status item from another. */
 .stale {
   grid-area: sync;
   justify-self: end;
@@ -210,13 +213,23 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--lh-space-3);
+  gap: var(--lh-space-3) var(--lh-space-6);
+}
+
+/* Status reports by exception, so most of the time these are empty. An empty
+ * span still occupies a gap and still takes a separator, which is how a screen
+ * ends up with a hairline floating in the corner divides nothing from nothing.
+ * `:empty` stops matching the instant content lands, so the element is in the
+ * DOM the whole time — which is what an aria-live region requires — and visible
+ * in the same paint as the text it has to announce. */
+.stale > span:empty {
+  display: none;
 }
 
 /* A hairline between status items rather than a bullet. The separator is the
  * substrate's rule colour, so it reads as the same kind of division as every
  * other rule on the screen. */
-.stale > * + *::before {
+.stale > span:not(:empty) + span:not(:empty)::before {
   content: "";
   display: inline-block;
   width: 1px;
@@ -235,7 +248,13 @@
   text-decoration: underline;
 }
 
-.simulatorLink {
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--lh-space-5);
+}
+
+.navLink {
   color: var(--lh-figure);
   font-family: var(--lh-font-display);
   font-weight: 700;
@@ -245,8 +264,8 @@
   text-transform: uppercase;
 }
 
-.simulatorLink:hover,
-.simulatorLink:focus-visible {
+.navLink:hover,
+.navLink:focus-visible {
   text-decoration-color: currentColor;
 }
 
@@ -259,12 +278,15 @@
   overflow: hidden;
 }
 
+/* Two rows, not three. The caption bar that held the first one restated the
+ * storm, the evidence kind and the registry size — each of which is on screen
+ * elsewhere — and charged the map a row of its height for the restatement. */
 .mapPanel {
   position: relative;
   min-width: 0;
   border-right: 1px solid var(--lh-rule);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
@@ -285,14 +307,6 @@
 .panelHead b {
   color: var(--lh-figure);
   font-weight: var(--lh-body-weight-strong);
-}
-
-.panelTitle {
-  color: inherit;
-  flex: none;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
 }
 
 .mapCanvas {
@@ -326,28 +340,43 @@
   color: var(--lh-quiet);
 }
 
-.legendItem b,
-.provenance b {
+.legendItem b {
   color: var(--lh-figure);
   font-weight: var(--lh-body-weight-strong);
 }
 
-.provenance {
+/* Four sentences of provenance were pinned under the map permanently. They
+ * answer a question a reader asks once and then never again — "is any of this
+ * real?" — so they are kept in full and asked for. The summary is the one
+ * sentence that has to survive without opening it.
+ *
+ * A native disclosure rather than a component: it is keyboard-operable,
+ * announced correctly and printable without anything being written for it. */
+.provenanceDetails {
   flex-basis: 100%;
   color: var(--lh-quiet);
-  line-height: var(--lh-leading-base);
 }
 
-.legendDot {
-  width: var(--lh-space-3);
-  height: var(--lh-space-3);
-  border-radius: 50%;
-}
-
-.legendCount {
-  font-family: var(--lh-font-data);
-  font-variant-numeric: tabular-nums;
+.provenanceSummary {
+  cursor: pointer;
   color: var(--lh-figure);
+  font-weight: var(--lh-body-weight-strong);
+  list-style-position: outside;
+}
+
+.provenanceSummary:focus-visible {
+  outline: var(--lh-space-1) solid var(--lh-figure);
+  outline-offset: var(--lh-space-1);
+}
+
+.provenanceDetails .provenance {
+  margin-top: var(--lh-space-2);
+  max-width: 92ch;
+  color: var(--lh-quiet);
+  font-family: var(--lh-font-body);
+  font-size: var(--lh-text-fine);
+  letter-spacing: normal;
+  line-height: var(--lh-leading-base);
 }
 
 /* ---------- right column — Register III ---------- */
@@ -394,13 +423,6 @@
   margin-bottom: var(--lh-space-4);
 }
 
-.replayLimit {
-  color: var(--lh-figure);
-  font-size: var(--lh-text-fine);
-  line-height: var(--lh-leading-base);
-  margin-bottom: var(--lh-space-4);
-}
-
 .gateActions {
   display: flex;
   gap: var(--lh-space-3);
@@ -421,12 +443,6 @@
   cursor: pointer;
 }
 
-.gateButton.secondary {
-  background: transparent;
-  color: var(--lh-figure);
-  border-color: var(--lh-rule);
-}
-
 .gateButton:disabled {
   background: transparent;
   border-color: var(--lh-rule);
@@ -434,74 +450,23 @@
   cursor: not-allowed;
 }
 
-.reviewList {
-  border-top: 1px solid var(--lh-rule);
-  margin-top: var(--lh-space-4);
-  max-height: calc(var(--lh-space-8) * 5);
-  overflow-y: auto;
-  padding-top: var(--lh-space-3);
-  scrollbar-gutter: stable;
-}
+/* The district review's rules lived here. It was a disclosure listing the same
+ * districts, ranked the same way, centring the map on the same click as the
+ * counts table below it — two lists of one thing, and the one that is always
+ * open won. */
 
-.reviewHead,
-.reviewRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 8ch;
-  gap: var(--lh-space-3);
-  width: 100%;
-}
-
-.reviewHead {
-  color: var(--lh-quiet);
-  font-size: var(--lh-text-micro);
-  letter-spacing: 0.06em;
-  padding: var(--lh-space-2) var(--lh-space-2) var(--lh-space-3);
-  text-transform: uppercase;
-}
-
-.reviewHead span:first-child {
-  grid-column: 1 / 3;
-}
-
-.reviewRow {
-  align-items: baseline;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--lh-text-fine);
-  padding: var(--lh-space-2);
-  text-align: left;
-}
-
-.reviewRow[data-unlocated="true"],
 .countRow[data-unlocated="true"] {
   cursor: default;
 }
 
-.reviewRow:not([data-unlocated="true"]):hover,
-.reviewRow[data-selected="true"],
 .countRow:not(.head):not([data-unlocated="true"]):hover,
 .countRow[data-selected="true"] {
   background: var(--lh-panel);
 }
 
-.reviewRow[data-selected="true"],
 .countRow[data-selected="true"] {
   outline: 1px solid var(--lh-figure);
   outline-offset: -1px;
-}
-
-.reviewParish {
-  color: var(--lh-quiet);
-  min-width: 0;
-}
-
-.reviewEmpty {
-  color: var(--lh-quiet);
-  font-size: var(--lh-text-fine);
-  padding: var(--lh-space-3) var(--lh-space-2);
 }
 
 /* A ruled row per line turned this column into a spreadsheet. Rules belong to
@@ -542,6 +507,15 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* Resolved here rather than through an inline style in the row. Colour that a
+ * component writes as a literal is colour the pre-merge checklist cannot see. */
+.countValue[data-band="destroyed"] { color: var(--lh-critical); }
+.countValue[data-band="major"] { color: var(--lh-elevated); }
+
+/* The head row reuses .countValue for its two column labels, which are words,
+ * not counts, and must not take the meaning hues with them. */
+.head .countValue { color: inherit; }
 
 .feed {
   min-height: 0;
@@ -696,19 +670,26 @@
 .tickMajor { background: var(--lh-elevated); }
 .tickDestroyed { background: var(--lh-critical); }
 
+/* `nowrap` is here for the time itself — a clock that breaks across two lines
+ * mid-reading is not a clock. It is not for the labels underneath, which are
+ * sentences and must be free to wrap, or the widest one silently sets the width
+ * of this whole footer column. */
 .clock {
   font-family: var(--lh-font-data);
   font-variant-numeric: tabular-nums;
   font-size: var(--lh-text-base);
   white-space: nowrap;
+  min-width: 0;
 }
 
-.clockLabel {
+.clockLabel,
+.clockNext {
   display: block;
   font-size: var(--lh-text-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lh-quiet);
+  white-space: normal;
 }
 
 /* Worst-hit list: place over parish, no rule between them. */
@@ -752,7 +733,7 @@
   .readings {
     display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--lh-space-5);
   }
 
@@ -761,12 +742,11 @@
   }
 }
 
-/* A fixed-height side rail cannot keep three independent grid rows visible
- * once the district review opens: at laptop widths/heights, the gate and
- * ranked counts consume the available track space and collapse the activity
- * feed to zero. Let the rail become the one vertical scroll container in that
- * constrained fixed-frame layout. The review keeps its shorter, local scroll
- * so opening 100+ districts does not turn the gate itself into the whole page. */
+/* A fixed-height side rail cannot keep three independent grid rows visible at
+ * laptop widths and heights: the gate and the ranked counts consume the
+ * available track space and collapse the activity feed to zero. Let the rail
+ * become the one vertical scroll container in that constrained fixed-frame
+ * layout. */
 @media (max-width: 68em), (max-height: 48em) {
   .side {
     display: block;
@@ -846,10 +826,6 @@
   }
 
   .feed { overflow: visible; }
-
-  .reviewList {
-    max-height: calc(var(--lh-space-8) * 7);
-  }
 
   .controller {
     display: grid;
@@ -1027,7 +1003,7 @@
     row-gap: var(--lh-space-1);
   }
 
-  .stale > * + *::before {
+  .stale > span:not(:empty) + span:not(:empty)::before {
     content: "·";
     display: inline;
     width: auto;
@@ -1089,13 +1065,17 @@
     overflow-wrap: anywhere;
   }
 
-  .simulatorLink {
+  .nav {
+    flex-wrap: wrap;
+  }
+
+  .navLink {
     align-items: center;
     display: inline-flex;
     min-height: 44px;
   }
 
-  .stale > * + *::before {
+  .stale > span:not(:empty) + span:not(:empty)::before {
     content: none;
     display: none;
   }

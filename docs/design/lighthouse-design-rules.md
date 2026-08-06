@@ -80,6 +80,24 @@ Ranked roughly by how strongly each one reads as machine-generated. Anything her
 29. **shadcn/ui or a Tailwind component library used unmodified.** Using the primitives is fine — using them with default tokens is the leading tell in the corpus. If we adopt any component library, its theme layer is fully overwritten before the second component lands. As of Aug 2 there is no Tailwind and no component library: the substrate is plain custom properties, which is the version of this rule with nothing to get wrong. Adopting Tailwind later is allowed only with `--color-*` reset and our tokens mapped in.
 30. **A ground nobody chose.** Both grounds are decided and each has a reason: the console is dark because an EOC is read in a dim room during a storm, often with the lights down and a projector running; the portal is light because it is read in daylight, on a phone, by a donor or an auditor who is not in a crisis. Different rooms, different grounds. What is banned is a mode that appears because a framework shipped one — and a theme toggle on an operational screen, which asks the user to decide something the product already knows.
 
+One radius exception is committed for rule 15, signed Aug 4. The two radii move
+from 2px/4px to **8px/12px**, applied to controls and surfaces alike across the
+console and the portal.
+
+The reason is not that the corners looked nice. It is that at 2px a button was
+not distinguishable at a glance from the ruled panels around it: the console's
+whole substrate is hairline rules and square edges, so a control sharing that
+edge treatment reads as another panel rather than as something to press. On a
+screen whose argument is that a human disposes, the thing a human presses has to
+look pressable from across a room.
+
+What the exception does **not** license, and these are the parts that keep rule
+15 doing its job: there are still exactly **two** values, they still live in
+`tokens.css`, and no component may introduce a third. No pill, no `999px`, no
+per-component radius, no blob. A radius that is not one of the two named tokens
+is still a bug, and the rule's original target — six ad-hoc values in one
+prototype — is still banned outright.
+
 One narrow colour exception is committed for Register I: `--lh-structure` is a
 cyan-blue mark only in the explicit **Structures** map view and its key. It is
 not a product accent. It encodes mapped public-source inventory that was
@@ -184,6 +202,39 @@ These are the ones that do not appear in any general anti-slop guide, because th
   2. A human gate that is open and unactioned — an approval or a signature the system is blocked on.
   3. A live write landing (a claim arriving, a disbursement confirming).
 Anything decorative that pulses makes static status look live, which is the exact failure mode that gets a real alert ignored.
+
+A second motion exception is committed for the **EOC replay map's circulation
+marks**, signed Aug 4. Short flow marks over the advisory's published wind
+bands rotate continuously to show the modelled surface circulation of the
+selected advisory.
+
+The argument is M1's own thesis rather than an exemption from it. Motion means
+state changed, and a cyclone's defining state is that it is turning. The three
+threshold polygons are the evidence and they are not smoothed or replaced — but
+an outline can only say how far a wind reaches, never which way it blows, and
+an operator reading a wind field needs both. The marks supply the second half.
+
+Scope and containment, which is what makes this bounded rather than a crack in
+the rule: the exception covers the `lh-flow` source in
+`apps/console/app/eoc/map/` and nothing else. The marks are drawn in the
+existing hazard ramp and introduce no colour; they carry no status, no chrome
+and no affordance; they are never a summons and never encode posture, severity
+or a human gate. Their parameters derive only from the selected advisory —
+its stated centre and intensity, its own forecast heading, the speed measured
+between its own frames, and the 34 kt radius read off its own published
+polygon. They must never acquire pulsing, easing, decorative turbulence, or
+motion outside the map canvas, and no *second* moving element may be added to
+this screen under cover of this paragraph.
+
+Motion stops for a hidden document and for `prefers-reduced-motion`, which is
+read in JS because the CSS token block only shrinks durations and cannot reach
+a source update. Under reduced motion the marks still render — the circulation
+is evidence, not ornament — they simply hold still.
+
+What is explicitly **not** carried over from the simulator: its modelled
+precipitation field. An advisory publishes no rainfall, so drawing one here
+would claim more than the source supports, which is the exact failure the
+blunt stepped polygons exist to avoid. `--lh-weather-*` stays in the simulator.
 
 One narrowly bounded motion exception is committed for the **storm simulation
 surface**. Modelled precipitation may evolve and wind particles may advect
