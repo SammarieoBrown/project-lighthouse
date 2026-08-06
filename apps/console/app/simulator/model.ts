@@ -401,6 +401,8 @@ function normalisedHolland(rNm: number, rmwNm: number, b: number): number {
 type Roof = "zinc" | "shingle" | "tile" | "concrete";
 type RoofShare = Record<Roof, number>;
 
+const ROOFS: Roof[] = ["zinc", "shingle", "tile", "concrete"];
+
 function roofShares(households: HouseholdSample[]): {
   byCommunity: Map<string, RoofShare>;
   byParish: Map<string, RoofShare>;
@@ -423,27 +425,106 @@ function roofShares(households: HouseholdSample[]): {
   };
 }
 
+/* Damage against wind speed, per roof class.
+ *
+ * This replaced a four-branch step function keyed on the same 34/50/64 kt
+ * thresholds the wind polygons use, and that function was wrong in a way that
+ * was visible from across the room: at 64 kt it assigned *every* weak roof to
+ * destroyed and *every* strong roof to major, so a Cat 1 brushing the coast did
+ * the same damage as a Cat 5 landfall, and nothing above 64 kt changed the
+ * answer at all. A 110 kt scenario reported 1,166,716 destroyed — 63% of every
+ * mapped building in Jamaica, which is the zinc share of the inventory and not
+ * a damage estimate. It was reporting the roof census.
+ *
+ * Two things were broken and both are fixed here. Damage is now continuous in
+ * wind speed, so intensity changes the outcome across the whole range; and it
+ * is a probability rather than a certainty, so at any given speed a roof class
+ * spreads across damage states instead of moving to one of them wholesale.
+ *
+ * The curves are lognormal exceedance functions — P(damage ≥ state) =
+ * Φ(ln(v/θ)/β) — which is the standard form in the wind-vulnerability
+ * literature and what HAZUS-style fragility uses. θ is the wind at which half
+ * the class has reached that state; β is the spread.
+ *
+ * The medians below are indicative and ordered by how Jamaican roofs actually
+ * fail: sheet zinc lifts first because the fastenings go before the sheet does,
+ * concrete slab last. They are not calibrated against a Jamaican loss record —
+ * there is no such dataset in this repository — and rule C3 means the surface
+ * has to say so rather than imply a precision the numbers do not carry. What
+ * they are is monotonic, continuous, and defensible in shape.
+ */
+const FRAGILITY: Record<Roof, { minor: number; major: number; destroyed: number }> = {
+  /* Sheet metal on timber purlins, frequently retrofitted and under-fastened.
+   * The dominant Jamaican roof and the reason the weak/strong split existed. */
+  zinc: { minor: 45, major: 70, destroyed: 100 },
+  shingle: { minor: 50, major: 80, destroyed: 115 },
+  tile: { minor: 55, major: 90, destroyed: 130 },
+  /* Cast slab. Loses openings and finishes long before it loses the roof. */
+  concrete: { minor: 65, major: 110, destroyed: 150 },
+};
+
+/* One dispersion for every class. A per-class β would be four more numbers with
+ * no evidence behind any of them; 0.4 is the middle of the range these curves
+ * are usually published with. */
+const FRAGILITY_BETA = 0.4;
+
+/* Standard normal CDF via the Abramowitz & Stegun 7.1.26 error function.
+ * Max absolute error 1.5e-7, which is far inside anything this model claims. */
+function normalCdf(x: number): number {
+  const sign = x < 0 ? -1 : 1;
+  const z = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * z);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+    - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
+  return 0.5 * (1 + sign * y);
+}
+
+/* P(damage ≥ state) for one roof class at one wind speed. */
+function exceedance(windKt: number, medianKt: number): number {
+  if (windKt <= 0) return 0;
+  return normalCdf(Math.log(windKt / medianKt) / FRAGILITY_BETA);
+}
+
 function impactCounts(structures: number, windKt: number, shares: RoofShare) {
-  const out = { destroyed: 0, major: 0, minor: 0, none: 0 };
-  const weak = shares.zinc + shares.shingle;
-  const strong = shares.tile + shares.concrete;
-  if (windKt >= 64) {
-    out.destroyed = Math.round(structures * weak);
-    out.major = structures - out.destroyed;
-  } else if (windKt >= 50) {
-    out.major = Math.round(structures * weak);
-    out.minor = structures - out.major;
-  } else if (windKt >= 34) {
-    out.minor = Math.round(structures * weak);
-    out.none = structures - out.minor;
-  } else {
-    out.none = structures;
+  /* Below tropical-storm force nothing is claimed. The curves return small but
+   * non-zero probabilities down at 20 kt, and a model that reports roof damage
+   * in a stiff breeze discredits the numbers that matter. */
+  if (windKt < 34 || structures <= 0) {
+    return { destroyed: 0, major: 0, minor: 0, none: structures };
   }
-  // A strong roof has no damage at 34 kt and only minor at 50 kt. The branch
-  // arithmetic above already assigns that share; reference it so this model's
-  // two populations remain explicit rather than looking accidental.
-  void strong;
-  return out;
+
+  let destroyed = 0;
+  let major = 0;
+  let minor = 0;
+
+  for (const roof of ROOFS) {
+    const share = shares[roof];
+    if (share <= 0) continue;
+    const count = structures * share;
+    const curve = FRAGILITY[roof];
+    /* Cumulative, then differenced into exclusive states. The medians are
+     * strictly ordered, so each difference is non-negative by construction. */
+    const pDestroyed = exceedance(windKt, curve.destroyed);
+    const pMajor = exceedance(windKt, curve.major);
+    const pMinor = exceedance(windKt, curve.minor);
+    destroyed += count * pDestroyed;
+    major += count * (pMajor - pDestroyed);
+    minor += count * (pMinor - pMajor);
+  }
+
+  /* Rounded once at the end and with the remainder absorbed by `none`, so the
+   * four states still sum to the structure count exactly — the invariant the
+   * model test asserts and the reason the panel's totals can be trusted to
+   * add up. */
+  const outDestroyed = Math.round(destroyed);
+  const outMajor = Math.round(major);
+  const outMinor = Math.round(minor);
+  return {
+    destroyed: outDestroyed,
+    major: outMajor,
+    minor: outMinor,
+    none: Math.max(0, structures - outDestroyed - outMajor - outMinor),
+  };
 }
 
 function emptyRoofs(): Record<Roof, number> {
