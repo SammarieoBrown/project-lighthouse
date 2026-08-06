@@ -100,6 +100,10 @@ export type Snapshot = {
    *  the same point in practice, but the position is what the advisory states
    *  and the track is a forecast drawn from it. */
   centre?: [number, number] | null;
+  /** Intensity and motion for this advisory, for the modelled flow marks. The
+   *  polygons say how far the wind reaches; these say which way it turns, and
+   *  nothing here is a second measurement — see map/advisory-wind.ts. */
+  motion?: { maxWindKt: number; headingDeg: number; forwardSpeedKt: number } | null;
   districts: District[];
   /** Only rendered past the zoom switch; absent in the SVG fallback. */
   households?: Household[];

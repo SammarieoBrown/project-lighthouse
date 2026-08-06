@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useRef, useState } from "react";
+
 import type { KeyboardEvent } from "react";
 
 import { SynopticMap, type MapFocus, type Snapshot } from "../map";
@@ -113,10 +114,19 @@ export function MapPanel({
   const showingFootprints = base === "structures" && zoom >= STRUCTURE_FOOTPRINT_ZOOM;
   const windQualifier = windQualifierFor(evidenceKind, sizeSource);
 
-  /* What the marks mean right now. The distinction at z14 is evidence, not
-   * polish: low zoom is a count-weighted grid distribution; high zoom contains
-   * the mapped building footprints. */
-  const note = base === "structures"
+  /* What the marks mean right now, and only when that is not what the selected
+   * view already says. The distinction at z14 is evidence, not polish: low zoom
+   * is a count-weighted grid distribution; high zoom contains the mapped
+   * building footprints — so those speak. So does every loading, unavailable
+   * and zoom-gated state.
+   *
+   * The default view does not. "Selected advisory forecast · synthetic impact
+   * aggregated by parish", sitting directly beneath a selector reading
+   * FORECAST + IMPACT and directly above a key decoding both layers, was a
+   * caption for a caption. Null renders nothing at all rather than an empty
+   * chip, which is the difference between a quiet map and a map with a hole in
+   * it. */
+  const note: string | null = base === "structures"
     ? structures.status === "unavailable"
       ? "Structure inventory unavailable · standard buildings remain"
       : structures.status === "loading"
@@ -132,11 +142,9 @@ export function MapPanel({
         : imagery.status === "unavailable"
           ? "Reference imagery unavailable · standard basemap remains"
           : "Loading reference imagery · standard basemap remains"
-      : evidenceKind === "hindcast"
-        ? `Historical ${windQualifier} · synthetic impact aggregated by parish`
-        : evidenceKind === "advisory"
-          ? "Selected advisory forecast · synthetic impact aggregated by parish"
-          : "Selected legacy replay · evidence provenance unavailable";
+      : evidenceKind === "unknown"
+        ? "Selected legacy replay · evidence provenance unavailable"
+        : null;
 
   const spokenStatus = base === "structures"
     ? `${note}. Structures are neutral inventory marks; wind colours come from the selected ${evidenceLabel(evidenceKind)}.`
@@ -210,7 +218,7 @@ export function MapPanel({
       />
 
       <div className={styles.controls}>
-        <span className={styles.scaleNote}>{note}</span>
+        {note ? <span className={styles.scaleNote}>{note}</span> : null}
         {/* One control, three states, because "what is under the data" is a
             single question. Radio semantics rather than three toggles: exactly
             one is true at a time and the markup should say so. */}
@@ -263,39 +271,77 @@ function MapKey({
   footprints?: boolean;
   evidenceKind?: EvidenceKind;
 }) {
+  /* The qualifier belongs to the layer, not to each threshold in it. Repeated
+   * per row it read "34 kt forecast / 50 kt forecast / 64 kt forecast" — three
+   * statements of one provenance fact, and a key tall enough to cover a
+   * quarter of the coastline saying them. Grouped, each row carries only what
+   * distinguishes it from its neighbours. */
   const wind = evidenceKind === "hindcast"
-    ? "hindcast extent"
-    : evidenceKind === "advisory" ? "forecast" : "replay extent · provenance unavailable";
+    ? "Wind extent · hindcast"
+    : evidenceKind === "advisory"
+      ? "Wind extent · forecast"
+      : "Wind extent · provenance unavailable";
+
+  /* Open by default, because a key nobody opens is a map nobody can read — but
+   * it sits on top of the coastline it decodes, and an operator who has read it
+   * once wants the water back. Held in state rather than left to the `open`
+   * attribute: React reconciles that attribute, and a native toggle it did not
+   * initiate is exactly the divergence that snaps back on the next replay
+   * frame. */
+  const [keyOpen, setKeyOpen] = useState(true);
+
   return (
-    <aside className={styles.key} aria-label="Map key">
-      <span className={styles.keyTitle}>Map key</span>
-      <div className={styles.keyGrid}>
-        <span className={`${styles.keyMark} ${styles.wind34}`} aria-hidden="true" />
-        <span>34 kt {wind}</span>
-        <span className={`${styles.keyMark} ${styles.wind50}`} aria-hidden="true" />
-        <span>50 kt {wind}</span>
-        <span className={`${styles.keyMark} ${styles.wind64}`} aria-hidden="true" />
-        <span>64 kt {wind}</span>
-        <span className={`${styles.keyMark} ${styles.impactMajor}`} aria-hidden="true" />
-        <span>Major+ ≥25% of modelled homes</span>
-        <span className={`${styles.keyMark} ${styles.impactDestroyed}`} aria-hidden="true" />
-        <span>Destroyed ≥25% of modelled homes</span>
-        <span className={`${styles.keyMark} ${styles.track}`} aria-hidden="true" />
-        <span>
-          {evidenceKind === "hindcast"
-            ? "Historical best track"
-            : evidenceKind === "advisory"
-              ? "Forecast track"
-              : "Replay track · provenance unavailable"}
-        </span>
+    <details
+      className={styles.key}
+      open={keyOpen}
+      onToggle={(event) => setKeyOpen(event.currentTarget.open)}
+    >
+      <summary className={styles.keyTitle}>Map key</summary>
+
+      <div className={styles.keyBody}>
+        <span className={styles.keyGroup}>{wind}</span>
+        <div className={styles.keyGrid}>
+          <span className={`${styles.keyMark} ${styles.wind34}`} aria-hidden="true" />
+          <span>34 kt</span>
+          <span className={`${styles.keyMark} ${styles.wind50}`} aria-hidden="true" />
+          <span>50 kt</span>
+          <span className={`${styles.keyMark} ${styles.wind64}`} aria-hidden="true" />
+          <span>64 kt</span>
+          <span className={`${styles.keyMark} ${styles.track}`} aria-hidden="true" />
+          <span>
+            {evidenceKind === "hindcast"
+              ? "Historical best track"
+              : evidenceKind === "advisory"
+                ? "Forecast track"
+                : "Replay track"}
+          </span>
+          {/* Named as modelled on the same line as the mark, because it is the
+              one thing in this key that is not published. The bands above it
+              are the advisory's own radii; this is a reading of them. */}
+          <span className={`${styles.keyMark} ${styles.flow}`} aria-hidden="true" />
+          <span>Circulation · modelled from these radii</span>
+        </div>
+
+        <span className={styles.keyGroup}>Parish fill · ≥25% of modelled homes</span>
+        <div className={styles.keyGrid}>
+          <span className={`${styles.keyMark} ${styles.impactMajor}`} aria-hidden="true" />
+          <span>Major or worse</span>
+          <span className={`${styles.keyMark} ${styles.impactDestroyed}`} aria-hidden="true" />
+          <span>Destroyed</span>
+        </div>
+
         {structures ? (
           <>
-            <span className={`${styles.keyMark} ${styles.structure}`} aria-hidden="true" />
-            <span>{footprints ? "Mapped footprint" : "Grouped structures; circle size represents count"}</span>
+            <span className={styles.keyGroup}>Mapped inventory</span>
+            <div className={styles.keyGrid}>
+              <span className={`${styles.keyMark} ${styles.structure}`} aria-hidden="true" />
+              <span>{footprints ? "Building footprint" : "Grouped structures; circle size is count"}</span>
+            </div>
           </>
         ) : null}
+
+        <span className={styles.keyNote}>Parish labels show expected major + destroyed homes.</span>
       </div>
-      <span className={styles.keyNote}>Parish labels show expected major + destroyed homes.</span>
-    </aside>
+    </details>
   );
 }

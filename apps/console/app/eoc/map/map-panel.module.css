@@ -120,14 +120,44 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The key decodes the map, and it does it while sitting on top of the map. Once
+ * an operator has read it, the coastline underneath is worth more than the
+ * legend over it — so it folds to its own title. */
 .keyTitle {
   display: block;
-  margin-bottom: var(--lh-space-2);
+  cursor: pointer;
   color: var(--lh-figure);
   font-family: var(--lh-font-display);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  list-style-position: outside;
+}
+
+.keyTitle:focus-visible {
+  outline: var(--lh-space-1) solid var(--lh-figure);
+  outline-offset: var(--lh-space-1);
+}
+
+.keyBody {
+  margin-top: var(--lh-space-3);
+}
+
+/* One layer, one provenance statement. The group label carries what every
+ * swatch beneath it shares, so the rows carry only their threshold. */
+.keyGroup {
+  display: block;
+  color: var(--lh-quiet);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.keyGroup + .keyGrid {
+  margin-bottom: var(--lh-space-3);
+}
+
+.keyGrid:last-of-type {
+  margin-bottom: 0;
 }
 
 .keyGrid {
@@ -136,6 +166,7 @@
   align-items: center;
   column-gap: var(--lh-space-3);
   row-gap: var(--lh-space-1);
+  margin-top: var(--lh-space-1);
 }
 
 .keyMark {
@@ -156,6 +187,16 @@
   border: 0;
   border-top: 1px dashed var(--lh-figure);
   background: none;
+}
+
+/* Three short strokes at the angle the marks are drawn at, so the key shows
+ * the shape of the thing rather than a swatch standing in for it. */
+.flow {
+  height: 0;
+  border: 0;
+  border-top: 1px solid var(--lh-hazard-50);
+  background: none;
+  transform: rotate(-20deg);
 }
 
 .structure {
@@ -184,10 +225,14 @@
 
 /* ---- MapLibre's own controls, brought into the system ---- */
 
+/* MapLibre's buttons carry their own square background, so at a radius this
+ * visible their corners sit outside the group's. Clipped rather than restyled
+ * per button — the group owns the shape. */
 .wrap :global(.maplibregl-ctrl-group) {
   background: color-mix(in srgb, var(--lh-ground) 82%, transparent);
   border: 1px solid var(--lh-rule);
   border-radius: var(--lh-radius);
+  overflow: hidden;
   box-shadow: none;
 }
 

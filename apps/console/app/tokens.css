@@ -75,11 +75,19 @@
   --lh-leading-base: 1.45;
   --lh-leading-read: 1.6;
 
-  /* Two radii, both nearly square. Rounded cards are the most reproduced AI
-   * shape there is; zero radius everywhere is the broadsheet default, which is
-   * the same mistake wearing a different coat. 2 and 4 is a decision. */
-  --lh-radius: 2px;
-  --lh-radius-lg: 4px;
+  /* Two radii, and they were 2 and 4 until Aug 4 — nearly square, on the
+   * argument that rounded corners are the most reproduced AI shape there is.
+   * That argument is still true and it is still why there are two values here
+   * rather than six. What changed is the operator's read of the built screen:
+   * at 2px the controls did not announce themselves as pressable against a
+   * console of ruled panels that share their edge treatment.
+   *
+   * 8 and 12 is the replacement decision, and it is a decision — a scale with
+   * two steps, applied to every control and surface identically. It is not a
+   * licence for a third value or for a pill. See the signed exception in
+   * docs/design/lighthouse-design-rules.md, Part 1 rule 15. */
+  --lh-radius: 8px;
+  --lh-radius-lg: 12px;
 
   /* ---------------------------------------------------------------------
    * MOTION — the whole budget.

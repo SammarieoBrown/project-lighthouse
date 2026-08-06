@@ -14,7 +14,6 @@ import {
   nf,
   POSTURE_PLAIN,
   snapshotAt,
-  stamp,
   strongestWarning,
   useLibrary,
   useReplay,
@@ -180,7 +179,6 @@ export function EocConsole() {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(DEFAULT_RATE);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState<SelectedDistrict | null>(null);
   const opened = useRef<string | null>(null);
   const focusRequest = useRef(0);
@@ -362,11 +360,10 @@ export function EocConsole() {
    * zero here would state that the chance is nil, which is a different and
    * false claim. */
   const montego = frame?.probabilities?.["MONTEGO BAY"]?.["48"];
-  const rankedDistricts = useMemo(
-    () => worstHit(districts, districts.length),
-    [districts],
-  );
-  const worstDistricts = rankedDistricts.slice(0, 5);
+  /* Five, because five is what the panel shows. It ranked every district in the
+   * frame so the district review could list them all; that review is gone, and
+   * ranking a hundred rows to render five is work done for nobody. */
+  const worstDistricts = useMemo(() => worstHit(districts, 5), [districts]);
   const evidenceKind = evidenceEntry?.kind ?? "unknown";
   const isHindcast = evidenceKind === "hindcast";
   const isAdvisory = evidenceKind === "advisory";
@@ -406,10 +403,13 @@ export function EocConsole() {
           ? "The storm library contains no published replays."
           : null;
 
-  /* Sync state, rule C4. This is a recorded storm being replayed, so it says
-   * so — a console that reads "live" over October 2025 advisories is asserting
-   * something the data flatly contradicts. */
-  const replayStatus =
+  /* Sync state, rule C4, reporting by exception. That this is a recorded storm
+   * is said once, by the provenance line beside the storm's name; repeating it
+   * here as a permanent "historical replay" banner was the same sentence a
+   * third time. What belongs in a masthead status slot is what is *wrong* — a
+   * library still arriving, a storm that would not open, a replay that does not
+   * exist. When the replay is simply playing, this is silent. */
+  const replayAlert =
     libraryState.status === "loading"
       ? "Reading storm library"
       : switching
@@ -420,9 +420,19 @@ export function EocConsole() {
             ? "No verified replay available"
             : state.status === "loading"
               ? `Reading ${requestedEntry?.name ?? "legacy"} replay`
-              : displayIndex < last
-                ? `Replay · next ${frameNoun} ${hhmm(frames[displayIndex + 1].at)}Z`
-                : `Replay · last ${frameNoun}`;
+              : null;
+
+  /* Where the replay is up to. Transport information, so it sits with the
+   * transport rather than in the masthead. */
+  const transportNote = !replay
+    ? null
+    : displayIndex < last
+      ? `next ${frameNoun} ${hhmm(frames[displayIndex + 1].at)}Z`
+      : `last ${frameNoun}`;
+
+  /* Online is the assumption this screen already runs on, and a line that says
+   * so on every render trains an operator to stop reading the line. It speaks
+   * when the answer is not the assumed one. */
   const connectionStatus =
     connectivity === "checking"
       ? "Browser network · checking"
@@ -430,7 +440,7 @@ export function EocConsole() {
         ? replay
           ? "Browser network · offline · loaded replay remains visible"
           : "Browser network · offline · selected replay unavailable"
-        : "Browser network · online · historical replay";
+        : null;
 
   const missing = initialFailure;
 
@@ -540,29 +550,30 @@ export function EocConsole() {
             </span>
             <span className={styles.readingLabel}>Modelled households · major or worse</span>
           </div>
-          <div className={styles.reading}>
-            {/* Not zero. Nothing has been delivered, and a zero would measure
-                something that has not happened. */}
-            <span className={styles.readingValue} data-empty="true">
-              —
-            </span>
-            <span className={styles.readingLabel}>Observed relief delivery · unavailable</span>
-          </div>
+          {/* Observed relief delivery had a reading here, permanently a dash,
+              holding a fifth of this band to report that a delivery path does
+              not exist yet. A dash is the honest rendering of a measurement
+              that failed; it is not the honest rendering of a measurement that
+              was never taken. It returns when something is delivering. */}
         </div>
 
         <div className={styles.stale}>
-          <Link className={styles.simulatorLink} href="/simulator">
-            Storm simulator
-          </Link>
-          <Link className={styles.simulatorLink} href="/operations">
-            Relief operations
-          </Link>
-          <span>
-            {frame
-              ? `${isHindcast ? "Historical fix" : isAdvisory ? "Advisory" : "Replay frame"} ${frame.n} · ${stamp(frame.at)}Z`
-              : "No replay frame"}
-          </span>
-          <span aria-live="polite">{replayStatus}</span>
+          {/* Navigation, not status. It sat in the status list reading as one
+              more piece of metadata, separated from the sync text by the same
+              hairline — so the only way between this console's three screens
+              looked like something to skim past. */}
+          <nav className={styles.nav} aria-label="Lighthouse screens">
+            <Link className={styles.navLink} href="/simulator">
+              Storm simulator
+            </Link>
+            <Link className={styles.navLink} href="/operations">
+              Relief operations
+            </Link>
+          </nav>
+          {/* Both stay mounted and both are usually empty. A live region has to
+              exist before its content does, or the first thing it ever says is
+              the one thing nobody hears. */}
+          <span aria-live="polite">{replayAlert}</span>
           <span
             className={styles.connectivity}
             data-state={connectivity}
@@ -574,29 +585,18 @@ export function EocConsole() {
       </header>
 
       <div className={styles.body}>
-        <section className={styles.mapPanel} ref={mapSection}>
-          <div className={styles.panelHead}>
-            <h1 className={styles.panelTitle}>
-              {isHindcast
-                ? "Selected historical hindcast and mapped structure exposure"
-                : isAdvisory
-                  ? "Selected advisory forecast and mapped structure exposure"
-                  : "Selected legacy replay and mapped structure exposure"}
-            </h1>
-            <span>
-              {replay ? (
-                <>
-                  <b>{nf.format(homes)}</b> synthetic households modelled across{" "}
-                  {replay.parishes.length} parishes
-                </>
-              ) : missing ? (
-                "Verified replay unavailable · no substitute storm shown"
-              ) : (
-                "Reading and verifying replay"
-              )}
-            </span>
-          </div>
+        {/* The screen's heading. It was a full-width caption bar above the map
+            restating the storm, the evidence kind and the registry size — all
+            three of which are already on screen, and the bar cost the map a row
+            of its height to do it. The page still needs one heading, so the
+            heading is what is left. */}
+        <h1 className={styles.srOnly}>
+          {replay
+            ? `${replay.event.name} — ${isHindcast ? "historical hindcast" : isAdvisory ? "historical advisory replay" : "legacy replay"}`
+            : "Emergency operations replay"}
+        </h1>
 
+        <section className={styles.mapPanel} ref={mapSection}>
           <div className={styles.mapCanvas}>
             {/* Mounted once the outcome of the fetch is known, so the map is
                 built exactly once. Advisory changes update its data sources;
@@ -614,60 +614,93 @@ export function EocConsole() {
           {/* The legend describes the map, so it lists only what the map draws.
               The damage counts moved to the panel with the marks they belonged
               to: they are modelled outcomes for a synthetic registry, and a key
-              beside a coastline reads as a key to the coastline. */}
+              beside a coastline reads as a key to the coastline.
+
+              One line of counts, because they are one statement about the same
+              inventory. Two lines reported the exposed count and the total count
+              as if they were unrelated facts; `exposed` is a subset of
+              `structures`, so saying so is both shorter and more informative
+              than saying each separately. */}
           <div className={styles.legend} aria-label="Map counts and data provenance">
             <span className={styles.legendItem}>
-              {exposed === null ? (
-                `${isHindcast ? "Hindcast" : isAdvisory ? "Forecast" : "Replay wind-field"} exposure inventory unavailable`
-              ) : (
+              {structures === null || exposed === null ? (
                 <>
-                  <b>{nf.format(exposed)}</b> mapped footprints in the selected 64 kt {windEvidence}
-                </>
-              )}
-            </span>
-            <span className={styles.legendItem}>
-              {structures === null
-                ? "Mapped building inventory unavailable"
-                : `${nf.format(structures)} mapped building footprints from public datasets`}
-            </span>
-            <p className={styles.provenance}>
-              {isHindcast ? (
-                <>
-                  <b>Historical hindcast, not a forecast or live product.</b> Track and intensity
-                  are historical best-track observations. Wind extent is {windSource === "modelled"
-                    ? "a modelled reconstruction"
-                    : windSource === "measured"
-                      ? "reconstructed from measured radii"
-                      : windSource === "mixed"
-                        ? "reconstructed from a mix of measured and modelled radii"
-                        : "shown without source provenance and must not be treated as measured"}; no contemporaneous probability
-                  forecast is implied. Building footprints are mapped public-source inventory;
-                  household locations and damage counts are synthetic model output.
-                </>
-              ) : isAdvisory ? (
-                <>
-                  <b>Historical advisory replay, not live.</b> Storm position and intensity are
-                  advisory observations. Wind areas and probabilities are forecasts published or
-                  derived for that advisory. Building footprints are mapped public-source
-                  inventory; household locations and damage counts are synthetic model output.
+                  {exposed === null
+                    ? `${isHindcast ? "Hindcast" : isAdvisory ? "Forecast" : "Replay wind-field"} exposure inventory unavailable`
+                    : `${nf.format(exposed)} mapped footprints in the selected 64 kt ${windEvidence}`}
+                  {structures === null ? " · mapped building inventory unavailable" : ""}
                 </>
               ) : (
                 <>
-                  <b>Legacy historical replay, not live.</b> The deployment did not publish a
-                  storm index, so Lighthouse cannot verify whether this artifact is an advisory
-                  replay or a hindcast, or whether its wind extent is measured or modelled.
-                  Building footprints are mapped public-source inventory; household locations and
-                  damage counts are synthetic model output.
+                  <b>{nf.format(exposed)}</b> of {nf.format(structures)} mapped building
+                  footprints lie in the selected 64 kt {windEvidence}
                 </>
               )}
-            </p>
+            </span>
+            {replay ? (
+              <span className={styles.legendItem}>
+                <b>{nf.format(homes)}</b> synthetic households modelled across{" "}
+                {replay.parishes.length} parishes
+              </span>
+            ) : (
+              <span className={styles.legendItem}>
+                {missing
+                  ? "Verified replay unavailable · no substitute storm shown"
+                  : "Reading and verifying replay"}
+              </span>
+            )}
+            {/* Every word of this was on screen permanently, four sentences
+                deep, under a map it was describing. It is the answer to a
+                question a reader asks once — "is any of this real?" — so it is
+                kept in full and asked for. The sentence that has to survive
+                without opening it is the summary. */}
+            <details className={styles.provenanceDetails}>
+              <summary className={styles.provenanceSummary}>
+                {isHindcast
+                  ? "Historical hindcast, not a forecast or live product."
+                  : isAdvisory
+                    ? "Historical advisory replay, not live."
+                    : "Legacy historical replay, not live."}
+              </summary>
+              <p className={styles.provenance}>
+                {isHindcast ? (
+                  <>
+                    Track and intensity are historical best-track observations. Wind extent
+                    is {windSource === "modelled"
+                      ? "a modelled reconstruction"
+                      : windSource === "measured"
+                        ? "reconstructed from measured radii"
+                        : windSource === "mixed"
+                          ? "reconstructed from a mix of measured and modelled radii"
+                          : "shown without source provenance and must not be treated as measured"}; no
+                    contemporaneous probability forecast is implied. Building footprints are
+                    mapped public-source inventory; household locations and damage counts are
+                    synthetic model output.
+                  </>
+                ) : isAdvisory ? (
+                  <>
+                    Storm position and intensity are advisory observations. Wind areas and
+                    probabilities are forecasts published or derived for that advisory. Building
+                    footprints are mapped public-source inventory; household locations and damage
+                    counts are synthetic model output.
+                  </>
+                ) : (
+                  <>
+                    The deployment did not publish a storm index, so Lighthouse cannot verify
+                    whether this artifact is an advisory replay or a hindcast, or whether its wind
+                    extent is measured or modelled. Building footprints are mapped public-source
+                    inventory; household locations and damage counts are synthetic model output.
+                  </>
+                )}
+              </p>
+            </details>
           </div>
         </section>
 
         <aside className={styles.side}>
           {frame ? (
             <div className={styles.gate}>
-              <span className={styles.gateRole}>Replay proposal · action unavailable</span>
+              <span className={styles.gateRole}>Replay proposal</span>
               <h2 className={styles.gateAsk}>
                 Alert cascade for {nf.format(atRisk)} modelled households
               </h2>
@@ -675,10 +708,11 @@ export function EocConsole() {
                 {warning ? `${warning} in effect. ` : ""}Patois and English, WhatsApp
                 with SMS fallback. Proposed from {frameNoun} {frame.n}.
               </p>
-              <p className={styles.replayLimit} id="replay-action-limit">
-                Historical replay only. Approval, messaging and ledger writes are not
-                connected, so this screen cannot send an alert.
-              </p>
+              {/* One statement that this cannot act, not three. It was in the
+                  eyebrow, in a paragraph and on the button — and the button is
+                  the only one of the three a reader is looking at when the
+                  question occurs to them, so the button says it. The full
+                  sentence stays for anyone reading by ear. */}
               <div className={styles.gateActions}>
                 <button
                   type="button"
@@ -686,68 +720,28 @@ export function EocConsole() {
                   disabled
                   aria-describedby="replay-action-limit"
                 >
-                  Approval unavailable
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.gateButton} ${styles.secondary}`}
-                  aria-expanded={reviewOpen}
-                  aria-controls="affected-districts"
-                  onClick={() => setReviewOpen((open) => !open)}
-                >
-                  {reviewOpen ? "Close review" : "Review districts"}
+                  Approval unavailable in replay
                 </button>
               </div>
-              {reviewOpen ? (
-                <div className={styles.reviewList} id="affected-districts">
-                  <div className={styles.reviewHead}>
-                    <span>Affected districts</span>
-                    <span>Modelled major+</span>
-                  </div>
-                  {rankedDistricts.length > 0 ? (
-                    rankedDistricts.map((district) => {
-                      const key = `${district.parish}/${district.district}`;
-                      const row = (
-                        <>
-                          <span>{district.district}</span>
-                          <span className={styles.reviewParish}>
-                            {district.parish.replace("Saint ", "St ")}
-                            {isLocatedDistrict(district) ? " · centre map" : " · map location unavailable"}
-                          </span>
-                          <span className={styles.countValue}>
-                            {nf.format(district.destroyed + district.major)}
-                          </span>
-                        </>
-                      );
-                      return isLocatedDistrict(district) ? (
-                        <button
-                          type="button"
-                          className={styles.reviewRow}
-                          data-selected={selectedDistrict?.districtKey === key}
-                          aria-current={selectedDistrict?.districtKey === key ? "location" : undefined}
-                          key={key}
-                          onClick={() => onDistrictFocus(district)}
-                          aria-label={`Centre map on ${district.district}, ${district.parish}; ${district.destroyed + district.major} synthetic households modelled major or worse`}
-                        >
-                          {row}
-                        </button>
-                      ) : (
-                        <div className={styles.reviewRow} data-unlocated="true" key={key}>
-                          {row}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className={styles.reviewEmpty}>No modelled major damage in this frame.</p>
-                  )}
-                </div>
-              ) : null}
+              <span className={styles.srOnly} id="replay-action-limit">
+                Historical replay only. Approval, messaging and ledger writes are not
+                connected, so this screen cannot send an alert.
+              </span>
+              {/* The district review lived here: a disclosure listing the same
+                  districts, ranked the same way, centring the map on the same
+                  click as the table immediately below it. Two lists of one
+                  thing. The table won because it is always open. */}
             </div>
           ) : null}
 
           <div className={styles.counts}>
+            {/* "Select to centre map" is stated once, by the header, instead of
+                once per row. Five rows each ending "· centre map" spent the
+                same eleven characters five times to describe a property of the
+                table, and pushed the parish — which is row-specific — out of
+                its own line. */}
             <div className={`${styles.countRow} ${styles.head}`}>
-              <span>Highest modelled impact · synthetic</span>
+              <span>Highest modelled impact · select to centre map</span>
               <span className={styles.countValue}>Destr.</span>
               <span className={styles.countValue}>Major</span>
             </div>
@@ -759,13 +753,13 @@ export function EocConsole() {
                     {d.district}
                     <span className={styles.countParish}>
                       {d.parish.replace("Saint ", "St ")}
-                      {isLocatedDistrict(d) ? " · centre map" : " · map location unavailable"}
+                      {isLocatedDistrict(d) ? "" : " · map location unavailable"}
                     </span>
                   </span>
-                  <span className={styles.countValue} style={{ color: "var(--lh-critical)" }}>
+                  <span className={styles.countValue} data-band="destroyed">
                     {d.destroyed || "—"}
                   </span>
-                  <span className={styles.countValue} style={{ color: "var(--lh-elevated)" }}>
+                  <span className={styles.countValue} data-band="major">
                     {d.major || "—"}
                   </span>
                 </>
@@ -791,8 +785,11 @@ export function EocConsole() {
           </div>
 
           <div className={styles.feed}>
+            {/* "Modelled state changes" came off: every row below already
+                reads "… synthetic households modelled as …", so the heading was
+                describing the rows to someone who is looking at the rows. */}
             <div className={styles.panelHead}>
-              <span>Replay activity · modelled state changes</span>
+              <span>Replay activity</span>
             </div>
             {feed.map((row) => (
               <div className={styles.tline} key={`${row.at}/${row.who}/${row.what}`}>
@@ -896,6 +893,11 @@ export function EocConsole() {
           </p>
         )}
 
+        {/* Every statement about where the replay is now lives here, beside the
+            scrubber that moves it. The masthead carried a second copy of the
+            frame identifier and its timestamp, and a third line saying which
+            frame came next — three readings of one clock, two of them nowhere
+            near the control that changes it. */}
         <div className={styles.clock}>
           {frame ? `${hhmm(frame.at)}Z` : "—"}
           <span className={styles.clockLabel}>
@@ -903,6 +905,14 @@ export function EocConsole() {
               ? `Storm time · ${frameNoun} ${frame.n} · frame ${displayIndex + 1} of ${frames.length}`
               : "Storm time · no replay frame"}
           </span>
+          {/* Its own line. Appended to the one above it, this was a fourth fact
+              on a line that already carried three, and the whole thing is set
+              `nowrap` so the time never breaks — which turned the extra words
+              into 140px of footer that the scrub bar had to give up, and at a
+              phone width pushed the entire controller wider than the screen. */}
+          {transportNote ? (
+            <span className={styles.clockNext}>{transportNote}</span>
+          ) : null}
         </div>
       </footer>
     </main>

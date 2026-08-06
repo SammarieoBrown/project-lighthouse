@@ -849,8 +849,67 @@ export function snapshotAt(
       typeof frame.position.lon === "number" && typeof frame.position.lat === "number"
         ? [frame.position.lon, frame.position.lat]
         : null,
+    motion: motionAt(replay, frame),
     districts,
   };
+}
+
+/* Where this advisory says the storm is going, and how fast.
+ *
+ * Both are derived from the artifact rather than declared by it. Heading comes
+ * from the first leg of the advisory's own forecast track, which is the
+ * direction it is forecasting; speed comes from the distance and elapsed time
+ * between this frame and its neighbour, which is what the replay measures.
+ *
+ * Absent rather than guessed when there is nothing to derive from. A single
+ * frame with no track has no motion, and a default heading would put a
+ * modelled circulation on screen pointing somewhere nobody claimed. */
+function motionAt(replay: Replay, frame: ReplayFrame): Snapshot["motion"] {
+  const { lon, lat, max_wind_kt: maxWindKt } = frame.position;
+  if (typeof lon !== "number" || typeof lat !== "number" || maxWindKt === undefined) return null;
+
+  const line = frame.track?.coordinates ?? [];
+  const ahead = line.find(
+    (point) => point.length >= 2 && (point[0] !== lon || point[1] !== lat),
+  );
+  if (!ahead) return null;
+  const headingDeg = bearingDegrees([lon, lat], [ahead[0], ahead[1]]);
+
+  /* Against the neighbouring frame in whichever direction exists, so the last
+   * advisory in a replay still reports a speed. */
+  const index = replay.frames.indexOf(frame);
+  const other = replay.frames[index + 1] ?? replay.frames[index - 1] ?? null;
+  let forwardSpeedKt = 10;
+  if (other && typeof other.position.lon === "number" && typeof other.position.lat === "number") {
+    const hours = Math.abs(Date.parse(other.at) - Date.parse(frame.at)) / 3_600_000;
+    if (hours > 0) {
+      const nm = distanceNauticalMiles([lon, lat], [other.position.lon, other.position.lat]);
+      if (Number.isFinite(nm)) forwardSpeedKt = nm / hours;
+    }
+  }
+
+  return { maxWindKt, headingDeg, forwardSpeedKt };
+}
+
+const EARTH_RADIUS_NM = 3440.065;
+const RADIANS = Math.PI / 180;
+
+function bearingDegrees(a: [number, number], b: [number, number]): number {
+  const lat1 = a[1] * RADIANS;
+  const lat2 = b[1] * RADIANS;
+  const dLon = (b[0] - a[0]) * RADIANS;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) / RADIANS) % 360 + 360) % 360;
+}
+
+function distanceNauticalMiles(a: [number, number], b: [number, number]): number {
+  const lat1 = a[1] * RADIANS;
+  const lat2 = b[1] * RADIANS;
+  const dLat = lat2 - lat1;
+  const dLon = (b[0] - a[0]) * RADIANS;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_NM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 export function nationalTotals(frame: ReplayFrame, homes: number) {

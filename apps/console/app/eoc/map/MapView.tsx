@@ -17,7 +17,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 
+import type { GeoJSONSource } from "maplibre-gl";
+
 import type { MapFocus, Snapshot } from "../map";
+import { advisoryFlow, advisoryWind } from "./advisory-wind";
 import { buildingWeights, lighthouseFlavor, pruneLayers, readTokens, retarget } from "./flavor";
 import {
   applyFrame,
@@ -28,6 +31,12 @@ import {
   STRUCTURES_MIN_ZOOM,
   type BaseView,
 } from "./layers";
+
+/* How fast the flow marks orbit. Slow on purpose: this is a cyclone turning,
+ * not a spinner. Fast enough to read as rotation within a second or two of
+ * looking, slow enough that it never competes with the posture chip for the
+ * corner of an eye. */
+const FLOW_RADIANS_PER_SECOND = 0.09;
 
 /* MapLibre, wired by hand.
  *
@@ -457,6 +466,61 @@ export default function MapView({
     const instance = map.current;
     if (!instance || !ready.current) return;
     applyFrame(instance, snapshot);
+  }, [snapshot]);
+
+  /* The flow marks turn.
+   *
+   * This is the console's first moving pixel and it is a written exception to
+   * rule M1, not an oversight — see the design rules, Part 3 M1. The argument
+   * that makes it honest is M1's own: motion means state changed, and a
+   * cyclone's defining state is that it is rotating. Three static outlines can
+   * say how far the wind reaches and cannot say that it turns at all.
+   *
+   * What keeps it inside the rule: it is bounded to this one source, it carries
+   * no colour, chrome or affordance of its own, it never signals status, and it
+   * stops dead for a hidden tab or a reduced-motion preference. Nothing else on
+   * this screen moves.
+   *
+   * `prefers-reduced-motion` is read here in JS rather than left to the CSS
+   * token block, because that block only shrinks durations and cannot reach a
+   * source update. When it is set the marks are still drawn — the circulation
+   * is evidence, and the reader who cannot take motion still needs it — they
+   * simply hold still. */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+
+    const wind = advisoryWind(
+      snapshot?.centre,
+      snapshot?.motion?.maxWindKt,
+      snapshot?.motion?.headingDeg ?? null,
+      snapshot?.motion?.forwardSpeedKt ?? null,
+      snapshot?.wind34,
+    );
+    if (!wind) return;
+
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (still.matches) return;
+
+    let frameId = 0;
+    let last = 0;
+    let phase = 0;
+
+    const tick = (now: number) => {
+      frameId = window.requestAnimationFrame(tick);
+      if (document.hidden) {
+        last = now;
+        return;
+      }
+      const elapsed = last === 0 ? 0 : Math.min(0.25, (now - last) / 1000);
+      last = now;
+      phase += elapsed * FLOW_RADIANS_PER_SECOND;
+      const source = instance.getSource("lh-flow") as GeoJSONSource | undefined;
+      source?.setData(advisoryFlow(wind, phase));
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
   }, [snapshot]);
 
   /* A ranked-list selection changes the viewport and strengthens the matching

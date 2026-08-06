@@ -2,6 +2,7 @@ import type { LayerSpecification, Map as MapLibreMap, SourceSpecification } from
 import type { GeoJSONSource } from "maplibre-gl";
 
 import { parishImpacts, type Snapshot } from "../map";
+import { advisoryFlow, advisoryWind } from "./advisory-wind";
 
 /* The two data layers that sit on the basemap: hazard and impact.
  *
@@ -77,7 +78,7 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
   if (!snapshot) {
     return {
       "lh-hazard": EMPTY, "lh-cone": EMPTY, "lh-track": EMPTY,
-      "lh-storm": EMPTY, "lh-parish-impact": EMPTY,
+      "lh-storm": EMPTY, "lh-parish-impact": EMPTY, "lh-flow": EMPTY,
     };
   }
 
@@ -113,6 +114,20 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
     },
     "lh-cone": one(snapshot.cone),
     "lh-track": one(snapshot.track),
+    /* Owned by the animation loop in MapView, which advances its phase against
+     * real time and setData()s this source. Seeded here at phase zero so a
+     * frame change still lands correct marks on the very first paint, before
+     * the loop's next tick. */
+    "lh-flow": advisoryFlow(
+      advisoryWind(
+        snapshot.centre,
+        snapshot.motion?.maxWindKt,
+        snapshot.motion?.headingDeg ?? null,
+        snapshot.motion?.forwardSpeedKt ?? null,
+        snapshot.wind34,
+      ),
+      0,
+    ),
     "lh-storm": centre
       ? {
           type: "FeatureCollection",
@@ -216,6 +231,32 @@ export function dataLayers(c: MapColours): LayerSpecification[] {
         "line-color": ["match", ["get", "kt"], 34, c.hazard34, 50, c.hazard50, c.hazard64],
         "line-width": ["match", ["get", "kt"], 34, 1, 50, 1.25, 1.75],
         "line-opacity": 0.7,
+      },
+    },
+    /* Modelled surface circulation, over the published bands and under the
+     * track. The polygons say how far each wind threshold reaches; these say
+     * which way it turns, which no outline can show.
+     *
+     * Drawn in the hazard ramp rather than a colour of its own, because it
+     * belongs to the same layer of meaning as the bands it sits on — and a new
+     * hue here would be a fifth thing on a map that already carries four.
+     * Faint on purpose: it is context for the bands, not a reading to take off
+     * the screen. */
+    {
+      id: "lh-flow",
+      type: "line",
+      source: "lh-flow",
+      /* `line-cap` is layout, not paint. Putting it in paint does not warn and
+       * does not degrade — MapLibre rejects the whole layer array, so the wind
+       * bands, the track and the parish impact all disappear with it. */
+      layout: { "line-cap": "round" },
+      paint: {
+        "line-color": [
+          "step", ["get", "speedKt"],
+          c.hazard34, 50, c.hazard50, 64, c.hazard64,
+        ],
+        "line-width": ["interpolate", ["linear"], ["get", "speedKt"], 8, 0.5, 90, 1.5],
+        "line-opacity": ["interpolate", ["linear"], ["get", "speedKt"], 8, 0.25, 64, 0.75],
       },
     },
     {
