@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     database_url: str
     environment: str = "local"
     log_level: str = "INFO"
+
+    # Signs the operator session cookie. No default on purpose: a generated
+    # fallback would invalidate every session on each deploy, and a constant one
+    # would let anyone holding this source forge a Director session. Unset means
+    # operator sign-in returns 503 rather than silently accepting forgeries.
+    session_secret: str | None = None
     public_base_url: str = "http://localhost:8000"
     replay_seed: int = 20251028
 

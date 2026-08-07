@@ -25,6 +25,7 @@ from .config import get_settings
 from .db import session_scope
 from .disbursements import router as disbursements_router
 from .intake import router as intake_router
+from .auth_session import router as auth_router
 from .public_ledger import router as public_ledger_router
 from .verification_reviews import router as verification_reviews_router
 
@@ -189,3 +190,4 @@ app.include_router(approvals_router)
 app.include_router(disbursements_router)
 app.include_router(verification_reviews_router)
 app.include_router(public_ledger_router)
+app.include_router(auth_router)

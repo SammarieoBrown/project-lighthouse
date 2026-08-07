@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import styles from "./operations.module.css";
+import { stepUp } from "./operator-session";
 
 type SettlementState =
   | "AWAITING_FINANCE_SIGNATURE"
@@ -176,15 +177,15 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
 
       <div className={styles.settlementAccess}>
         <label className={styles.field}>
-          <span>Finance Officer signing token</span>
+          <span>Confirm your password</span>
           <input
             type="password"
             value={tokenDraft}
-            autoComplete="off"
+            autoComplete="current-password"
             spellCheck={false}
             disabled={loading || busyId !== null}
             onChange={(event) => setTokenDraft(event.target.value)}
-            placeholder="Paste five-minute Finance Officer token"
+            placeholder="Password"
           />
         </label>
         <label className={styles.field}>
@@ -200,11 +201,24 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
         <button
           type="button"
           className={`${styles.approveButton} ${styles.openButton}`}
-          disabled={!tokenDraft.trim() || loading || busyId !== null}
-          onClick={() => {
-            const next = tokenDraft.trim();
-            setToken(next);
-            void load(next);
+          disabled={!tokenDraft || loading || busyId !== null}
+          onClick={async () => {
+            /* The Finance Officer steps up separately from the Director, and
+             * that is the control: one role per account means the person who
+             * approved the allocation cannot be the person who signs its
+             * disbursement, and each proves themselves at their own gate. */
+            try {
+              const next = await stepUp(tokenDraft);
+              setTokenDraft("");
+              setToken(next);
+              await load(next);
+            } catch (failure) {
+              setError(
+                failure instanceof Error
+                  ? failure.message
+                  : "Could not confirm your password.",
+              );
+            }
           }}
         >
           {loading ? "Opening…" : token ? "Refresh finance queue" : "Open finance queue"}

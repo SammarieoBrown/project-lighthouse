@@ -40,6 +40,12 @@ services:
       # every resulting receipt states that no real funds moved.
       - key: DISBURSEMENT_EXECUTOR_MODE
         value: simulated
+      # Signs the operator session cookie. Generated once by Render and held
+      # there, never in the repository. Rotating it signs every operator out,
+      # which is the intended emergency control. Unset means sign-in returns
+      # 503 rather than accepting forged sessions.
+      - key: SESSION_SECRET
+        generateValue: true
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
