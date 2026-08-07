@@ -323,3 +323,45 @@
   .metrics { padding: 0 var(--lh-space-4); }
   .sectionHead { align-items: flex-start; flex-direction: column; }
 }
+
+/* ---------- operator sign-in ----------
+ *
+ * The gate before the shift. Narrow measure on purpose: it is a form with two
+ * fields and a button, and giving it the full width of an operations screen
+ * would make it read as the product rather than the door to it.
+ */
+.signIn {
+  display: grid;
+  gap: var(--lh-space-4);
+  align-content: start;
+  max-width: 44ch;
+  margin: var(--lh-space-8) auto;
+  padding: var(--lh-space-6);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+}
+
+.signIn h2 {
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-title);
+  line-height: var(--lh-leading-tight);
+  margin: 0;
+}
+
+/* One sentence, whatever went wrong. The API answers identically for a missing
+ * account, an inactive one and a wrong password, and a console that explained
+ * the difference would hand back exactly what that refuses to say. */
+.signInError {
+  color: var(--lh-critical-text);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+}
+
+/* Who is signed in, in the chrome. Data font because the role is the load-
+ * bearing half and it is read at a glance, not scanned. */
+.operator {
+  color: var(--lh-quiet);
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+}

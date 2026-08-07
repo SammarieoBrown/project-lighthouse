@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LighthouseMark } from "../logo";
 import styles from "./operations.module.css";
+import { stepUp, useOperatorSession } from "./operator-session";
 import { SettlementWorkbench } from "./settlement-workbench";
+import { SignIn } from "./sign-in";
 
 type Claim = {
   id: string;
@@ -203,7 +205,12 @@ export function ReliefOperations() {
   const [detailState, setDetailState] = useState<LoadState>("loading");
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRefresh, setDetailRefresh] = useState(0);
-  const [operatorToken, setOperatorToken] = useState("");
+  /* The password, held only long enough to exchange it for a credential. The
+   * five-minute token it mints is what everything downstream uses, exactly as
+   * before — this field used to be where a token got pasted after a trip to a
+   * terminal. */
+  const [operatorPassword, setOperatorPassword] = useState("");
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
   const [activeToken, setActiveToken] = useState("");
   const [note, setNote] = useState("");
   const [approving, setApproving] = useState(false);
@@ -447,28 +454,66 @@ export function ReliefOperations() {
     }
   }, [activeToken, claimDetail, loadClaims, reviewNote, reviewReady, selected]);
 
+  /* The shift, not the approval. Signing in opens the queues this role may
+   * read; it never approves anything on its own — that still costs a password
+   * and produces a five-minute credential. */
+  const { state: sessionState, signIn, signOut } = useOperatorSession();
+
+  const chrome = (
+    <header className={styles.header}>
+      <div className={styles.identity}>
+        <LighthouseMark size={28} title="Lighthouse" />
+        <div>
+          <span className={styles.brand}>Lighthouse</span>
+          <span className={styles.mode}>Relief operations · Acts 2 and 3</span>
+        </div>
+      </div>
+      <nav className={styles.nav} aria-label="Lighthouse products">
+        <Link href="/eoc">EOC map</Link>
+        <Link href="/simulator">Storm simulator</Link>
+        {sessionState.status === "in" ? (
+          <>
+            <span className={styles.operator}>
+              {sessionState.operator.display_name} · {sessionState.operator.role}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={claimsState === "loading" || approving}
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveToken("");
+                void signOut();
+              }}
+            >
+              Sign out
+            </button>
+          </>
+        ) : null}
+      </nav>
+    </header>
+  );
+
+  if (sessionState.status !== "in") {
+    return (
+      <main className={styles.screen} data-theme="dark">
+        {chrome}
+        {sessionState.status === "loading" ? (
+          <p className={styles.empty}>Checking your session…</p>
+        ) : (
+          <SignIn onSignIn={signIn} />
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className={styles.screen} data-theme="dark">
-      <header className={styles.header}>
-        <div className={styles.identity}>
-          <LighthouseMark size={28} title="Lighthouse" />
-          <div>
-            <span className={styles.brand}>Lighthouse</span>
-            <span className={styles.mode}>Relief operations · Acts 2 and 3</span>
-          </div>
-        </div>
-        <nav className={styles.nav} aria-label="Lighthouse products">
-          <Link href="/eoc">EOC map</Link>
-          <Link href="/simulator">Storm simulator</Link>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={claimsState === "loading" || approving}
-          >
-            Refresh
-          </button>
-        </nav>
-      </header>
+      {chrome}
 
       <section className={styles.metrics} aria-label="Relief operation measures">
         <div>
@@ -560,31 +605,42 @@ export function ReliefOperations() {
           <span className={styles.eyebrow}>Act 3 · human gate</span>
           <h2>Approve relief allocation</h2>
           <label className={styles.field}>
-            <span>Operator signing token</span>
+            <span>Confirm your password</span>
             <input
               type="password"
-              value={operatorToken}
-              autoComplete="off"
+              value={operatorPassword}
+              autoComplete="current-password"
               spellCheck={false}
               disabled={approving}
-              onChange={(event) => setOperatorToken(event.target.value)}
-              placeholder="Paste five-minute operator token"
+              onChange={(event) => setOperatorPassword(event.target.value)}
+              placeholder="Password"
             />
           </label>
           <button
             type="button"
             className={`${styles.approveButton} ${styles.openButton}`}
-            disabled={!operatorToken.trim() || claimsState === "loading" || approving}
-            onClick={() => {
-              const token = operatorToken.trim();
-              setActiveToken(token);
-              void loadClaims(token);
+            disabled={!operatorPassword || claimsState === "loading" || approving}
+            onClick={async () => {
+              setStepUpError(null);
+              try {
+                const token = await stepUp(operatorPassword);
+                setOperatorPassword("");
+                setActiveToken(token);
+                await loadClaims(token);
+              } catch (failure) {
+                setStepUpError(
+                  failure instanceof Error ? failure.message : "Could not confirm your password.",
+                );
+              }
             }}
           >
             {claimsState === "loading" ? "Opening…" : activeToken ? "Refresh protected queue" : "Open protected queue"}
           </button>
+          {stepUpError ? (
+            <p className={styles.signInError} role="alert">{stepUpError}</p>
+          ) : null}
           <p className={styles.noMovement}>
-            The credential remains in this tab&apos;s memory only and expires after five minutes.
+            The credential stays in this tab&apos;s memory only and expires after five minutes.
           </p>
           {selected ? (
             <>

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const REQUEST_HEADERS = ["authorization", "idempotency-key"] as const;
+/* `cookie` carries the operator session upstream and `set-cookie` carries it
+ * back. Both are needed because the session is minted by the API but has to
+ * live on the console's origin — the browser never talks to the API directly.
+ * Nothing else is forwarded in either direction. */
+const REQUEST_HEADERS = ["authorization", "idempotency-key", "cookie"] as const;
 const MAX_REQUEST_BYTES = 16 * 1024;
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}";
 const CLAIM_DETAIL = new RegExp(`^/api/claims/${UUID}$`);
@@ -33,14 +37,19 @@ function allowedPath(method: string, segments: string[]): string | null {
     path === "/api/claims"
     || path === "/v1/public/ledger"
     || path === "/v1/settlements"
+    || path === "/v1/auth/session"
     || CLAIM_DETAIL.test(path)
   )) return path;
   if (method === "POST" && (
-    APPROVAL.test(path)
+    path === "/v1/auth/session"
+    || path === "/v1/auth/step-up"
+    || APPROVAL.test(path)
     || REVIEW.test(path)
     || SIGN_DISBURSEMENT.test(path)
     || EXECUTE_DISBURSEMENT.test(path)
   )) return path;
+  // Sign-out is the only DELETE the console may make.
+  if (method === "DELETE" && path === "/v1/auth/session") return path;
   return null;
 }
 
@@ -66,6 +75,9 @@ class ProxyRequestError extends Error {
 async function boundedJsonBody(request: NextRequest): Promise<string | undefined> {
   if (request.method === "GET" || request.method === "HEAD") return undefined;
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  // Sign-out is a DELETE with nothing to say. Everything else that carries a
+  // body still has to declare it as JSON.
+  if (request.method === "DELETE" && !contentType) return undefined;
   if (contentType !== "application/json") {
     throw new ProxyRequestError(415, "The console proxy accepts JSON requests only.");
   }
@@ -158,6 +170,12 @@ async function proxy(
       "content-type": response.headers.get("content-type") ?? "application/json",
       "x-content-type-options": "nosniff",
     });
+    /* getSetCookie rather than get: sign-in sends one and sign-out sends
+     * another, and a naive get() would silently drop all but the first if that
+     * ever became two. */
+    for (const cookie of response.headers.getSetCookie?.() ?? []) {
+      responseHeaders.append("set-cookie", cookie);
+    }
     return new NextResponse(responseBody, {
       status: response.status,
       headers: responseHeaders,
@@ -172,3 +190,4 @@ async function proxy(
 
 export const GET = proxy;
 export const POST = proxy;
+export const DELETE = proxy;
