@@ -701,6 +701,40 @@ def _enqueue_triage(
     )
 
 
+def _has_stored_photo_evidence(session: Session, claim_id: uuid.UUID) -> bool:
+    return bool(
+        session.execute(
+            text(
+                """
+                SELECT 1 FROM evidence
+                 WHERE claim_id = :claim_id
+                   AND kind = 'PHOTO'
+                   AND uri LIKE 'r2://%'
+                   AND payload ->> 'media_state' = 'STORED'
+                 LIMIT 1
+                """
+            ),
+            {"claim_id": claim_id},
+        ).first()
+    )
+
+
+def _enqueue_damage_assessment(session: Session, claim: Claim, storm_file: StormFile) -> None:
+    """Only for verified claims with stored photo evidence — a rejected or
+    photo-less claim never burns a paid vision call."""
+    if not _has_stored_photo_evidence(session, claim.id):
+        return
+    queue.enqueue(
+        session,
+        job_type=AgentName.DAMAGE_ASSESSMENT_AGENT,
+        priority=SOL_PRIORITY if claim.sol else 0,
+        payload={
+            "claim_id": str(claim.id),
+            "storm_file_id": str(storm_file.id),
+        },
+    )
+
+
 def _transition_approved(
     session: Session,
     claim: Claim,
@@ -748,6 +782,7 @@ def _transition_approved(
             },
         )
     _enqueue_triage(session, claim, storm_file, verification)
+    _enqueue_damage_assessment(session, claim, storm_file)
 
 
 def run_verification(session: Session, claim_id: uuid.UUID) -> VerificationRun:

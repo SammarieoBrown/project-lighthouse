@@ -52,6 +52,10 @@ class Event(StrEnum):
     VERIFICATION_QUEUED_FOR_REVIEW = "verification.queued_for_review"
     THRESHOLD_CHANGED = "verification.threshold_changed"
 
+    # Damage assessment
+    DAMAGE_ASSESSMENT_PROPOSED = "damage_assessment.proposed"
+    DAMAGE_ASSESSMENT_DECIDED = "damage_assessment.decided"
+
     # Gates
     ALERT_CASCADE_PROPOSED = "alert.cascade_proposed"
     ALERT_CASCADE_APPROVED = "alert.cascade_approved"

@@ -22,6 +22,7 @@ from lighthouse_contracts import __version__ as contracts_version
 from . import ledger, queue
 from .approvals import router as approvals_router
 from .config import get_settings
+from .damage_assessment_reviews import router as damage_assessment_reviews_router
 from .db import session_scope
 from .disbursements import router as disbursements_router
 from .intake import router as intake_router
@@ -189,5 +190,6 @@ app.include_router(intake_router)
 app.include_router(approvals_router)
 app.include_router(disbursements_router)
 app.include_router(verification_reviews_router)
+app.include_router(damage_assessment_reviews_router)
 app.include_router(public_ledger_router)
 app.include_router(auth_router)

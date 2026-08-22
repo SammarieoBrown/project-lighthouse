@@ -64,6 +64,15 @@ class Verdict(StrEnum):
     REJECTED = "REJECTED"
 
 
+class DamageAssessmentVerdict(StrEnum):
+    """No AUTO_VERIFIED counterpart: a dollar figure always waits for a
+    Director, so the agent's own row is always PROPOSED."""
+
+    PROPOSED = "PROPOSED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class ActorKind(StrEnum):
     AGENT = "AGENT"
     HUMAN = "HUMAN"
@@ -127,7 +136,7 @@ class JobStatus(StrEnum):
 
 
 class AgentName(StrEnum):
-    """The eight agents. Authority per agent is fixed in transitions.md."""
+    """The nine agents. Authority per agent is fixed in transitions.md."""
 
     FORECAST_SENTINEL = "forecast_sentinel"
     RISK_MAPPER = "risk_mapper"
@@ -137,3 +146,4 @@ class AgentName(StrEnum):
     TRIAGE_AGENT = "triage_agent"
     LOGISTICS_AGENT = "logistics_agent"
     LEDGER_AGENT = "ledger_agent"
+    DAMAGE_ASSESSMENT_AGENT = "damage_assessment_agent"

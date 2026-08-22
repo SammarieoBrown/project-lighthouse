@@ -44,6 +44,8 @@ CREATE TYPE evidence_kind AS ENUM (
 
 CREATE TYPE verdict AS ENUM ('AUTO_VERIFIED', 'REVIEW', 'FLAGGED', 'APPROVED', 'REJECTED');
 
+CREATE TYPE damage_assessment_verdict AS ENUM ('PROPOSED', 'APPROVED', 'REJECTED');
+
 CREATE TYPE actor_kind AS ENUM ('AGENT', 'HUMAN', 'SYSTEM');
 
 CREATE TYPE payer_route AS ENUM ('GOV_RELIEF', 'INSURER', 'BOTH', 'DONOR_POOL');
@@ -562,6 +564,180 @@ END $$;
 CREATE TRIGGER verification_immutable_guard_trigger
   BEFORE UPDATE OR DELETE ON verification
   FOR EACH ROW EXECUTE FUNCTION verification_immutable_guard();
+
+-- Post-hoc, photo-based damage estimate tied to the same claim location
+-- verification already resolves (COALESCE(claim.location, storm_file.location)).
+-- Like verification, every proposal is stored raw and is never edited in
+-- place — a Director's decision is a new row, linked by overrides_id. Unlike
+-- verification there is no confidence-gated auto path: a dollar figure always
+-- waits for a Director (Damage Assessment Agent authority, transitions.md).
+CREATE TABLE damage_assessment (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  claim_id          uuid NOT NULL REFERENCES claim(id) ON DELETE CASCADE,
+  storm_file_id     uuid NOT NULL REFERENCES storm_file(id),
+
+  band              damage_band NOT NULL,
+  estimate_low      numeric(14,2) NOT NULL CHECK (estimate_low >= 0),
+  estimate_high     numeric(14,2) NOT NULL CHECK (estimate_high >= estimate_low),
+  currency          text NOT NULL DEFAULT 'JMD',
+  confidence        real NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+
+  -- [{evidence_id, observed_damage, band, confidence}, ...] — one per photo read.
+  findings          jsonb NOT NULL DEFAULT '[]'::jsonb,
+  location_source   text NOT NULL CHECK (location_source IN ('claim', 'storm_file')),
+
+  verdict           damage_assessment_verdict NOT NULL,
+  actor_kind        actor_kind NOT NULL,
+  actor_id          uuid REFERENCES app_user(id),
+  agent_name        text,
+  model_version     text,
+  rationale         text,
+
+  overrides_id      uuid REFERENCES damage_assessment(id),
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  snapshot_hash     text NOT NULL
+    CHECK (snapshot_hash ~ '^[0-9a-f]{64}$'),
+
+  CHECK ((actor_kind = 'HUMAN') = (actor_id IS NOT NULL))
+);
+
+CREATE INDEX damage_assessment_claim_idx ON damage_assessment (claim_id, created_at);
+
+-- One agent proposal can receive one Director disposition, same rule as
+-- verification_overrides_uidx above.
+CREATE UNIQUE INDEX damage_assessment_overrides_uidx
+  ON damage_assessment (overrides_id) WHERE overrides_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION damage_assessment_snapshot_digest(d damage_assessment)
+RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
+  SELECT encode(
+    digest(
+      convert_to(
+        jsonb_build_object(
+          'id', d.id::text,
+          'claim_id', d.claim_id::text,
+          'storm_file_id', d.storm_file_id::text,
+          'band', d.band::text,
+          'estimate_low', d.estimate_low,
+          'estimate_high', d.estimate_high,
+          'currency', d.currency,
+          'confidence', d.confidence,
+          'findings', d.findings,
+          'location_source', d.location_source,
+          'verdict', d.verdict::text,
+          'actor_kind', d.actor_kind::text,
+          'actor_id', d.actor_id::text,
+          'agent_name', d.agent_name,
+          'model_version', d.model_version,
+          'rationale', d.rationale,
+          'overrides_id', d.overrides_id::text,
+          'created_at_epoch_us',
+            (extract(epoch FROM d.created_at) * 1000000)::bigint
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION damage_assessment_snapshot_guard()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  director_role app_role;
+  director_active boolean;
+  parent damage_assessment%ROWTYPE;
+  latest_id uuid;
+BEGIN
+  IF NEW.actor_kind = 'HUMAN' THEN
+    SELECT role, active INTO director_role, director_active
+      FROM app_user WHERE id = NEW.actor_id;
+    IF NOT FOUND OR NOT director_active OR director_role <> 'DIRECTOR' THEN
+      RAISE EXCEPTION
+        'human damage assessment verdicts require an active DIRECTOR';
+    END IF;
+    IF NEW.agent_name IS NOT NULL THEN
+      RAISE EXCEPTION
+        'human damage assessment verdicts cannot assert an agent name';
+    END IF;
+    IF NEW.verdict NOT IN ('APPROVED', 'REJECTED') THEN
+      RAISE EXCEPTION
+        'human damage assessment verdict must be APPROVED or REJECTED';
+    END IF;
+    IF NEW.overrides_id IS NULL THEN
+      RAISE EXCEPTION
+        'damage assessment override must bind latest agent evidence';
+    END IF;
+
+    SELECT * INTO parent FROM damage_assessment WHERE id = NEW.overrides_id;
+    IF NOT FOUND
+       OR parent.claim_id IS DISTINCT FROM NEW.claim_id
+       OR parent.actor_kind <> 'AGENT'
+       OR parent.actor_id IS NOT NULL
+       OR parent.agent_name IS DISTINCT FROM 'damage_assessment_agent'
+       OR parent.verdict <> 'PROPOSED'
+       OR parent.overrides_id IS NOT NULL THEN
+      RAISE EXCEPTION
+        'damage assessment override must bind latest agent evidence';
+    END IF;
+
+    SELECT id INTO latest_id
+      FROM damage_assessment
+     WHERE claim_id = NEW.claim_id
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1;
+    IF latest_id IS DISTINCT FROM parent.id THEN
+      RAISE EXCEPTION
+        'damage assessment override must bind latest agent evidence';
+    END IF;
+
+    -- The Director may adjust the dollar range; every other observed fact
+    -- about the photos carries over unchanged.
+    IF NEW.storm_file_id IS DISTINCT FROM parent.storm_file_id
+       OR NEW.band IS DISTINCT FROM parent.band
+       OR NEW.currency IS DISTINCT FROM parent.currency
+       OR NEW.confidence IS DISTINCT FROM parent.confidence
+       OR NEW.findings IS DISTINCT FROM parent.findings
+       OR NEW.location_source IS DISTINCT FROM parent.location_source
+       OR NEW.model_version IS DISTINCT FROM parent.model_version THEN
+      RAISE EXCEPTION
+        'damage assessment override must copy parent observed evidence';
+    END IF;
+  ELSIF NEW.actor_kind = 'AGENT' THEN
+    IF NEW.actor_id IS NOT NULL
+       OR NEW.agent_name IS DISTINCT FROM 'damage_assessment_agent' THEN
+      RAISE EXCEPTION
+        'agent damage assessment verdicts require damage_assessment_agent authority';
+    END IF;
+    IF NEW.overrides_id IS NOT NULL THEN
+      RAISE EXCEPTION
+        'agent damage assessment verdicts cannot override another row';
+    END IF;
+    IF NEW.verdict <> 'PROPOSED' THEN
+      RAISE EXCEPTION 'agent damage assessment verdict must be PROPOSED';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'system actors cannot issue damage assessment verdicts';
+  END IF;
+
+  NEW.snapshot_hash := damage_assessment_snapshot_digest(NEW);
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER damage_assessment_snapshot_guard_trigger
+  BEFORE INSERT ON damage_assessment
+  FOR EACH ROW EXECUTE FUNCTION damage_assessment_snapshot_guard();
+
+CREATE OR REPLACE FUNCTION damage_assessment_immutable_guard()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'damage assessment evidence is immutable; append a new row';
+END $$;
+
+CREATE TRIGGER damage_assessment_immutable_guard_trigger
+  BEFORE UPDATE OR DELETE ON damage_assessment
+  FOR EACH ROW EXECUTE FUNCTION damage_assessment_immutable_guard();
 
 -- RTE-02: routing is an explicit decision with the consent snapshot that
 -- justified it, not an inferred property of the claim.

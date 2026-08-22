@@ -71,6 +71,7 @@ G3 is enforced by `disbursement.approval_id NOT NULL` — a disbursement is lite
 | Triage Agent | *none* — annotates severity and rank | Autonomous |
 | Logistics Agent | *none* | Propose only → G2 |
 | Ledger Agent | T8, C6 | Autonomous, but only *after* G3 |
+| Damage Assessment Agent | *none* — proposes a dollar estimate from claim photos | Propose only → Director review, always (no confidence-gated auto-path; a dollar figure requires a human by construction) |
 
 The Triage and Alert agents hold no transition authority at all. That is deliberate: an agent that cannot move a file cannot lose one.
 

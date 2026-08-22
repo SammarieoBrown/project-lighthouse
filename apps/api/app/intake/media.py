@@ -549,6 +549,23 @@ class R2MediaStore:
             size_bytes=len(media.data),
         )
 
+    def get(self, object_key: str, *, expected_sha256: str) -> FetchedMedia:
+        """Read a previously stored object back, verifying its digest.
+
+        Every reader of stored evidence — not just the writer in ``put`` —
+        must not trust bytes that could have changed underneath the row.
+        """
+        obj = self.client.get_object(Bucket=self.bucket, Key=object_key)
+        data = obj["Body"].read()
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != expected_sha256:
+            raise MediaBoundaryError("stored media digest does not match evidence row")
+        return FetchedMedia(
+            data=data,
+            content_type=str(obj.get("ContentType") or ""),
+            sha256=digest,
+        )
+
 
 __all__ = [
     "AUDIO_CONTENT_TYPES",

@@ -21,6 +21,8 @@ dependencies = [
   "boto3>=1.35",
   # Decode bounded images before computing the PHOTO perceptual integrity hash.
   "pillow>=10.4",
+  # Worker-only vision call for the Damage Assessment Agent.
+  "anthropic>=0.69",
   "geoalchemy2>=0.15",
   "lighthouse-contracts",
   "pyshp>=2.3",
