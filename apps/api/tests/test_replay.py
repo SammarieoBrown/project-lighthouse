@@ -17,7 +17,7 @@ from lighthouse_contracts import AgentName, Posture
 from app.models import Advisory, AgentJob, HazardEvent
 from app.nhc.ingest import ingest_storm
 from app.replay import ReplayDriver, posture_for
-from app.replay.posture import warning_codes_here
+from app.forecast_sentinel_service import warning_codes_here
 
 
 @pytest.fixture(scope="module")

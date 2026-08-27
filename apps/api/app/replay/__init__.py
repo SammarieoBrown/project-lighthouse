@@ -4,7 +4,7 @@ Every act of the demo runs through this. If it breaks, fixing it outranks
 whatever else was in progress.
 """
 
+from app.forecast_sentinel_service import posture_for, posture_from
 from app.replay.driver import Applied, ReplayDriver, ReplayState
-from app.replay.posture import posture_for, posture_from
 
 __all__ = ["Applied", "ReplayDriver", "ReplayState", "posture_for", "posture_from"]

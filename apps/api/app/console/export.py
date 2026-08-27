@@ -65,7 +65,12 @@ from app.registry.buildings import (
     structure_rows_sha256,
 )
 from app.registry.geography import community_districts, load_parishes, parish_names
-from app.replay.posture import SIMPLIFY_DEG, arrival_hours, posture_from, warning_codes_here
+from app.forecast_sentinel_service import (
+    SIMPLIFY_DEG,
+    arrival_hours,
+    posture_from,
+    warning_codes_here,
+)
 
 #: Where the console looks for it. Committed — see the module docstring.
 DEFAULT_OUTPUT = REPO_ROOT / "apps" / "console" / "public" / "replay" / "replay.json"

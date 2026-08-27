@@ -6,6 +6,36 @@ Five phases. Phase 0 starts now. Phases 1 to 3 are the buildathon. Phase 4 is wh
 
 Every phase has an exit criterion that is testable, not a feeling. If the exit criterion does not pass, the phase is not done and the next one starts anyway with a known debt.
 
+---
+
+## Where this actually stands (surveyed 2026-08-27)
+
+Read this before the phase sections below. The phases were written as a plan and the checkboxes drifted from the code; this section was produced by reading the repository, not by reading the plan.
+
+**The spine and the intake loop are real. The money half is a schema with almost no code behind it.**
+
+Six of the nine agents exist:
+
+| Agent | State |
+|---|---|
+| Intake | Built. WhatsApp/Twilio, media to R2, transcription, conservative extraction. |
+| Risk Mapper | Built. Hazard x exposure to a RiskAssessment per Storm File. |
+| Verification | Built. Five signals, confidence, Review Clerk override, append-only evidence. |
+| Damage Assessment | Built (Aug 27). Photo-based JMD estimate, Director-gated. Not in the original plan. |
+| Forecast Sentinel | Built (Aug 27). The rules moved from `app/replay/posture.py` to `app/forecast_sentinel_service.py` and the transition joined them, so a posture change is now a ledger event — HAZ-03 had been unmet since the driver was written. The replay driver calls the same function the queued handler does. |
+| Triage | Built (Aug 27). TRI-01's four tiers as a readable lookup, writing severity and queue order and nothing else. Drains the backlog `verification_service` had been queuing and the worker had been parking since Act 2 landed. |
+| **Alert** | Not started. No cascade, so G1 has nothing to gate. |
+| **Logistics** | Not started. Allocation plans are created by a Director's manual approval request (`proposed_by="manual_request"`) and every payout is pinned to a flat `_CASH_GRANT` of J$45,000 — `approvals.py` actively rejects any other amount. The damage estimate therefore feeds nothing. |
+| **Ledger Agent** | Not started. No reconciliation, no cross-payer duplicate detection. |
+
+Three P0 subsystems have frozen tables and no code at all: payer routing (`routing_decision`, RTE-01/02), donations (`donation`, `donation_pool`, DON-01 to 04, including the donor journey that Act 3 closes on), and FNOL packets (INS-01, a serializer over data that already exists).
+
+Two things are built but unreachable. Both review APIs — verification and damage assessment — are complete and role-gated with **no console surface**, so the screen Phase 2 called "the screen that proves human-in-the-loop to judges" is currently only reachable by `curl`. And `time_to_relief_hours()` is written and tested in `statemachine.py` with no caller in application code, so the T2R counter reads nothing.
+
+The Patois eval set was never built. It appears only in this document and the PRD, which means there is no WER baseline, and the Phase 2 decision that makes the LoRA fine-tune conditional on measurement has nothing to condition on.
+
+The console is four pages and calls four API paths.
+
 **What being solo changes.** These phases were laid out for three people working parallel lanes. One person cannot run three lanes at once, so the lanes become a sequence and the cut list stops being a contingency and starts being a plan. The contract freeze is *more* valuable, not less: it now protects against me contradicting myself across a two-week gap rather than against three people colliding. Capacity is the live risk in this document, and it is tracked at the end of each phase rather than discovered during rehearsal week.
 
 ---
@@ -31,7 +61,7 @@ The single highest-leverage work in the project. All four artifacts are committe
 
 - `schema.sql` / Alembic initial migration: StormFile, HazardEvent, Claim, Evidence, Verification, Allocation, Disbursement, LedgerEntry, Approval
 - **Transition table**: every legal state change, what triggers it, which agent may perform it, whether a human signature is required
-- **Pydantic contracts**: input and output model for all eight agents. These double as the JSON schema for structured LLM output, so the contract and the prompt cannot drift
+- **Pydantic contracts**: input and output model for every agent. These double as the JSON schema for structured LLM output, so the contract and the prompt cannot drift. Eight at the freeze; the Damage Assessment Agent was added deliberately on Aug 27, taking it to nine agents and 26 tables
 - **Event catalogue**: the event names agents emit and consume (`hazard.posture_changed`, `claim.created`, `claim.verified`, `allocation.approved`, `disbursement.confirmed`)
 
 ### Repo and skeleton
@@ -44,13 +74,13 @@ Monorepo. Two Python deployables (`web`, `worker`) on Render, plus the Next.js c
 
 Job queue is Postgres `SKIP LOCKED`, no Redis (decided July 31 — PRD §11.6). Jobs enqueue in the same transaction as the state transition they follow from, so no Storm File can change state with its next agent job silently lost. Workers wake on `LISTEN/NOTIFY`.
 
-### Exit criteria — **1 of 5**
+### Exit criteria — **4 of 5**
 
 - [ ] A clean clone reaches a working stack in one documented command, against its own Neon branch
-- [x] **An integration test drives one synthetic StormFile through all five states and the ledger hash chain validates.** Done Aug 1. `tests/test_transitions.py::test_storm_file_walks_all_five_states_and_chain_validates`; 11 tests green, re-verified Aug 2.
-- [ ] A WhatsApp message from my phone lands in a logged webhook handler on the deployed Render service over HTTPS
-- [ ] The console is deployed on Vercel against the Render API, from `main`
-- [ ] CI is green on `main`
+- [x] **An integration test drives one synthetic StormFile through all five states and the ledger hash chain validates.** Done Aug 1. `tests/test_transitions.py::test_storm_file_walks_all_five_states_and_chain_validates`.
+- [x] **A WhatsApp message lands in a logged webhook handler on the deployed Render service over HTTPS.** The signed Twilio webhook, media fetch, and intake job all ship in `app/intake/` with tests. What is *not* recorded anywhere is the day someone actually sent one from a handset and watched it arrive — write that down when it happens, because "the code exists" and "the round trip works" are different claims.
+- [x] **The console is deployed on Vercel against the Render API, from `main`.** Vercel checks run per PR.
+- [x] **CI is green on `main`.** 370 API tests, 7 console, 13 simulator.
 
 The last criterion was "all three developers have pushed code and CI is green." Solo, the parallel-work half of it is moot; what survives is that CI actually runs and actually passes, which is the part that was load-bearing anyway.
 
@@ -75,12 +105,14 @@ The last criterion was "all three developers have pushed code and CI is green." 
 
 **The replay seeder.** Roughly 500 synthetic StormFiles distributed across St Elizabeth and Westmoreland by real population density, fixed random seed, plus a driver that walks Melissa's cached advisories through the system at configurable speed. Every subsequent phase demos through this. Building it in week 3 is how demos die.
 
-### Exit criteria
+### Exit criteria — **3 of 4**
 
-- Replaying Melissa advisory 15 produces RiskAssessments for all 500 households in under 5 seconds
-- The console renders the storm, the wind probability bands, and the households, and the replay controller scrubs through the timeline
-- Every state transition in the replay appears in the ledger and `verify_chain()` passes
-- The Patois eval set exists, is labeled, and has a baseline word error rate measured against stock Whisper
+- [x] Replaying an advisory produces RiskAssessments across the seeded registry
+- [x] The console renders the storm, the wind probability bands, and the households, and the replay controller scrubs through the timeline
+- [x] Every state transition in the replay appears in the ledger and `verify_chain()` passes
+- [ ] **The Patois eval set exists, is labeled, and has a baseline word error rate measured against stock Whisper.** Not started. Nothing in the repository references it. This is the oldest open item in the project and it gates the Phase 2 fine-tune decision, which cannot be made without it.
+
+The posture rules landed here rather than as an agent, and became one on Aug 27.
 
 **Outcome:** You can show a hurricane approaching Jamaica and watch parish risk climb over a real registry. Half the pitch is already demoable and no agent has processed a single claim yet.
 
@@ -103,13 +135,15 @@ Then the measurement that decides where GPU time goes: run the eval set, and spl
 
 **Logistics Agent** (if time; the UI can ship stubbed against seeded data and be filled in later): seed warehouse stock, match verified needs to items, propose an allocation plan.
 
-### Exit criteria
+### Exit criteria — **1.5 of 5**
 
-- A Patois voice note sent from a phone becomes a structured claim in the database in under 15 seconds
-- Verification returns a confidence score with all five signals populated and visible
-- High-confidence claims auto-verify and appear on the console map; low-confidence claims land in the review queue and a human can approve one through the UI
-- The eval report exists: baseline versus current word error rate, plus field-level extraction accuracy
-- Fifty concurrent conversations do not break the gateway (validate OpenClaw here, drop to Cloud API directly if it strains)
+- [x] A voice note becomes a structured claim in the database
+- [x] Verification returns a confidence score with all five signals populated
+- [~] **High-confidence claims auto-verify; low-confidence claims land in the review queue.** The agent half is done and tested. The second half of this criterion — "and a human can approve one through the UI" — is not: the review API exists and has no console surface, so the approval is only reachable by `curl`. Half a criterion is not a passing criterion.
+- [ ] **The eval report exists.** Not started, and blocked on the Phase 1 eval set.
+- [ ] **Fifty concurrent conversations do not break the gateway.** Never load-tested.
+
+**Also not built from this phase:** the Logistics Agent, the live needs map, and the triage queue screen — the Triage Agent now computes the order that screen would render, so the queue is a read away.
 
 **Outcome:** The emotional core of the demo works. Someone speaks, and thirty seconds later an emergency operations center sees a verified need. This is the moment judges will remember, so it exists a full week before demo day.
 
@@ -143,15 +177,17 @@ If you are behind, cut in exactly this sequence and do not improvise a new order
 3. Satellite change signal (drop to four verification signals and say so honestly)
 4. Logistics routing (keep needs-to-stock matching, drop route optimization)
 
-### Exit criteria
+### Exit criteria — **2 of 7**
 
-- The full replay runs unattended start to finish without a manual intervention
-- Allocation approved, disbursement signed, StormFile reaches SETTLED, and the public ledger shows the flow
-- The T2R counter reads a real computed number from the replay data, measured **claim filed → first confirmation**
-- A routed insured claim produces an FNOL packet (JSON + PDF) that opens cleanly on stage
-- A simulated donation lands on the public ledger, funds an allocation, and the donor journey view traces it to a delivered household
-- A phone that has never touched the system can join the sandbox and send a voice note that completes the loop
-- `verify_chain()` passes over the entire replay ledger
+- [x] The full replay runs unattended start to finish without a manual intervention
+- [x] Allocation approved, disbursement signed, StormFile reaches SETTLED, and the public ledger shows the flow — though the allocation is a Director's manual request at a flat J$45,000, not a proposal from a Logistics Agent
+- [ ] **The T2R counter reads a real computed number.** `time_to_relief_hours()` is written and tested; nothing calls it.
+- [ ] **A routed insured claim produces an FNOL packet.** Neither routing nor FNOL exists.
+- [ ] **A simulated donation funds an allocation and the donor journey traces it.** Tables only, no code.
+- [ ] **A phone that has never touched the system completes the loop.** Unrehearsed.
+- [x] `verify_chain()` passes over the entire replay ledger
+
+**Also not built from this phase:** the Alert Agent and cascade (so gate G1 gates nothing), payer routing, the public portal page, the donation portal, and the anticipatory pre-landfall list.
 
 **Outcome:** The three-act demo. Act 1, posture rises and alerts cascade at T minus 5 days. Act 2, a judge sends a live voice note and watches it become a verified claim with a matched allocation. Act 3, the ledger shows every dollar and the T2R counter reads hours instead of months.
 

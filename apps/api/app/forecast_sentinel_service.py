@@ -1,10 +1,14 @@
-"""National readiness posture from an advisory.
+"""National readiness posture: the rules, and the transition they drive.
 
-This is the decision Forecast Sentinel will own. It lives here because the
-replay driver cannot demonstrate anything without it, and because it is
-deliberately not a model: it is four rules a Director can read, disagree with,
-and overrule. When the agent lands it consumes this function rather than
-reinventing the judgement, so there is one definition of what READY means.
+This is the decision Forecast Sentinel owns. It began life under
+``app/replay/`` because the replay driver could not demonstrate anything
+without it, on the understanding that the agent would consume it rather than
+reinvent the judgement when it landed. The agent has landed, so the rules
+moved to where the agent lives — there is still exactly one definition of what
+READY means, and now exactly one place that acts on it.
+
+It is deliberately not a model: it is four rules a Director can read, disagree
+with, and overrule.
 
     ACT     a hurricane warning covering the replay area, or hurricane-force
             wind forecast to arrive within 36 hours
@@ -33,14 +37,17 @@ posture at all.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import timedelta
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from lighthouse_contracts import Posture
+from lighthouse_contracts import ActorKind, AgentName, Event, Posture
+from lighthouse_contracts.agents import ForecastSentinelOutput
 
-from app.models import Advisory
+from app import ledger, queue
+from app.models import Advisory, HazardEvent
 from app.nhc.geometry import quadrant_polygon_wkt
 from app.registry.geography import REPLAY_PARISHES, load_parishes
 
@@ -211,3 +218,143 @@ def posture_for(session: Session, advisory: Advisory, *, simplify: bool = True) 
         warning_codes_here(session, advisory, simplify=simplify),
         arrival_hours(session, advisory, simplify=simplify),
     )
+
+
+# ---------------------------------------------------------------------------
+# The transition. Everything above decides what the posture *is*; this decides
+# what happens when it changes.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class PostureDecision:
+    """One advisory's effect on national posture."""
+
+    posture: Posture
+    previous: Posture
+    changed: bool
+    output: ForecastSentinelOutput
+
+
+def _affected_parishes(session: Session, advisory: Advisory) -> list[str]:
+    """Parishes with registered households inside the 34 kt wind field.
+
+    The same containment test Risk Mapper uses, asked of the registry rather
+    than of a single household. Empty is a real answer — an advisory whose
+    wind field misses the registry entirely affects nobody we know about, and
+    saying so is more useful than naming every parish the storm threatens.
+    """
+    if advisory.wind_field_34 is None:
+        return []
+    rows = session.execute(
+        text(
+            """
+            SELECT DISTINCT sf.parish
+              FROM storm_file sf
+              JOIN advisory adv ON adv.id = :advisory_id
+             WHERE sf.parish IS NOT NULL
+               AND sf.location IS NOT NULL
+               AND adv.wind_field_34 IS NOT NULL
+               AND ST_Intersects(adv.wind_field_34, sf.location)
+             ORDER BY sf.parish
+            """
+        ),
+        {"advisory_id": advisory.id},
+    ).scalars()
+    return [parish for parish in rows if parish]
+
+
+def evaluate_posture(
+    session: Session, event: HazardEvent, advisory: Advisory
+) -> PostureDecision:
+    """Set national posture from one advisory, and record it if it moved.
+
+    Idempotent by construction: posture is derived from the advisory, so
+    running this twice on the same advisory computes the same answer, finds it
+    already current the second time, and writes nothing. That is what lets the
+    replay driver call it synchronously — it needs the answer in hand to report
+    what an advisory did — while the worker calls it from a queued job on the
+    live feed path, without the two racing to double-record anything.
+
+    A posture change is a ledger event (HAZ-03) and not merely a column write.
+    For most of this project's life it was only the column: the driver moved
+    ``current_posture`` and enqueued the alert job, so the fact that the
+    country went to READY at 03:40 existed nowhere anyone could audit. A
+    posture change is the moment people start acting, and an unrecorded one
+    makes every action that follows unexplainable.
+    """
+    previous = event.current_posture
+    posture = posture_for(session, advisory)
+    changed = posture != previous
+    parishes = _affected_parishes(session, advisory)
+
+    if changed:
+        event.current_posture = posture
+
+    output = ForecastSentinelOutput(
+        posture=posture,
+        posture_changed=changed,
+        affected_parishes=parishes,
+        advisory_number=advisory.advisory_number,
+        # ACT is the level at which a Director is expected to be awake and
+        # deciding, so reaching it asks for a human even though the posture
+        # itself is set autonomously.
+        escalate_to_human=changed and posture is Posture.ACT,
+        rationale=(
+            f"Advisory {advisory.advisory_number}: posture {previous} -> {posture}"
+            if changed
+            else f"Advisory {advisory.advisory_number}: posture holds at {posture}"
+        ),
+    )
+
+    if not changed:
+        return PostureDecision(posture, previous, False, output)
+
+    ledger.append(
+        session,
+        action=str(Event.HAZARD_POSTURE_CHANGED),
+        subject_type="hazard_event",
+        subject_id=event.id,
+        payload={
+            "hazard_event_id": str(event.id),
+            "advisory_id": str(advisory.id),
+            "advisory_number": advisory.advisory_number,
+            "issued_at": advisory.issued_at.isoformat(),
+            "previous_posture": str(previous),
+            "posture": str(posture),
+            "affected_parishes": parishes,
+            "escalate_to_human": output.escalate_to_human,
+        },
+        actor_kind=ActorKind.AGENT,
+        agent=AgentName.FORECAST_SENTINEL,
+    )
+
+    # Alert cascades hang off the posture change, not off the advisory
+    # arriving. No handler is registered for this yet, so the worker parks it
+    # and the backlog waits for the Alert Agent.
+    queue.enqueue(
+        session,
+        job_type=AgentName.ALERT_AGENT,
+        payload={
+            "hazard_event_id": str(event.id),
+            "advisory_id": str(advisory.id),
+            "advisory_number": advisory.advisory_number,
+            "issued_at": advisory.issued_at.isoformat(),
+            "event": str(Event.HAZARD_POSTURE_CHANGED),
+            "previous_posture": str(previous),
+            "posture": str(posture),
+        },
+    )
+    return PostureDecision(posture, previous, True, output)
+
+
+__all__ = [
+    "PostureDecision",
+    "SIMPLIFY_DEG",
+    "arrival_hours",
+    "evaluate_posture",
+    "posture_for",
+    "posture_from",
+    "replay_area_wkb",
+    "warning_codes_here",
+]
