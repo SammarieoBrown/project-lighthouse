@@ -23,6 +23,9 @@ dependencies = [
   "pillow>=10.4",
   # Worker-only vision call for the Damage Assessment Agent.
   "anthropic>=0.69",
+  # INS-01 requires the FNOL packet be readable by a human, not only parseable
+  # by an insurer's API. Pure Python, no system libraries to install on Render.
+  "reportlab>=4.2",
   "geoalchemy2>=0.15",
   "lighthouse-contracts",
   "pyshp>=2.3",
