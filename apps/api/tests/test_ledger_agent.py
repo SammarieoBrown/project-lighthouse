@@ -9,7 +9,6 @@ asking anybody.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, text
@@ -25,7 +24,7 @@ from lighthouse_contracts import (
 
 from app.agents.ledger_agent import LedgerAgentNotRunnable
 from app.agents.ledger_agent import handle as ledger_handle
-from app.ledger_agent_service import STUCK_AFTER, reconcile
+from app.ledger_agent_service import reconcile
 from app.models import Disbursement, LedgerEntry, StormFile
 from app.worker import load_handlers
 

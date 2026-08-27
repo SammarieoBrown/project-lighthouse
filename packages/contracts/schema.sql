@@ -770,7 +770,12 @@ CREATE TABLE donation_pool (
   name        text NOT NULL,
   scope_kind  text NOT NULL,          -- EVENT | PARISH  (PRD 11.3: no category in P0)
   scope_value text,
-  balance     numeric(14,2) NOT NULL DEFAULT 0,
+  -- DON-03: allocations draw this down visibly. A pool cannot be overdrawn,
+  -- and that is a database rule rather than application arithmetic for the
+  -- same reason stock_item.quantity is: it is the last thing standing between
+  -- a signed allocation and money that was never given.
+  balance     numeric(14,2) NOT NULL DEFAULT 0
+    CONSTRAINT donation_pool_balance_chk CHECK (balance >= 0),
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -960,21 +965,27 @@ CREATE TABLE allocation (
       resource = 'CASH'
       AND amount = 45000.00
       AND currency = 'JMD'
-      AND payer_route = 'GOV_RELIEF'
       AND sku IS NULL
       AND quantity IS NULL
-      AND pool_id IS NULL
       AND warehouse_id IS NULL
     ) OR (
       resource = 'ITEM'
       AND amount IS NULL
-      AND payer_route = 'GOV_RELIEF'
       AND sku IS NOT NULL
       AND quantity IS NOT NULL
       AND quantity > 0
       AND warehouse_id IS NOT NULL
-      AND pool_id IS NULL
     )
+  ),
+  -- RTE-01 calls DONOR_POOL "orthogonal to the other two as a funding
+  -- source": it says who paid, not who carries the loss. So it is a payer
+  -- route like the rest, and the pool it draws on is required exactly when it
+  -- is the route and barred otherwise. INSURER and BOTH are still absent
+  -- here, and deliberately: an insurer settles with its policyholder, it does
+  -- not fund a relief allocation.
+  CONSTRAINT allocation_payer_source_chk CHECK (
+    (payer_route = 'GOV_RELIEF' AND pool_id IS NULL)
+    OR (payer_route = 'DONOR_POOL' AND pool_id IS NOT NULL)
   )
 );
 
@@ -1167,20 +1178,16 @@ BEGIN
   IF NEW.resource = 'CASH' THEN
     IF NEW.amount IS DISTINCT FROM 45000.00
        OR NEW.currency <> 'JMD'
-       OR NEW.payer_route <> 'GOV_RELIEF'
        OR NEW.sku IS NOT NULL
        OR NEW.quantity IS NOT NULL
-       OR NEW.pool_id IS NOT NULL
        OR NEW.warehouse_id IS NOT NULL THEN
       RAISE EXCEPTION 'allocation does not match the fixed release grant policy';
     END IF;
   ELSIF NEW.resource = 'ITEM' THEN
     IF NEW.amount IS NOT NULL
-       OR NEW.payer_route <> 'GOV_RELIEF'
        OR NEW.sku IS NULL
        OR NEW.quantity IS NULL
        OR NEW.quantity <= 0
-       OR NEW.pool_id IS NOT NULL
        OR NEW.warehouse_id IS NULL THEN
       RAISE EXCEPTION 'allocation does not match the tiered goods policy';
     END IF;
@@ -1196,6 +1203,22 @@ BEGIN
     END IF;
   ELSE
     RAISE EXCEPTION 'allocation resource is not releasable';
+  END IF;
+
+  IF NEW.payer_route = 'DONOR_POOL' THEN
+    -- DON-03. Signing against a pool that cannot cover it is the failure this
+    -- catches; the draw-down's own ``balance >= 0`` check catches the race.
+    IF NEW.pool_id IS NULL THEN
+      RAISE EXCEPTION 'donor-funded allocation must name a pool';
+    END IF;
+    IF NEW.resource = 'CASH' AND NOT EXISTS (
+      SELECT 1 FROM donation_pool p
+       WHERE p.id = NEW.pool_id AND p.balance >= NEW.amount
+    ) THEN
+      RAISE EXCEPTION 'donor pool cannot cover this allocation';
+    END IF;
+  ELSIF NEW.payer_route <> 'GOV_RELIEF' THEN
+    RAISE EXCEPTION 'allocation payer route is not a funding source';
   END IF;
 
   SELECT p.hazard_event_id
@@ -1372,7 +1395,11 @@ BEGIN
        OR NEW.payload ->> 'warehouse_id'
             IS DISTINCT FROM allocation_row.warehouse_id::text
      ))
-     OR NEW.payload ->> 'payer_route' IS DISTINCT FROM 'GOV_RELIEF'
+     OR NEW.payload ->> 'payer_route'
+          IS DISTINCT FROM allocation_row.payer_route::text
+     OR (allocation_row.payer_route = 'DONOR_POOL'
+         AND NEW.payload ->> 'pool_id' IS DISTINCT FROM allocation_row.pool_id::text)
+     OR (allocation_row.payer_route = 'GOV_RELIEF' AND NEW.payload ? 'pool_id')
      OR NEW.payload ->> 'money_movement'
           IS DISTINCT FROM 'NOT_INITIATED_AT_APPROVAL'
      OR jsonb_typeof(NEW.payload -> 'synthetic') IS DISTINCT FROM 'boolean'

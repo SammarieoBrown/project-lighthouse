@@ -38,11 +38,13 @@ from app.models import (
     Approval,
     Disbursement,
     HumanCredential,
+    DonationPool,
     LedgerEntry,
     StockItem,
     Verification,
     Warehouse,
 )
+from app.donations_service import create_pool, record_donation
 from app.web import BoundedApprovalBodyMiddleware, _MAX_APPROVAL_BODY_BYTES, app
 
 from factories import (
@@ -879,3 +881,111 @@ def test_a_goods_request_without_a_warehouse_is_refused(session, monkeypatch):
 
     assert response.status_code == 422
     assert "warehouse_id" in response.text
+
+
+# ---------------------------------------------------------------------------
+# DON-03. A donation pool is a payer source, and signing draws it down.
+# ---------------------------------------------------------------------------
+
+
+def _pool_with(session, amount="90000.00"):
+    pool = create_pool(
+        session, name="St Elizabeth pool", scope_kind="PARISH", scope_value="St Elizabeth"
+    )
+    record_donation(
+        session, pool_id=pool.id, donor_handle="diaspora-42", amount=Decimal(amount)
+    )
+    return pool
+
+
+def test_a_donor_pool_can_fund_a_grant_and_is_drawn_down(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    pool = _pool_with(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    response = _approve(
+        client,
+        claim,
+        issued.token,
+        body={**BODY, "payer_route": "DONOR_POOL", "pool_id": str(pool.id)},
+    )
+
+    assert response.status_code == 201, response.text
+    allocation = session.scalar(select(Allocation))
+    assert allocation.payer_route is PayerRoute.DONOR_POOL
+    assert allocation.pool_id == pool.id
+    # 90,000 donated, one 45,000 grant released.
+    assert session.scalar(select(DonationPool.balance)) == Decimal("45000.00")
+
+
+def test_the_receipt_names_the_pool_that_paid(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    pool = _pool_with(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    _approve(
+        client,
+        claim,
+        issued.token,
+        body={**BODY, "payer_route": "DONOR_POOL", "pool_id": str(pool.id)},
+    )
+
+    entry = session.scalar(
+        select(LedgerEntry)
+        .where(LedgerEntry.action == str(Event.ALLOCATION_APPROVED))
+        .order_by(LedgerEntry.seq.desc())
+        .limit(1)
+    )
+    assert entry.payload["payer_route"] == "DONOR_POOL"
+    assert entry.payload["pool_id"] == str(pool.id)
+
+
+def test_a_pool_that_cannot_cover_the_grant_is_refused(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    pool = _pool_with(session, amount="1000.00")
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    response = _approve(
+        client,
+        claim,
+        issued.token,
+        body={**BODY, "payer_route": "DONOR_POOL", "pool_id": str(pool.id)},
+    )
+
+    assert response.status_code == 409
+    assert session.scalar(select(DonationPool.balance)) == Decimal("1000.00")
+    assert session.scalar(select(func.count()).select_from(Allocation)) == 0
+
+
+def test_relief_funding_may_not_name_a_pool_and_pool_funding_must(session, monkeypatch):
+    """A relief-funded allocation naming a pool would claim a donor paid for
+    something a donor did not."""
+    storm_file, claim = _verified_claim(session)
+    pool = _pool_with(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    named = _approve(
+        client, claim, issued.token, body={**BODY, "pool_id": str(pool.id)}
+    )
+    assert named.status_code == 422
+
+    unnamed = _approve(
+        client, claim, issued.token, body={**BODY, "payer_route": "DONOR_POOL"}
+    )
+    assert unnamed.status_code == 422
+
+
+def test_an_insurer_may_not_fund_a_relief_allocation(session, monkeypatch):
+    """Routing a claim to a carrier and funding a basket are different
+    questions that happen to share an enum."""
+    storm_file, claim = _verified_claim(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    response = _approve(client, claim, issued.token, body={**BODY, "payer_route": "INSURER"})
+
+    assert response.status_code == 422

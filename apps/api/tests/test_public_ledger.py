@@ -248,3 +248,68 @@ def test_cached_verification_expires_after_short_ttl(session, monkeypatch):
     now += ledger._CHAIN_CACHE_TTL_SECONDS + 0.001
     assert ledger.cached_verify_chain(session) is True
     assert calls == 2
+
+
+# ---------------------------------------------------------------------------
+# LGR-02's median time to relief, from immutable receipts only.
+# ---------------------------------------------------------------------------
+
+
+def test_the_median_resists_one_household_that_waited_weeks():
+    """Mean would let a single bad phone number make the headline number look
+    worse than the experience of the households behind it."""
+    from app.public_ledger import _median
+
+    assert _median([10.0, 12.0, 14.0, 500.0]) == 13.0  # not the ~134 a mean gives
+    assert _median([52.0]) == 52.0
+    assert _median([]) is None
+
+
+def test_the_real_relief_chain_produces_a_median(session):
+    """Read across claim.created -> allocation.approved -> disbursement
+    .confirmed, every link a receipt the database refuses to let change."""
+    from lighthouse_contracts import ActorKind as _ActorKind
+    from lighthouse_contracts import AppRole as _AppRole
+    from lighthouse_contracts import ClaimStatus as _ClaimStatus
+    from lighthouse_contracts import Event as _Event
+    from lighthouse_contracts import StormFileState as _StormFileState
+
+    from app import ledger as ledger_module
+    from app.public_ledger import _median_time_to_relief
+    from factories import (
+        make_claim,
+        make_event,
+        make_storm_file,
+        make_user,
+        make_verification,
+        settle_with_signature,
+    )
+
+    assert _median_time_to_relief(session) == (None, 0)
+
+    event = make_event(session)
+    sf = make_storm_file(session, state=_StormFileState.VERIFIED)
+    claim = make_claim(session, sf, event, status=_ClaimStatus.VERIFIED)
+    make_verification(session, claim)
+    ledger_module.append(
+        session,
+        action=str(_Event.CLAIM_CREATED),
+        subject_type="claim",
+        subject_id=claim.id,
+        payload={"claim_id": str(claim.id)},
+        actor_kind=_ActorKind.SYSTEM,
+    )
+    finance = make_user(session, _AppRole.FINANCE_OFFICER)
+    settle_with_signature(session, claim, finance)
+    session.flush()
+
+    median, sample = _median_time_to_relief(session)
+
+    assert sample == 1
+    assert median is not None and median >= 0
+
+
+def test_nothing_confirmed_reports_no_median_rather_than_zero(session):
+    from app.public_ledger import _median_time_to_relief
+
+    assert _median_time_to_relief(session) == (None, 0)
