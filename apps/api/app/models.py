@@ -37,6 +37,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from lighthouse_contracts import (
     ActorKind,
+    AlertChannel,
+    AlertDeliveryStatus,
     AppRole,
     ClaimStatus,
     DamageAssessmentVerdict,
@@ -325,6 +327,40 @@ class DamageAssessment(Base):
     )
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
     snapshot_hash: Mapped[str] = mapped_column(Text)
+
+
+class AlertDelivery(Base):
+    """ALT-02. One household, one channel, one signed cascade.
+
+    ``approval_id`` is NOT NULL, which makes G1 structural here the way
+    ``disbursement.approval_id`` makes G3 structural: this row cannot exist
+    without the signature that authorised the cascade it belongs to.
+    """
+
+    __tablename__ = "alert_delivery"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("approval.id")
+    )
+    storm_file_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("storm_file.id", ondelete="CASCADE")
+    )
+    #: Never the number. An alert log is exactly the kind of table that
+    #: quietly becomes a directory.
+    phone_hash: Mapped[str] = mapped_column(Text)
+    parish: Mapped[str | None] = mapped_column(Text, nullable=True)
+    community: Mapped[str | None] = mapped_column(Text, nullable=True)
+    channel: Mapped[AlertChannel] = mapped_column(_enum(AlertChannel, "alert_channel"))
+    status: Mapped[AlertDeliveryStatus] = mapped_column(
+        _enum(AlertDeliveryStatus, "alert_delivery_status"),
+        default=AlertDeliveryStatus.QUEUED,
+    )
+    simulated: Mapped[bool] = mapped_column(Boolean, default=True)
+    provider_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempted_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    confirmed_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
 
 
 class DonationPool(Base):
@@ -646,6 +682,7 @@ __all__ = [
     "Claim",
     "Verification",
     "DamageAssessment",
+    "AlertDelivery",
     "DonationPool",
     "Donation",
     "Consent",

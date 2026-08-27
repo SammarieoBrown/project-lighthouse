@@ -39,7 +39,9 @@ T2R now reads a real number. The public portal publishes a **median** time to re
 
 What is genuinely missing on the console: the triage queue's ordering (TRI-02 — the claims API does not return `severity` or `triage_rank` at all, so the queue cannot sort by them), the damage assessment review surface, a public portal that does not require signing in (LGR-02 — the ledger renders inside the authenticated operations screen), the donation portal and donor journey (DON-01/02/04), and an FNOL download on the claim.
 
-The Patois eval set was never built. It appears only in this document and the PRD, which means there is no WER baseline, and the Phase 2 decision that makes the LoRA fine-tune conditional on measurement has nothing to condition on.
+The Patois eval set still does not exist, and the scorer for it now does (`app/patois_eval.py`, `data/patois-eval/`). That split is deliberate: the set is roughly a hundred held-out utterances from Jamaican speakers with hand-written transcripts and hand-written labels, and collecting it depends on other people saying words into a phone. Nothing in the repository generates the audio or invents a label, because a synthetic eval set scores well and means nothing — and the entire point of NFR-G-03 is to find out whether transcription is good enough to trust. With an empty manifest the scorer reports no cases and says so, which is the honest reading until recordings exist.
+
+It reports word error rate and per-field extraction accuracy **separately**, because Phase 2 makes the fine-tune conditional on which half is the bottleneck and a blended score cannot answer that.
 
 The console is four pages and calls four API paths.
 
@@ -195,7 +197,11 @@ If you are behind, cut in exactly this sequence and do not improvise a new order
 - [ ] **A phone that has never touched the system completes the loop.** Unrehearsed.
 - [x] `verify_chain()` passes over the entire replay ledger
 
-**Also not built from this phase:** the outbound send channel (so an approved cascade still cannot reach a phone), payer routing, the public portal page, the donation portal, and the anticipatory pre-landfall list (ALT-04).
+The outbound channel exists (Aug 27) and sends nothing. ALT-02's tiering, per-recipient delivery status, and the ten-minute SMS fallback are built against an `alert_delivery` table whose `approval_id` is NOT NULL — G1 made structural, the way `disbursement.approval_id` makes G3 structural. The sender is fail-closed and `simulated` is the only implemented mode: the registry is synthetic and so are its phone numbers, and a real message to a real number is the one mistake in this system that cannot be taken back. Households are recorded by `phone_hash`, never by number.
+
+The anticipatory list (ALT-04) is built and Director-only, ranked by vulnerability times wind probability and exportable as CSV because pre-positioning happens on paper in a truck. It refuses below READY — at WATCH there is genuinely nothing to anticipate, which is a different statement from "nobody is at risk" — and it carries household counts rather than people: no name, no number, not even on a Director-only surface.
+
+**Still not built from this phase:** the community relay digest (ALT-03, P1).
 
 **Outcome:** The three-act demo. Act 1, posture rises and alerts cascade at T minus 5 days. Act 2, a judge sends a live voice note and watches it become a verified claim with a matched allocation. Act 3, the ledger shows every dollar and the T2R counter reads hours instead of months.
 
