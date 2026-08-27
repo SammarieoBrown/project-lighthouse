@@ -28,7 +28,7 @@ from lighthouse_contracts import AgentName, Event, Posture
 
 from app import queue
 from app.models import Advisory, HazardEvent
-from app.replay.posture import posture_for
+from app.forecast_sentinel_service import evaluate_posture
 
 #: Agents woken by a new advisory. Nothing is registered to handle these yet —
 #: the jobs queue up and wait, which is the point of enqueueing rather than
@@ -155,48 +155,34 @@ class ReplayDriver:
     # -- moving ------------------------------------------------------------
 
     def _apply(self, advisory: Advisory) -> Applied:
-        previous = self.event.current_posture
-        posture = posture_for(self.session, advisory)
-        changed = posture != previous
-
-        if changed:
-            self.event.current_posture = posture
+        # Posture is Forecast Sentinel's decision, and this calls the same
+        # function the agent's own handler does. Called rather than enqueued
+        # because the driver has to report what the advisory did in the return
+        # value the scrub bar reads; the queued path exists for the live feed,
+        # and the function is idempotent so neither can double-record.
+        decision = evaluate_posture(self.session, self.event, advisory)
 
         payload = {
             "hazard_event_id": str(self.event.id),
             "advisory_id": str(advisory.id),
             "advisory_number": advisory.advisory_number,
             "issued_at": advisory.issued_at.isoformat(),
-            "posture": str(posture),
+            "posture": str(decision.posture),
             "event": str(Event.HAZARD_ADVISORY_INGESTED),
         }
 
-        jobs = 0
+        jobs = 1 if decision.changed else 0  # the alert job evaluate_posture queued
         for agent in ADVISORY_CONSUMERS:
             queue.enqueue(self.session, job_type=agent, payload=payload)
-            jobs += 1
-
-        if changed:
-            # A posture change is its own event because people act on it —
-            # alert cascades hang off this, not off the advisory arriving.
-            queue.enqueue(
-                self.session,
-                job_type=AgentName.ALERT_AGENT,
-                payload={
-                    **payload,
-                    "event": str(Event.HAZARD_POSTURE_CHANGED),
-                    "previous_posture": str(previous),
-                },
-            )
             jobs += 1
 
         self.session.flush()
         return Applied(
             advisory_number=advisory.advisory_number,
             issued_at=advisory.issued_at,
-            posture=posture,
-            posture_changed=changed,
-            previous_posture=previous,
+            posture=decision.posture,
+            posture_changed=decision.changed,
+            previous_posture=decision.previous,
             jobs_enqueued=jobs,
         )
 

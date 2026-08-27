@@ -45,7 +45,7 @@ from app.registry.buildings import (
     stored_structure_rows,
     structure_rows_sha256,
 )
-from app.replay.posture import SIMPLIFY_DEG
+from app.forecast_sentinel_service import SIMPLIFY_DEG
 
 #: Small enough that 41 advisories of assessments stay quick, large enough that
 #: households land in a couple of dozen districts and the positional joins are

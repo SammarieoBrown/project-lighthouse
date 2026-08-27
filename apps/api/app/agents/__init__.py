@@ -7,14 +7,18 @@ paths require a human signature and the database enforces it.
 
 from app.agents import (  # noqa: F401  — register handlers
     damage_assessment_agent,
+    forecast_sentinel,
     intake_agent,
     risk_mapper,
+    triage_agent,
     verification_agent,
 )
 
 __all__ = [
     "damage_assessment_agent",
+    "forecast_sentinel",
     "intake_agent",
     "risk_mapper",
+    "triage_agent",
     "verification_agent",
 ]
