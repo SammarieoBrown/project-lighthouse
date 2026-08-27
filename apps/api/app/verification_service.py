@@ -43,6 +43,7 @@ from lighthouse_contracts.agents import (
 from app import ledger, queue, statemachine
 from app.config import get_settings
 from app.damage_assessment_service import has_readable_photo_evidence
+from app.routing_service import route_claim
 from app.models import AppUser, Claim, StormFile, Verification
 
 
@@ -778,6 +779,11 @@ def _transition_approved(
         )
     _enqueue_triage(session, claim, storm_file, verification)
     _enqueue_damage_assessment(session, claim, storm_file)
+    # RTE-01: "after verification". Decided inline rather than queued because
+    # the answer is a read of consent already on file — there is no external
+    # call to defer, and a claim that is verified but not yet routed is a claim
+    # nothing downstream can decide who pays for.
+    route_claim(session, claim.id)
 
 
 def run_verification(session: Session, claim_id: uuid.UUID) -> VerificationRun:
