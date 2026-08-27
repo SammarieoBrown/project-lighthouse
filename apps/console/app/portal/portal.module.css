@@ -8,12 +8,18 @@
  * decision rather than a drift.
  */
 
-.page {
+/* Full-bleed ground, centred column. The light theme on the column alone left
+ * a light strip on a dark body. */
+.ground {
   background: var(--lh-ground);
   color: var(--lh-figure);
+  min-height: 100vh;
+  width: 100%;
+}
+
+.page {
   margin: 0 auto;
   max-width: 68ch;
-  min-height: 100vh;
   padding: var(--lh-space-7) var(--lh-space-5) var(--lh-space-8);
 }
 

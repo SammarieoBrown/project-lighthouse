@@ -129,7 +129,8 @@ export function PublicPortal() {
   }, [journeyId]);
 
   return (
-    <main className={styles.page} data-theme="light">
+    <div className={styles.ground} data-theme="light">
+    <main className={styles.page}>
       <header className={styles.head}>
         <LighthouseMark size={32} title="Lighthouse" />
         <div>
@@ -318,5 +319,6 @@ export function PublicPortal() {
         )}
       </section>
     </main>
+    </div>
   );
 }
