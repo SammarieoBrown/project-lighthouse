@@ -180,3 +180,54 @@ def test_seeding_refuses_an_unknown_event(session):
 def test_seeding_refuses_an_empty_registry(session, event):
     with pytest.raises(SeedError, match="registry is empty"):
         seed_claims(session, count=2, event_ref=EVENT_REF, seed=7)
+
+
+def test_seeding_pools_is_idempotent_and_names_the_acceptance_pool(session):
+    """Step 6 of the buildathon acceptance test donates to "St Elizabeth
+    pool" by name, so the seeder must stand it up — and a re-run must not
+    mint a second pot with the same name and a zero balance."""
+    from app.models import DonationPool
+    from app.registry.geography import REPLAY_PARISHES
+    from app.replay.seed_claims import seed_pools
+
+    first = seed_pools(session)
+    second = seed_pools(session)
+
+    assert first == 3
+    assert second == 0
+    names = set(session.scalars(select(DonationPool.name)))
+    assert "St Elizabeth pool" in names
+    scopes = set(session.scalars(select(DonationPool.scope_kind)))
+    assert scopes <= {"EVENT", "PARISH"}  # PRD 11.3: nothing narrower
+
+    # Parish name is the join key — the p-codes are known-broken — so a pool
+    # scoped to a parish spelled differently from every other row would read
+    # fine and match nothing.
+    parishes = set(
+        session.scalars(
+            select(DonationPool.scope_value).where(DonationPool.scope_kind == "PARISH")
+        )
+    )
+    assert parishes <= set(REPLAY_PARISHES), parishes
+
+
+def test_seeding_pools_repairs_a_pool_seeded_with_a_drifted_scope(session):
+    """An earlier run of this seeder wrote "St Elizabeth". Idempotent-by-name
+    would leave that spelling in place forever, on a public payload, next to
+    the canonical one the storm rows use."""
+    from app.donations_service import create_pool
+    from app.models import DonationPool
+    from app.replay.seed_claims import seed_pools
+
+    create_pool(
+        session, name="St Elizabeth pool", scope_kind="PARISH", scope_value="St Elizabeth"
+    )
+    session.flush()
+
+    created = seed_pools(session)
+    session.flush()
+
+    assert created == 2  # the drifted one was repaired, not duplicated
+    pools = list(session.scalars(select(DonationPool).where(DonationPool.name == "St Elizabeth pool")))
+    assert len(pools) == 1
+    assert pools[0].scope_value == "Saint Elizabeth"

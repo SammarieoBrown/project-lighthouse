@@ -101,10 +101,26 @@
 .settlement { border-bottom: 1px solid var(--lh-rule); }
 
 .sectionHead { justify-content: space-between; gap: var(--lh-space-4); margin-bottom: var(--lh-space-5); }
-.sectionHead h1, .sectionHead h2, .approval h2 {
+
+/* The type ladder, and the reason the old screen read as a spaceship: every
+ * section heading sat at the same size and weight, so four surfaces shouted
+ * at once and none of them won. One rung per job now —
+ *   h1  the workspace (the claim queue): title size, heaviest
+ *   h2  the panels that act on it (gates): lead size
+ *   h3  groups inside a panel: carried by the eyebrow alone
+ * Density is untouched; what changed is that the eye has an order to read
+ * things in. */
+.sectionHead h1 {
   font-family: var(--lh-font-display);
   font-size: var(--lh-text-title);
   font-weight: 750;
+  line-height: var(--lh-leading-tight);
+  margin: var(--lh-space-1) 0 0;
+}
+.sectionHead h2, .approval h2 {
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-lead);
+  font-weight: 700;
   line-height: var(--lh-leading-tight);
   margin: var(--lh-space-1) 0 0;
 }
@@ -227,6 +243,7 @@
   width: 100%;
 }
 .approveButton:disabled { background: transparent; border-color: var(--lh-rule); color: var(--lh-quiet); cursor: not-allowed; }
+.signIn .approveButton { margin-top: var(--lh-space-2); }
 .openButton { background: transparent; color: var(--lh-figure); margin-bottom: 0; }
 .reviewGate { border-top: 1px solid var(--lh-elevated); margin-top: var(--lh-space-5); padding-top: var(--lh-space-4); }
 .gateActions { gap: var(--lh-space-3); align-items: stretch; }
@@ -245,12 +262,6 @@
 }
 .success span { color: var(--lh-figure); }
 
-.settlement .sectionHead h2 {
-  font-family: var(--lh-font-display);
-  font-size: var(--lh-text-title);
-  line-height: var(--lh-leading-tight);
-  margin: var(--lh-space-1) 0 0;
-}
 .simulationBadge {
   border: 1px solid var(--lh-elevated);
   color: var(--lh-elevated);
@@ -342,15 +353,34 @@
  * fields and a button, and giving it the full width of an operations screen
  * would make it read as the product rather than the door to it.
  */
+/* One form, one action, and nothing else on the screen — so it sits in the
+ * optical centre of what is left under the header rather than pinned to the
+ * top of a full-height column with several hundred pixels of nothing beneath
+ * it. The header is 72px and the screen carries a bottom pad; subtracting both
+ * is what stops "centred" from meaning "slightly too low".
+ *
+ * The panel keeps a rule and a ground of its own because it is the one thing
+ * being asked for on an otherwise empty screen, and a bordered block on a
+ * bare ground is how this console distinguishes a surface from the page
+ * everywhere else. It is one level of containment, not three. */
 .signIn {
+  align-content: center;
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
   display: grid;
   gap: var(--lh-space-4);
-  align-content: start;
-  max-width: 44ch;
-  margin: var(--lh-space-8) auto;
+  margin: 0 auto;
+  max-width: 42ch;
   padding: var(--lh-space-6);
-  border: 1px solid var(--lh-rule);
-  border-radius: var(--lh-radius);
+  width: 100%;
+}
+
+.signInScreen {
+  align-items: center;
+  display: grid;
+  min-height: calc(100vh - 72px - var(--lh-space-8));
+  padding: var(--lh-space-6) var(--lh-space-5);
 }
 
 .signIn h2 {
@@ -418,3 +448,54 @@
   text-underline-offset: 3px;
 }
 .fnolLink:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
+
+/* An open credential is a state, not a pending action, so once the queue is
+ * unlocked the password field gives way to this line: what is active, when it
+ * dies, and a small refresh. Keeping a filled field and a big button on screen
+ * after they had done their job was half of the two-password confusion. */
+/* Why the password field came back. An expired credential is not a failure —
+ * nothing was refused and nothing was lost — it is work the operator has to
+ * do before the gate opens again, which is what elevated means. */
+.credentialNotice {
+  color: var(--lh-elevated-text);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+  margin: 0 0 var(--lh-space-3);
+}
+
+.credentialLine {
+  align-items: baseline;
+  border-top: 1px solid var(--lh-rule);
+  color: var(--lh-quiet);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--lh-text-micro);
+  gap: var(--lh-space-2) var(--lh-space-3);
+  letter-spacing: 0.07em;
+  padding-top: var(--lh-space-3);
+  text-transform: uppercase;
+}
+.credentialLine button {
+  background: transparent;
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  color: var(--lh-figure);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: var(--lh-space-1) var(--lh-space-3);
+  text-transform: inherit;
+}
+.credentialLine button:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
+
+/* Why a figure is a dash. Quiet, because it is an explanation and not a
+ * status — a locked queue is the normal state before a credential, not a
+ * fault, and colouring it would say otherwise. */
+.metricWhy {
+  color: var(--lh-quiet);
+  display: block;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  margin-top: var(--lh-space-1);
+  text-transform: uppercase;
+}

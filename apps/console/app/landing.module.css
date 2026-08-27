@@ -1,0 +1,320 @@
+/* The front door. Full-bleed bands on the light ground, a wide working
+ * container inside each, columns divided by hairline rules — newspaper
+ * construction, not cards. Register III sets the language; the substrate
+ * supplies every value.
+ *
+ * The hero is left-set (rule 2 bans the centred oversized full-sentence
+ * headline) and the headline is a name for the thing, not a sentence about
+ * it. Nothing on this page moves (M1), nothing carries a meaning hue (C1),
+ * and every figure in the numbers band is a checkable fact about the shipped
+ * system.
+ */
+
+.ground {
+  background: var(--lh-ground);
+  color: var(--lh-figure);
+  min-height: 100vh;
+}
+
+.container {
+  margin: 0 auto;
+  max-width: 1440px;
+  padding-left: clamp(20px, 4vw, 64px);
+  padding-right: clamp(20px, 4vw, 64px);
+  width: 100%;
+}
+
+/* --- top bar -------------------------------------------------------------- */
+
+.topbar {
+  border-bottom: 1px solid var(--lh-rule);
+}
+.topbar .container {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lh-space-2) var(--lh-space-5);
+  justify-content: space-between;
+  padding-bottom: var(--lh-space-3);
+  padding-top: var(--lh-space-3);
+  min-height: 72px;
+}
+.topbar nav {
+  display: flex;
+  gap: clamp(var(--lh-space-4), 2.5vw, var(--lh-space-7));
+}
+.topbar nav a {
+  color: var(--lh-figure);
+  font-size: var(--lh-text-fine);
+  font-weight: var(--lh-body-weight-strong);
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.topbar nav a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.topbar nav a:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 3px; }
+
+/* --- hero ----------------------------------------------------------------- */
+
+.hero {
+  border-bottom: 1px solid var(--lh-rule);
+}
+.hero .container {
+  align-items: end;
+  display: grid;
+  gap: clamp(var(--lh-space-6), 4vw, 80px);
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  padding-bottom: clamp(48px, 7vh, 96px);
+  padding-top: clamp(48px, 9vh, 120px);
+}
+.hero h1 {
+  font-family: var(--lh-font-display);
+  font-size: clamp(40px, 6.5vw, 96px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+  margin: 0;
+  text-wrap: balance;
+}
+.heroSide p {
+  font-size: var(--lh-text-read);
+  line-height: var(--lh-leading-read);
+  margin: 0 0 var(--lh-space-5);
+}
+.motto {
+  border-left: 2px solid var(--lh-figure);
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-lead);
+  font-weight: var(--lh-display-weight);
+  letter-spacing: -0.01em;
+  padding-left: var(--lh-space-4);
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: var(--lh-space-3); }
+.primary, .secondary {
+  border: 1px solid var(--lh-figure);
+  border-radius: var(--lh-radius);
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-fine);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  padding: var(--lh-space-3) var(--lh-space-5);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.primary { background: var(--lh-figure); color: var(--lh-ground); }
+.secondary { color: var(--lh-figure); }
+.primary:focus-visible, .secondary:focus-visible {
+  outline: 2px solid var(--lh-figure);
+  outline-offset: 3px;
+}
+
+/* --- the numbers band ----------------------------------------------------- */
+
+.figures {
+  background: var(--lh-panel);
+  border-bottom: 1px solid var(--lh-rule);
+}
+.figures .container {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  padding-bottom: clamp(28px, 4vh, 48px);
+  padding-top: clamp(28px, 4vh, 48px);
+}
+.figures .container > div {
+  border-left: 1px solid var(--lh-rule);
+  padding: 0 var(--lh-space-4);
+}
+.figures .container > div:first-child { border-left: 0; padding-left: 0; }
+.figures strong {
+  display: block;
+  font-size: clamp(28px, 3vw, 44px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: var(--lh-space-2);
+}
+.figures span {
+  color: var(--lh-quiet);
+  display: block;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  line-height: var(--lh-leading-base);
+  text-transform: uppercase;
+}
+
+/* --- bands ---------------------------------------------------------------- */
+
+.band { border-bottom: 1px solid var(--lh-rule); }
+.band .container {
+  padding-bottom: clamp(40px, 6vh, 88px);
+  padding-top: clamp(40px, 6vh, 88px);
+}
+
+.kicker {
+  color: var(--lh-quiet);
+  font-family: var(--lh-font-body);
+  font-size: var(--lh-text-micro);
+  font-weight: var(--lh-body-weight-strong);
+  letter-spacing: 0.12em;
+  margin: 0 0 clamp(var(--lh-space-5), 3vh, var(--lh-space-7));
+  text-transform: uppercase;
+}
+.bandLede {
+  font-size: var(--lh-text-read);
+  line-height: var(--lh-leading-read);
+  margin: calc(-1 * var(--lh-space-4)) 0 var(--lh-space-7);
+  max-width: 68ch;
+}
+
+/* Three acts, three columns, rules between. An <ol> because the order is the
+ * information — a household cannot be paid before it is verified. */
+.acts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 clamp(var(--lh-space-6), 3vw, 56px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.acts li {
+  border-left: 1px solid var(--lh-rule);
+  display: flex;
+  flex-direction: column;
+  padding-left: clamp(var(--lh-space-4), 2vw, var(--lh-space-6));
+}
+.acts li:first-child { border-left: 0; padding-left: 0; }
+.ordinal { color: var(--lh-quiet); font-size: var(--lh-text-fine); }
+.acts h3 {
+  font-family: var(--lh-font-display);
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: var(--lh-display-weight);
+  letter-spacing: -0.01em;
+  line-height: var(--lh-leading-tight);
+  margin: var(--lh-space-2) 0 var(--lh-space-3);
+}
+.acts p {
+  color: var(--lh-figure);
+  flex: 1;
+  font-size: var(--lh-text-base);
+  line-height: var(--lh-leading-read);
+  margin: 0 0 var(--lh-space-4);
+}
+.rowLink {
+  color: var(--lh-figure);
+  font-size: var(--lh-text-fine);
+  font-weight: var(--lh-body-weight-strong);
+  text-underline-offset: 4px;
+}
+.rowLink:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 3px; }
+
+/* Nine agents, 3×3, ruled. This grid is also the answer to "where does each
+ * person's work live" — every agent on it is real and registered. */
+.agents {
+  border-left: 1px solid var(--lh-rule);
+  border-top: 1px solid var(--lh-rule);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.agents li {
+  border-bottom: 1px solid var(--lh-rule);
+  border-right: 1px solid var(--lh-rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--lh-space-2);
+  padding: clamp(var(--lh-space-4), 2vw, var(--lh-space-6));
+}
+.agents h3 {
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-lead);
+  font-weight: var(--lh-display-weight);
+  margin: 0;
+}
+.agents p {
+  color: var(--lh-figure);
+  flex: 1;
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+  margin: 0;
+}
+.authority {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.04em;
+}
+
+/* Surfaces: one wide ruled row each. */
+.surfaces { list-style: none; margin: 0; padding: 0; }
+.surfaces li {
+  align-items: baseline;
+  border-top: 1px solid var(--lh-rule);
+  display: grid;
+  gap: var(--lh-space-2) clamp(var(--lh-space-5), 4vw, 96px);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  padding: var(--lh-space-4) 0;
+}
+.surfaces li:last-child { border-bottom: 1px solid var(--lh-rule); }
+.surfaces a {
+  color: var(--lh-figure);
+  font-family: var(--lh-font-display);
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: var(--lh-display-weight);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+.surfaces a:hover { text-decoration: underline; text-underline-offset: 5px; }
+.surfaces a:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 3px; }
+.surfaces p {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+  margin: 0;
+}
+
+/* --- footer --------------------------------------------------------------- */
+
+.foot .container {
+  display: grid;
+  gap: var(--lh-space-5) clamp(var(--lh-space-6), 4vw, 96px);
+  grid-template-columns: minmax(0, 8fr) minmax(0, 2fr);
+  padding-bottom: clamp(40px, 6vh, 72px);
+  padding-top: clamp(32px, 5vh, 56px);
+}
+.foot p {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-read);
+  margin: 0;
+  max-width: 76ch;
+}
+.footNote {
+  color: var(--lh-figure) !important;
+  font-family: var(--lh-font-display);
+  font-weight: var(--lh-display-weight);
+  text-align: right;
+}
+
+/* --- small screens -------------------------------------------------------- */
+
+@media (max-width: 64rem) {
+  .hero .container { grid-template-columns: 1fr; }
+  .figures .container { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: var(--lh-space-5); }
+  .figures .container > div:nth-child(4) { border-left: 0; padding-left: 0; }
+  .acts { grid-template-columns: 1fr; row-gap: var(--lh-space-6); }
+  .acts li { border-left: 0; border-top: 1px solid var(--lh-rule); padding-left: 0; padding-top: var(--lh-space-5); }
+  .acts li:first-child { border-top: 0; padding-top: 0; }
+  .agents { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 40rem) {
+  .topbar nav { gap: var(--lh-space-4); }
+  .figures .container { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figures .container > div:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .figures .container > div:nth-child(even) { border-left: 1px solid var(--lh-rule); }
+  .agents { grid-template-columns: 1fr; }
+  .surfaces li { grid-template-columns: 1fr; }
+  .foot .container { grid-template-columns: 1fr; }
+  .footNote { text-align: left; }
+}

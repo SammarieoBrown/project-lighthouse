@@ -61,3 +61,7 @@ data/buildings/cache/*.parquet
 # the adjacent ignored build-state record before they are reused.
 data/buildings/cache/*.geojsonl
 data/buildings/cache/structure-points.geojsonl
+
+# Playwright's scratch output and the screenshots taken while reviewing a page.
+output/
+*-review.png

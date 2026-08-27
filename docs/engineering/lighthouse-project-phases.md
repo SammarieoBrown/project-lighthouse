@@ -37,13 +37,26 @@ T2R now reads a real number. The public portal publishes a **median** time to re
 
 **Correction (Aug 27).** An earlier revision of this section said both review APIs were unreachable without `curl`. That was wrong about verification: `relief-operations.tsx` renders all five signals with individual scores and posts a Clerk decision to `/v1/claims/{id}/verification/review`. The screen Phase 2 called "the screen that proves human-in-the-loop to judges" exists and works. The error came from grepping for literal API paths and missing the template-literal call sites — worth recording because the same grep would make the same mistake again.
 
-What is genuinely missing on the console: the triage queue's ordering (TRI-02 — the claims API does not return `severity` or `triage_rank` at all, so the queue cannot sort by them), the damage assessment review surface, a public portal that does not require signing in (LGR-02 — the ledger renders inside the authenticated operations screen), the donation portal and donor journey (DON-01/02/04), and an FNOL download on the claim.
+That list of console gaps is now closed. The claims API returns `severity` and
+`triage_rank` and orders by SOL first, so the queue sorts by triage (TRI-02).
+The damage assessment review surface renders the estimate and takes a Director
+decision. `/portal` publishes the ledger, pool balances and the donor journey
+to a reader who has not signed in (LGR-02, DON-02/04), and takes a simulated
+donation on the same page (DON-01) — pool, amount, public handle, and a
+reference the donor keeps, which drops straight into the journey lookup. The
+FNOL packet downloads from the claim.
+
+What is left is not console work. ALT-03 is P1 and unbuilt. The Patois eval set
+is still a hundred recordings that do not exist yet, and the scorer that is
+waiting for them cannot be honest about a set it invents. The WhatsApp round
+trip has not been made from a real handset, which is a Phase 0 exit criterion
+and stays open until someone sends a message from a phone.
 
 The Patois eval set still does not exist, and the scorer for it now does (`app/patois_eval.py`, `data/patois-eval/`). That split is deliberate: the set is roughly a hundred held-out utterances from Jamaican speakers with hand-written transcripts and hand-written labels, and collecting it depends on other people saying words into a phone. Nothing in the repository generates the audio or invents a label, because a synthetic eval set scores well and means nothing — and the entire point of NFR-G-03 is to find out whether transcription is good enough to trust. With an empty manifest the scorer reports no cases and says so, which is the honest reading until recordings exist.
 
 It reports word error rate and per-field extraction accuracy **separately**, because Phase 2 makes the fine-tune conditional on which half is the bottleneck and a blended score cannot answer that.
 
-The console is four pages and calls four API paths.
+The console is six pages — landing, operations, portal, EOC map, simulator, and the design specimen sheet.
 
 **What being solo changes.** These phases were laid out for three people working parallel lanes. One person cannot run three lanes at once, so the lanes become a sequence and the cut list stops being a contingency and starts being a plan. The contract freeze is *more* valuable, not less: it now protects against me contradicting myself across a two-week gap rather than against three people colliding. Capacity is the live risk in this document, and it is tracked at the end of each phase rather than discovered during rehearsal week.
 

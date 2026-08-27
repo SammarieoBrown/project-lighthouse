@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { jsonOrDetail } from "./credential";
 import styles from "./operations.module.css";
 import { stepUp } from "./operator-session";
 
@@ -15,9 +16,13 @@ type SettlementState =
 type Settlement = {
   allocation_id: string;
   claim_ref: string;
-  amount: string | number;
+  amount: string | number | null;
   currency: "JMD";
-  payer_route: "GOV_RELIEF";
+  payer_route: "GOV_RELIEF" | "DONOR_POOL";
+  resource: "CASH" | "ITEM";
+  sku: string | null;
+  quantity: number | null;
+  time_to_relief_hours: number | null;
   state: SettlementState;
   batch_id: string | null;
   disbursement_id: string | null;
@@ -47,22 +52,14 @@ type Props = {
   onLedgerChanged: () => Promise<void>;
 };
 
-const money = new Intl.NumberFormat("en-JM", {
-  style: "currency",
-  currency: "JMD",
-  maximumFractionDigits: 0,
-});
-
-async function jsonOrDetail(response: Response): Promise<unknown> {
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = body && typeof body === "object" && "detail" in body
-      ? String((body as { detail: unknown }).detail)
-      : `Request failed (${response.status})`;
-    throw new Error(detail);
-  }
-  return body;
-}
+/* J$ rather than a bare "$", matching the approval rail — and null-safe,
+ * because a goods allocation has no amount at all and Number(null) is 0,
+ * which would have rendered a tarpaulin as a zero-dollar payment. */
+const jmd = new Intl.NumberFormat("en-JM", { maximumFractionDigits: 0 });
+const money = {
+  format: (value: string | number | null) =>
+    value === null || value === "" ? null : `J$${jmd.format(Number(value))}`,
+};
 
 function stateLabel(state: SettlementState): string {
   return {
@@ -177,7 +174,7 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
 
       <div className={styles.settlementAccess}>
         <label className={styles.field}>
-          <span>Confirm your password</span>
+          <span>Finance Officer password · opens the settlement queue</span>
           <input
             type="password"
             value={tokenDraft}
@@ -256,12 +253,22 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
                   <small>Household identity withheld</small>
                 </span>
                 <span className={styles.data}>
-                  {money.format(Number(item.amount))}
+                  {item.resource === "ITEM"
+                    ? `${item.quantity ?? "?"} × ${item.sku ?? "item"}`
+                    : money.format(item.amount) ?? "—"}
                   <small>{item.payer_route.replaceAll("_", " ")}</small>
                 </span>
                 <span>
                   {stateLabel(item.state)}
-                  <small>{item.provider_confirmation_ref ?? item.executor_provenance ?? "No execution record"}</small>
+                  <small>
+                    {item.state === "SIMULATED_CONFIRMED" && item.time_to_relief_hours !== null ? (
+                      <>
+                        T2R <span className={styles.data}>{Math.round(item.time_to_relief_hours)}</span>
+                        {" h · "}
+                      </>
+                    ) : null}
+                    {item.provider_confirmation_ref ?? item.executor_provenance ?? "No execution record"}
+                  </small>
                 </span>
                 <span>
                   <button

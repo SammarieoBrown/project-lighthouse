@@ -67,6 +67,12 @@ export function PublicPortal() {
   const [chainValid, setChainValid] = useState<boolean | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [givePool, setGivePool] = useState("");
+  const [giveAmount, setGiveAmount] = useState("");
+  const [giveHandle, setGiveHandle] = useState("");
+  const [giving, setGiving] = useState(false);
+  const [giveError, setGiveError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{ id: string; amount: string; pool: string } | null>(null);
   const [journeyId, setJourneyId] = useState("");
   const [journey, setJourney] = useState<Journey | null>(null);
   const [journeyError, setJourneyError] = useState<string | null>(null);
@@ -105,6 +111,89 @@ export function PublicPortal() {
     return () => clearInterval(timer);
   }, [load]);
 
+  const give = useCallback(async () => {
+    if (giving) return;
+    const pool = pools.find((candidate) => candidate.pool_id === givePool);
+    const amount = giveAmount.trim();
+    const handle = giveHandle.trim();
+    /* A button that does nothing is worse than one that refuses. The browser's
+     * own `required` accepts a single space, so the handle is checked here
+     * against what the API will actually be sent. */
+    if (!pool) {
+      setGiveError("Choose a pool before giving.");
+      return;
+    }
+    if (!amount) {
+      setGiveError("Enter an amount in JMD.");
+      return;
+    }
+    if (!handle) {
+      setGiveError("Enter the handle this donation is shown under. A space is not a handle.");
+      return;
+    }
+    setGiving(true);
+    setGiveError(null);
+    try {
+      const response = await fetch("/api/lighthouse/v1/public/donations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          pool_id: pool.pool_id,
+          donor_handle: handle,
+          amount,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = body && typeof body === "object" && "detail" in body
+          ? body.detail
+          : null;
+        throw new Error(
+          typeof detail === "string"
+            ? detail
+            : "The donation could not be recorded. Nothing was taken.",
+        );
+      }
+      /* The reference is the whole receipt: without it the donation cannot be
+       * followed and a donor who assumes it failed will give twice, because
+       * this POST carries no idempotency key. So an unreadable 2xx body is
+       * reported as what it is — recorded, reference lost — and never as a
+       * failure. */
+      const recorded = body && typeof body === "object" ? body as Record<string, unknown> : null;
+      const reference = recorded && recorded.donation_id != null
+        ? String(recorded.donation_id)
+        : "";
+      if (!reference) {
+        throw new Error(
+          "Your donation was recorded, but this page did not get the reference back. "
+          + "Do not give again — the amount is already in the pool. Note the time and "
+          + "ask an operator to find it.",
+        );
+      }
+      setReceipt({
+        id: reference,
+        amount: recorded?.amount != null ? String(recorded.amount) : amount,
+        pool: pool.name,
+      });
+      setGiveAmount("");
+      // The reference goes straight into the journey lookup rather than asking
+      // the donor to copy it — and the panel below is cleared, so it cannot
+      // keep showing an earlier donation's journey under this new reference.
+      setJourney(null);
+      setJourneyError(null);
+      setJourneyId(reference);
+      await load();
+    } catch (failure) {
+      setGiveError(
+        failure instanceof Error
+          ? failure.message
+          : "The donation could not be recorded. Nothing was taken.",
+      );
+    } finally {
+      setGiving(false);
+    }
+  }, [pools, givePool, giveAmount, giveHandle, giving, load]);
+
   const lookUpJourney = useCallback(async () => {
     const id = journeyId.trim();
     if (!id) return;
@@ -129,7 +218,8 @@ export function PublicPortal() {
   }, [journeyId]);
 
   return (
-    <main className={styles.page} data-theme="light">
+    <div className={styles.ground} data-theme="light">
+    <main className={styles.page}>
       <header className={styles.head}>
         <LighthouseMark size={32} title="Lighthouse" />
         <div>
@@ -220,6 +310,91 @@ export function PublicPortal() {
           Donations are simulated for this release. The platform records and
           directs; a registered charity partner holds the funds.
         </p>
+      </section>
+
+      <section aria-label="Give to a pool">
+        <h2>Give</h2>
+        <p className={styles.note}>
+          Simulated for this release — no card is charged and no money moves.
+          A registered charity partner would hold real funds; the platform
+          records and directs.
+        </p>
+        {pools.length === 0 ? (
+          <p className={styles.empty}>
+            Giving opens when the first pool does.
+          </p>
+        ) : receipt ? (
+          <div className={styles.receipt} role="status">
+            <p>
+              <strong>
+                <span className="lh-data">JMD {receipt.amount}</span>
+                {" "}given to {receipt.pool} — simulated.
+              </strong>
+            </p>
+            <p>
+              Your reference is <code className="lh-data">{receipt.id}</code> —
+              save it. It is the one way to follow this donation, and it is
+              already in the lookup below.
+            </p>
+            <button type="button" onClick={() => setReceipt(null)}>
+              Give again
+            </button>
+          </div>
+        ) : (
+          <form
+            className={styles.give}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void give();
+            }}
+          >
+            <label>
+              <span>Pool</span>
+              <select
+                value={givePool}
+                onChange={(event) => setGivePool(event.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Choose where it goes
+                </option>
+                {pools.map((pool) => (
+                  <option key={pool.pool_id} value={pool.pool_id}>
+                    {pool.name}
+                    {pool.scope_kind === "PARISH" ? ` — ${pool.scope_value}` : " — event-wide"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Amount · JMD</span>
+              <input
+                inputMode="decimal"
+                pattern="[0-9]+([.][0-9]{1,2})?"
+                placeholder="10000"
+                value={giveAmount}
+                onChange={(event) => setGiveAmount(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              <span>Shown publicly as</span>
+              <input
+                maxLength={60}
+                placeholder="A handle, not your name"
+                value={giveHandle}
+                onChange={(event) => setGiveHandle(event.target.value)}
+                required
+              />
+            </label>
+            <button type="submit" disabled={giving}>
+              {giving ? "Giving…" : "Give (simulated)"}
+            </button>
+            {giveError ? (
+              <p className={styles.error} role="alert">{giveError}</p>
+            ) : null}
+          </form>
+        )}
       </section>
 
       <section aria-label="Follow a donation">
@@ -318,5 +493,6 @@ export function PublicPortal() {
         )}
       </section>
     </main>
+    </div>
   );
 }

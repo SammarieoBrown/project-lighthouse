@@ -171,5 +171,20 @@ def main() -> None:
     log.info("worker %s stopped", worker_id)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__":  # pragma: no cover - exercised by test_worker_entrypoint
+    # ``python -m app.worker`` — which is how Render starts this process —
+    # imports this file *twice*: once as ``__main__``, and again as
+    # ``app.worker`` the moment an agent module does ``from app.worker import
+    # register``. Those are two module objects with two separate ``HANDLERS``
+    # dicts. Every handler registers into the ``app.worker`` copy, and a
+    # ``main()`` running out of ``__main__`` reads the other one, finds it
+    # empty, and parks every job it claims while logging "handlers
+    # registered: none".
+    #
+    # This is the exact failure ``load_handlers`` warns about, arriving by a
+    # route that docstring did not anticipate. Delegating to the properly
+    # named module means the ``main()`` that runs is the one whose HANDLERS
+    # the agents actually filled.
+    from app.worker import main as _main
+
+    _main()
