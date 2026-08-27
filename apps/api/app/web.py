@@ -20,6 +20,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from lighthouse_contracts import __version__ as contracts_version
 
 from . import ledger, queue
+from .alert_approvals import router as alert_approvals_router
 from .approvals import router as approvals_router
 from .config import get_settings
 from .damage_assessment_reviews import router as damage_assessment_reviews_router
@@ -188,6 +189,7 @@ async def unhandled(_: Request, exc: Exception) -> JSONResponse:
 app.include_router(router)
 app.include_router(intake_router)
 app.include_router(approvals_router)
+app.include_router(alert_approvals_router)
 app.include_router(disbursements_router)
 app.include_router(verification_reviews_router)
 app.include_router(damage_assessment_reviews_router)

@@ -14,7 +14,8 @@ Read this before the phase sections below. The phases were written as a plan and
 
 **The spine and the intake loop are real. The money half is a schema with almost no code behind it.**
 
-Seven of the nine agents exist:
+**All nine agents now exist.** What is left is not agents — it is the surfaces people use, and the P0 subsystems below.
+
 
 | Agent | State |
 |---|---|
@@ -24,9 +25,9 @@ Seven of the nine agents exist:
 | Damage Assessment | Built (Aug 27). Photo-based JMD estimate, Director-gated. Not in the original plan. |
 | Forecast Sentinel | Built (Aug 27). The rules moved from `app/replay/posture.py` to `app/forecast_sentinel_service.py` and the transition joined them, so a posture change is now a ledger event — HAZ-03 had been unmet since the driver was written. The replay driver calls the same function the queued handler does. |
 | Triage | Built (Aug 27). TRI-01's four tiers as a readable lookup, writing severity and queue order and nothing else. Drains the backlog `verification_service` had been queuing and the worker had been parking since Act 2 landed. |
-| **Alert** | Not started. No cascade, so G1 has nothing to gate. |
+| Alert | Built (Aug 27). Drafts cascades per community in English and Patois, scoped by geography and risk band; G1 signs. Names no shelter, because LGX-04's registry does not exist and inventing one would be dangerous. Sends nothing — the outbound channel is unbuilt, so ALT-02's WhatsApp/SMS tiering is still open. |
 | Logistics | Built (Aug 27). Matches verified claims to cash and stock in triage order and proposes; G2 still releases. Cash stays flat by design (PAY-06 removes per-claim valuation from the agent path), so the damage estimate informs the Director rather than sizing the grant. The goods half required widening five allocation guards that 0007 had narrowed past PAY-06. |
-| **Ledger Agent** | Not started. No reconciliation, no cross-payer duplicate detection. |
+| Ledger Agent | Built (Aug 27). LGR-04 reconciliation: duplicates, orphans, amount mismatches, unconfirmed payments, and `verify_chain()`, with every flag a ledger entry. It never resolves its own findings. T8/C6 were already exercised by the confirmation endpoint. |
 
 Two P0 subsystems have frozen tables and no code at all: payer routing (`routing_decision`, RTE-01/02) and donations (`donation`, `donation_pool`, DON-01 to 04, including the donor journey that Act 3 closes on). FNOL packets (INS-01) are a serializer over data that already exists and are also unwritten. Both allocation halves stay pinned to `GOV_RELIEF` and bar donation pools until those two land, so nothing can quietly record that an insurer bought a tarpaulin.
 
@@ -183,11 +184,12 @@ If you are behind, cut in exactly this sequence and do not improvise a new order
 - [x] Allocation approved, disbursement signed, StormFile reaches SETTLED, and the public ledger shows the flow — though the allocation is a Director's manual request at a flat J$45,000, not a proposal from a Logistics Agent
 - [ ] **The T2R counter reads a real computed number.** `time_to_relief_hours()` is written and tested; nothing calls it.
 - [ ] **A routed insured claim produces an FNOL packet.** Neither routing nor FNOL exists.
+- [~] **Alert cascades are drafted and signed** but cannot be sent: there is no outbound channel module, so ALT-02's per-recipient delivery status has nothing to record.
 - [ ] **A simulated donation funds an allocation and the donor journey traces it.** Tables only, no code.
 - [ ] **A phone that has never touched the system completes the loop.** Unrehearsed.
 - [x] `verify_chain()` passes over the entire replay ledger
 
-**Also not built from this phase:** the Alert Agent and cascade (so gate G1 gates nothing), payer routing, the public portal page, the donation portal, and the anticipatory pre-landfall list.
+**Also not built from this phase:** the outbound send channel (so an approved cascade still cannot reach a phone), payer routing, the public portal page, the donation portal, and the anticipatory pre-landfall list (ALT-04).
 
 **Outcome:** The three-act demo. Act 1, posture rises and alerts cascade at T minus 5 days. Act 2, a judge sends a live voice note and watches it become a verified claim with a matched allocation. Act 3, the ledger shows every dollar and the T2R counter reads hours instead of months.
 
