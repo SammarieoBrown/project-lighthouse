@@ -17,6 +17,7 @@ from lighthouse_contracts import (
     ActorKind,
     AppRole,
     ClaimStatus,
+    Event,
     GateKind,
     PayerRoute,
     ResourceKind,
@@ -38,7 +39,9 @@ from app.models import (
     Disbursement,
     HumanCredential,
     LedgerEntry,
+    StockItem,
     Verification,
+    Warehouse,
 )
 from app.web import BoundedApprovalBodyMiddleware, _MAX_APPROVAL_BODY_BYTES, app
 
@@ -767,3 +770,112 @@ def test_unknown_household_classification_is_safely_coarsened_not_denied(
     assert "private free-form detail" not in public.text
     assert "UNSPECIFIED" not in public.text
     assert "OTHER_DAMAGE" not in public.text
+
+
+# ---------------------------------------------------------------------------
+# PAY-06's goods half. Cash stays flat; goods carry a SKU, a count, and the
+# shelf they leave — and the shelf moves when a Director signs.
+# ---------------------------------------------------------------------------
+
+
+def _stocked_warehouse(session, sku="tarpaulin", quantity=5):
+    warehouse = Warehouse(name="St Elizabeth Depot", parish="St Elizabeth")
+    session.add(warehouse)
+    session.flush()
+    session.add(StockItem(warehouse_id=warehouse.id, sku=sku, quantity=quantity))
+    session.flush()
+    return warehouse
+
+
+def _goods_body(warehouse, *, sku="tarpaulin", quantity=2):
+    return {
+        "resource": "ITEM",
+        "payer_route": "GOV_RELIEF",
+        "sku": sku,
+        "quantity": quantity,
+        "warehouse_id": str(warehouse.id),
+        "note": "Roof cover for a household with the roof off.",
+    }
+
+
+def test_signing_goods_releases_stock_and_decrements_the_shelf(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    warehouse = _stocked_warehouse(session, quantity=5)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    response = _approve(client, claim, issued.token, body=_goods_body(warehouse))
+
+    assert response.status_code == 201, response.text
+    allocation = session.scalar(
+        select(Allocation).where(Allocation.resource == ResourceKind.ITEM)
+    )
+    assert allocation is not None
+    assert allocation.sku == "tarpaulin"
+    assert allocation.quantity == 2
+    assert allocation.amount is None
+    assert allocation.warehouse_id == warehouse.id
+    # LGX-01: decremented by approved allocations.
+    assert session.scalar(select(StockItem.quantity)) == 3
+
+
+def test_a_goods_receipt_names_the_sku_and_never_an_amount(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    warehouse = _stocked_warehouse(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    _approve(client, claim, issued.token, body=_goods_body(warehouse))
+
+    entry = session.scalar(
+        select(LedgerEntry)
+        .where(LedgerEntry.action == str(Event.ALLOCATION_APPROVED))
+        .order_by(LedgerEntry.seq.desc())
+        .limit(1)
+    )
+    assert entry.payload["resource"] == "ITEM"
+    assert entry.payload["sku"] == "tarpaulin"
+    assert entry.payload["quantity"] == "2"
+    # An amount on a goods row would be a valuation nobody made.
+    assert "amount" not in entry.payload
+
+
+def test_signing_for_stock_that_is_not_there_is_refused(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    warehouse = _stocked_warehouse(session, quantity=1)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    response = _approve(
+        client, claim, issued.token, body=_goods_body(warehouse, quantity=4)
+    )
+
+    assert response.status_code == 409
+    assert "only 1" in response.text
+    assert session.scalar(select(StockItem.quantity)) == 1
+
+
+def test_cash_is_still_exactly_the_flat_grant(session, monkeypatch):
+    """Widening the path for goods must not have loosened the cash half."""
+    storm_file, claim = _verified_claim(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    inflated = {**BODY, "amount": "90000.00"}
+    response = _approve(client, claim, issued.token, body=inflated)
+
+    assert response.status_code == 422
+    assert session.scalar(select(func.count()).select_from(Allocation)) == 0
+
+
+def test_a_goods_request_without_a_warehouse_is_refused(session, monkeypatch):
+    storm_file, claim = _verified_claim(session)
+    director, issued = _credential(session)
+    client = _client(monkeypatch, session)
+
+    body = {"resource": "ITEM", "payer_route": "GOV_RELIEF", "sku": "tarpaulin",
+            "quantity": 1}
+    response = _approve(client, claim, issued.token, body=body)
+
+    assert response.status_code == 422
+    assert "warehouse_id" in response.text

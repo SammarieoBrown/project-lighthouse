@@ -206,16 +206,30 @@ def upgrade() -> None:
                    AND conname = 'allocation_release_policy_chk'
                    AND contype = 'c'
               ) AS allocation_release_constraint,
+              -- 0011 renamed this to allocation_plan_cash_uidx when it
+              -- widened the plan to carry goods beside the grant. Either name
+              -- means the same thing here: one signed plan, one cash grant.
+              -- A fresh database applies the current schema.sql at 0001 and
+              -- therefore arrives carrying the newer name only.
               EXISTS (
                 SELECT 1
                  WHERE to_regclass(
                    format('%I.%I', current_schema(), 'allocation_plan_uidx')
                  ) IS NOT NULL
+                    OR to_regclass(
+                   format('%I.%I', current_schema(), 'allocation_plan_cash_uidx')
+                 ) IS NOT NULL
               ) AS allocation_plan_index_exists,
               EXISTS (
                 SELECT 1 FROM pg_index
-                 WHERE indexrelid = to_regclass(
-                         format('%I.%I', current_schema(), 'allocation_plan_uidx')
+                 WHERE indexrelid IN (
+                         to_regclass(
+                           format('%I.%I', current_schema(), 'allocation_plan_uidx')
+                         ),
+                         to_regclass(
+                           format('%I.%I', current_schema(),
+                                  'allocation_plan_cash_uidx')
+                         )
                        )
                    AND indisunique
               ) AS allocation_plan_unique_index,

@@ -949,20 +949,43 @@ CREATE TABLE allocation (
   verification_snapshot_hash text NOT NULL
     CHECK (verification_snapshot_hash ~ '^[0-9a-f]{64}$'),
   created_at    timestamptz NOT NULL DEFAULT now(),
+  -- PAY-06 has two halves and they have different rules. Cash is flat and
+  -- unarguable: one amount, one currency, one payer, so no agent ever makes a
+  -- per-claim valuation judgement. Goods are the half where triage severity
+  -- earns its keep, so an ITEM row must name a SKU, a count, and the warehouse
+  -- it comes out of — that last one is what makes LGX-01's stock decrement
+  -- possible at all.
   CONSTRAINT allocation_release_policy_chk CHECK (
-    resource = 'CASH'
-    AND amount = 45000.00
-    AND currency = 'JMD'
-    AND payer_route = 'GOV_RELIEF'
-    AND sku IS NULL
-    AND quantity IS NULL
-    AND pool_id IS NULL
-    AND warehouse_id IS NULL
+    (
+      resource = 'CASH'
+      AND amount = 45000.00
+      AND currency = 'JMD'
+      AND payer_route = 'GOV_RELIEF'
+      AND sku IS NULL
+      AND quantity IS NULL
+      AND pool_id IS NULL
+      AND warehouse_id IS NULL
+    ) OR (
+      resource = 'ITEM'
+      AND amount IS NULL
+      AND payer_route = 'GOV_RELIEF'
+      AND sku IS NOT NULL
+      AND quantity IS NOT NULL
+      AND quantity > 0
+      AND warehouse_id IS NOT NULL
+      AND pool_id IS NULL
+    )
   )
 );
 
 CREATE INDEX allocation_claim_idx ON allocation (claim_id);
-CREATE UNIQUE INDEX allocation_plan_uidx ON allocation (plan_id);
+
+-- One cash grant per plan, still. Goods are one row per SKU, so a plan can
+-- carry a basket without a second grant sneaking in beside it.
+CREATE UNIQUE INDEX allocation_plan_cash_uidx
+  ON allocation (plan_id) WHERE resource = 'CASH';
+CREATE UNIQUE INDEX allocation_plan_item_uidx
+  ON allocation (plan_id, sku) WHERE resource = 'ITEM';
 
 CREATE TABLE disbursement_batch (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1141,15 +1164,38 @@ BEGIN
     RAISE EXCEPTION 'signed allocation is immutable';
   END IF;
 
-  IF NEW.resource <> 'CASH'
-     OR NEW.amount IS DISTINCT FROM 45000.00
-     OR NEW.currency <> 'JMD'
-     OR NEW.payer_route <> 'GOV_RELIEF'
-     OR NEW.sku IS NOT NULL
-     OR NEW.quantity IS NOT NULL
-     OR NEW.pool_id IS NOT NULL
-     OR NEW.warehouse_id IS NOT NULL THEN
-    RAISE EXCEPTION 'allocation does not match the fixed release grant policy';
+  IF NEW.resource = 'CASH' THEN
+    IF NEW.amount IS DISTINCT FROM 45000.00
+       OR NEW.currency <> 'JMD'
+       OR NEW.payer_route <> 'GOV_RELIEF'
+       OR NEW.sku IS NOT NULL
+       OR NEW.quantity IS NOT NULL
+       OR NEW.pool_id IS NOT NULL
+       OR NEW.warehouse_id IS NOT NULL THEN
+      RAISE EXCEPTION 'allocation does not match the fixed release grant policy';
+    END IF;
+  ELSIF NEW.resource = 'ITEM' THEN
+    IF NEW.amount IS NOT NULL
+       OR NEW.payer_route <> 'GOV_RELIEF'
+       OR NEW.sku IS NULL
+       OR NEW.quantity IS NULL
+       OR NEW.quantity <= 0
+       OR NEW.pool_id IS NOT NULL
+       OR NEW.warehouse_id IS NULL THEN
+      RAISE EXCEPTION 'allocation does not match the tiered goods policy';
+    END IF;
+    -- LGX-01. Signing for stock that is not on the shelf is the failure this
+    -- catches; the decrement's own ``quantity >= 0`` check catches the race.
+    IF NOT EXISTS (
+      SELECT 1 FROM stock_item s
+       WHERE s.warehouse_id = NEW.warehouse_id
+         AND s.sku = NEW.sku
+         AND s.quantity >= NEW.quantity
+    ) THEN
+      RAISE EXCEPTION 'goods allocation exceeds the stock on hand';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'allocation resource is not releasable';
   END IF;
 
   SELECT p.hazard_event_id
@@ -1309,9 +1355,23 @@ BEGIN
      OR NEW.payload ->> 'verification_snapshot_hash'
           IS DISTINCT FROM allocation_row.verification_snapshot_hash
      OR NEW.payload ->> 'gate' IS DISTINCT FROM 'ALLOCATION_PLAN'
-     OR NEW.payload ->> 'resource' IS DISTINCT FROM 'CASH'
-     OR NEW.payload ->> 'amount' IS DISTINCT FROM '45000.00'
-     OR NEW.payload ->> 'currency' IS DISTINCT FROM 'JMD'
+     -- The receipt states what was signed for, and the row is the referee.
+     -- A cash receipt still has to read exactly 45000.00 JMD; a goods receipt
+     -- has to name the SKU and count that came off the shelf.
+     OR NEW.payload ->> 'resource' IS DISTINCT FROM allocation_row.resource::text
+     OR (allocation_row.resource = 'CASH' AND (
+          NEW.payload ->> 'amount' IS DISTINCT FROM '45000.00'
+       OR NEW.payload ->> 'currency' IS DISTINCT FROM 'JMD'
+       OR NEW.payload ? 'sku'
+       OR NEW.payload ? 'quantity'
+     ))
+     OR (allocation_row.resource = 'ITEM' AND (
+          NEW.payload ? 'amount'
+       OR NEW.payload ->> 'sku' IS DISTINCT FROM allocation_row.sku
+       OR NEW.payload ->> 'quantity' IS DISTINCT FROM allocation_row.quantity::text
+       OR NEW.payload ->> 'warehouse_id'
+            IS DISTINCT FROM allocation_row.warehouse_id::text
+     ))
      OR NEW.payload ->> 'payer_route' IS DISTINCT FROM 'GOV_RELIEF'
      OR NEW.payload ->> 'money_movement'
           IS DISTINCT FROM 'NOT_INITIATED_AT_APPROVAL'
@@ -1342,9 +1402,21 @@ CREATE TRIGGER ledger_allocation_approval_guard_trigger
 CREATE OR REPLACE FUNCTION signed_plan_must_be_complete()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.approval_id IS NOT NULL
-     AND (SELECT count(*) FROM allocation WHERE plan_id = NEW.id) <> 1 THEN
-    RAISE EXCEPTION 'signed allocation plan must contain exactly one allocation';
+  -- The invariant is that a signature releases at most one grant, not that it
+  -- releases exactly one row. A plan carrying only goods is legitimate — not
+  -- every household on a run sheet is a cash stop — but a plan carrying two
+  -- cash grants is a double payment, and a signed plan releasing nothing at
+  -- all is a signature over an empty set.
+  IF NEW.approval_id IS NOT NULL THEN
+    IF (SELECT count(*) FROM allocation WHERE plan_id = NEW.id) = 0 THEN
+      RAISE EXCEPTION 'signed allocation plan must release at least one allocation';
+    END IF;
+    IF (
+      SELECT count(*) FROM allocation
+       WHERE plan_id = NEW.id AND resource = 'CASH'
+    ) > 1 THEN
+      RAISE EXCEPTION 'signed allocation plan cannot release two cash grants';
+    END IF;
   END IF;
   RETURN NULL;
 END $$;
