@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import dataclass, field
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 
@@ -23,6 +25,7 @@ from lighthouse_contracts import (
 )
 from lighthouse_contracts.agents import (
     AGENT_IO,
+    MAX_ESTIMATE,
     PROPOSE_ONLY,
     DamageAssessmentOutput,
     DamagePhotoFinding,
@@ -278,23 +281,73 @@ def test_non_director_cannot_decide(session):
         )
 
 
-def test_agent_refuses_to_run_once_a_director_decision_is_latest(session):
+def _decide(session, claim, proposal, director, verdict: str):
+    return record_damage_assessment_decision(
+        session,
+        claim_id=claim.id,
+        assessment_id=proposal.assessment.id,
+        director_id=director.id,
+        verdict=verdict,
+        rationale="Reviewed against the field photos and the standing quote.",
+    )
+
+
+def test_the_same_photos_are_not_reproposed_after_a_director_rules(session):
     sf, claim, evidence_ids = _verified_claim_with_photo(session)
     store = _seed_store(session, claim.id, evidence_ids)
     proposal = run_damage_assessment(
         session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
     )
     director = make_user(session, AppRole.DIRECTOR)
-    record_damage_assessment_decision(
-        session,
-        claim_id=claim.id,
-        assessment_id=proposal.assessment.id,
-        director_id=director.id,
-        verdict="REJECTED",
-        rationale="Photos do not support the claimed severity.",
+    _decide(session, claim, proposal, director, "REJECTED")
+
+    with pytest.raises(DamageAssessmentNotRunnable, match="already ruled"):
+        run_damage_assessment(
+            session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+        )
+
+
+def test_a_rejection_is_not_a_dead_end_when_new_photos_arrive(session):
+    """Rejection is the case that most needs a second look. A household that
+    sends clearer photos after one should get a second proposal."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    proposal = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    )
+    director = make_user(session, AppRole.DIRECTOR)
+    _decide(session, claim, proposal, director, "REJECTED")
+
+    evidence_ids.append(_photo_evidence(session, claim.id))
+    session.flush()
+    store = _seed_store(session, claim.id, evidence_ids)
+
+    second = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
     )
 
-    with pytest.raises(DamageAssessmentNotRunnable, match="already latest"):
+    assert second.created is True
+    assert str(second.assessment.verdict) == "PROPOSED"
+    assert len(second.assessment.evidence_ids) == 2
+    # And the Director can rule on the new proposal, which is now latest.
+    again = _decide(session, claim, second, director, "APPROVED")
+    assert again.assessment.overrides_id == second.assessment.id
+
+
+def test_an_approved_estimate_is_settled_even_if_more_photos_arrive(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    proposal = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    )
+    director = make_user(session, AppRole.DIRECTOR)
+    _decide(session, claim, proposal, director, "APPROVED")
+
+    evidence_ids.append(_photo_evidence(session, claim.id))
+    session.flush()
+    store = _seed_store(session, claim.id, evidence_ids)
+
+    with pytest.raises(DamageAssessmentNotRunnable, match="has approved"):
         run_damage_assessment(
             session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
         )
@@ -731,3 +784,113 @@ def test_the_provider_rechecks_the_boundary_it_was_handed():
     ]
     with pytest.raises(DamageAssessmentNotRunnable, match="byte boundary"):
         assessor.assess(claim=None, photos=[], media=too_big)
+
+
+# ---------------------------------------------------------------------------
+# A range that is not a range, and figures the column cannot hold.
+# ---------------------------------------------------------------------------
+
+
+def test_an_inverted_range_is_refused_rather_than_quietly_flattened(session):
+    """Clamping high up to low turns a self-contradicting answer into a
+    confident-looking point estimate, which is worse than no estimate."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    assessor = _assessor(evidence_ids=evidence_ids)
+    assessor.output = assessor.output.model_copy(
+        update={"estimate_low": 90000.0, "estimate_high": 40000.0}
+    )
+
+    with pytest.raises(DamageAssessmentNotRunnable, match="inverted cost range"):
+        run_damage_assessment(session, claim.id, assessor=assessor, store=store)
+
+    assert session.scalar(
+        select(func.count())
+        .select_from(DamageAssessment)
+        .where(DamageAssessment.claim_id == claim.id)
+    ) == 0
+
+
+def test_estimates_cannot_exceed_what_the_column_holds():
+    """numeric(14,2) overflows into a bare 500 otherwise, with nothing saying
+    which field was wrong."""
+    base = dict(
+        band=DamageBand.MAJOR,
+        estimate_low=0.0,
+        estimate_high=0.0,
+        confidence=0.5,
+        findings=[
+            DamagePhotoFinding(
+                evidence_id=uuid.uuid4(),
+                observed_damage="x",
+                band=DamageBand.MAJOR,
+                confidence=0.5,
+            )
+        ],
+        location_source="claim",
+        model_version="test",
+        rationale="test",
+    )
+    # The column is numeric(14,2): twelve integer digits, no more.
+    assert MAX_ESTIMATE == 999_999_999_999.99
+    assert DamageAssessmentOutput(**{**base, "estimate_high": MAX_ESTIMATE})
+
+    for bounded in ("estimate_low", "estimate_high"):
+        with pytest.raises(ValidationError):
+            DamageAssessmentOutput(**{**base, bounded: MAX_ESTIMATE * 10})
+
+
+# ---------------------------------------------------------------------------
+# The lock now closes after the paid call, so the gate is checked twice.
+# ---------------------------------------------------------------------------
+
+
+def test_a_proposal_landing_during_the_vision_call_is_adopted_not_duplicated(session):
+    """The claim row is unlocked while the photos are read and assessed, so
+    another worker can land a proposal in that window. The second, locked
+    pass is the one that decides."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    inner = _assessor(evidence_ids=evidence_ids)
+
+    @dataclass
+    class _RacingAssessor:
+        """Stands in for a second worker finishing first."""
+
+        calls: list = field(default_factory=list)
+
+        def assess(self, *, claim, photos, media):
+            self.calls.append(claim.id)
+            competitor = DamageAssessment(
+                claim_id=claim.id,
+                storm_file_id=sf.id,
+                band=DamageBand.MINOR,
+                estimate_low=Decimal("100.00"),
+                estimate_high=Decimal("200.00"),
+                currency=CURRENCY,
+                confidence=0.4,
+                findings=[],
+                evidence_ids=[str(photo.id) for photo in photos],
+                location_source="claim",
+                verdict=DamageAssessmentVerdict.PROPOSED,
+                actor_kind=ActorKind.AGENT,
+                actor_id=None,
+                agent_name=str(AgentName.DAMAGE_ASSESSMENT_AGENT),
+                model_version="other-worker",
+                rationale="landed first",
+            )
+            session.add(competitor)
+            session.flush()
+            return inner.output
+
+    racer = _RacingAssessor()
+    result = run_damage_assessment(session, claim.id, assessor=racer, store=store)
+
+    assert racer.calls == [claim.id]
+    assert result.created is False
+    assert result.assessment.model_version == "other-worker"
+    assert session.scalar(
+        select(func.count())
+        .select_from(DamageAssessment)
+        .where(DamageAssessment.claim_id == claim.id)
+    ) == 1

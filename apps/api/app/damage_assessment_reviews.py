@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from lighthouse_contracts import AppRole
+from lighthouse_contracts.agents import MAX_ESTIMATE
 
 from .damage_assessment_service import (
     ClaimNotFound,
@@ -29,8 +30,11 @@ class DamageAssessmentDecisionRequest(BaseModel):
     assessment_id: uuid.UUID
     verdict: Literal["APPROVED", "REJECTED"]
     rationale: str = Field(min_length=10, max_length=500)
-    confirmed_low: float | None = Field(default=None, ge=0)
-    confirmed_high: float | None = Field(default=None, ge=0)
+    # Bounded for the same reason the agent's own estimates are: past this
+    # the INSERT overflows numeric(14,2) and the Director gets a 500 where
+    # every other bad decision on this route gets a 409 that says why.
+    confirmed_low: float | None = Field(default=None, ge=0, le=MAX_ESTIMATE)
+    confirmed_high: float | None = Field(default=None, ge=0, le=MAX_ESTIMATE)
 
     @field_validator("rationale")
     @classmethod

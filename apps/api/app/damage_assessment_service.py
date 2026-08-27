@@ -311,12 +311,19 @@ class DeterministicDamageAssessor:
         return self.output
 
 
-def _validate_findings(
+def _validate_output(
     output: DamageAssessmentOutput, photos: list[_PhotoEvidence]
 ) -> None:
-    """Every finding must ground itself in a photo we actually sent — a model
-    (real or fake) that references evidence outside the claim is a bug, not
-    something to silently store."""
+    """Every finding must ground itself in a photo we actually sent, and a
+    range must be a range.
+
+    A model (real or fake) that references evidence outside the claim, or
+    hands back a high below its low, is a bug — not something to silently
+    store, and not something to silently repair either. Clamping an inverted
+    range collapses it to a single figure, and a Director reading one number
+    where the design promised two reads false precision rather than the
+    contradiction it actually is.
+    """
     known_ids = {photo.id for photo in photos}
     if not output.findings:
         raise DamageAssessmentNotRunnable("assessment returned no photo findings")
@@ -325,6 +332,86 @@ def _validate_findings(
             raise DamageAssessmentNotRunnable(
                 "assessment referenced evidence outside this claim"
             )
+    if output.estimate_high < output.estimate_low:
+        raise DamageAssessmentNotRunnable("assessment returned an inverted cost range")
+
+
+@dataclass(frozen=True, slots=True)
+class _AssessmentGate:
+    """What must hold both before the paid call and again before the insert."""
+
+    claim: Claim
+    storm_file: StormFile
+    latest: DamageAssessment | None
+    latest_agent: DamageAssessment | None
+
+
+def _assessment_gate(
+    session: Session, claim_id: uuid.UUID, *, locked: bool
+) -> _AssessmentGate:
+    """Read the claim's assessment state, optionally under its row lock."""
+    stmt = select(Claim).where(Claim.id == claim_id)
+    if locked:
+        stmt = stmt.with_for_update()
+    claim = session.scalar(stmt)
+    if claim is None:
+        raise ClaimNotFound("claim does not exist")
+    storm_file = session.get(StormFile, claim.storm_file_id)
+    if storm_file is None:
+        raise ClaimNotFound("claim Storm File does not exist")
+    if claim.status not in {ClaimStatus.VERIFIED, ClaimStatus.SETTLED}:
+        raise DamageAssessmentNotRunnable("claim is not in an assessable state")
+
+    def _newest(*extra):
+        return session.scalar(
+            select(DamageAssessment)
+            .where(DamageAssessment.claim_id == claim.id, *extra)
+            .order_by(DamageAssessment.created_at.desc(), DamageAssessment.id.desc())
+            .limit(1)
+        )
+
+    latest = _newest()
+    # An approved figure is settled and the agent has nothing to add. A
+    # rejected one is the case that most needs another look — a household
+    # that sends clearer photos after a rejection should get a second
+    # proposal, not a permanent dead end. Whether it gets one is decided by
+    # the evidence, in _replay_or_refuse below.
+    if (
+        latest is not None
+        and latest.actor_kind is ActorKind.HUMAN
+        and latest.verdict is DamageAssessmentVerdict.APPROVED
+    ):
+        raise DamageAssessmentNotRunnable("a Director has approved this estimate")
+
+    return _AssessmentGate(
+        claim=claim,
+        storm_file=storm_file,
+        latest=latest,
+        latest_agent=_newest(DamageAssessment.actor_kind == ActorKind.AGENT),
+    )
+
+
+def _replay_or_refuse(
+    gate: _AssessmentGate, evidence_ids: list[str]
+) -> DamageAssessment | None:
+    """The standing proposal if this evidence has already been assessed,
+    ``None`` if there is something new to say.
+
+    Compared against what was *sent* — ``evidence_ids``, written by this
+    service — rather than against ``findings``, which is the model's account
+    and may legitimately omit a photo.
+    """
+    proposal = gate.latest_agent
+    if proposal is None or list(proposal.evidence_ids or []) != evidence_ids:
+        return None
+    if gate.latest is not None and gate.latest.actor_kind is ActorKind.HUMAN:
+        # A Director already ruled on exactly these photos, and the ruling was
+        # a rejection (approval is refused in _assessment_gate). Re-proposing
+        # would hand back the same figure they just threw out.
+        raise DamageAssessmentNotRunnable(
+            "a Director has already ruled on this photo evidence"
+        )
+    return proposal
 
 
 def _output_from_row(row: DamageAssessment) -> DamageAssessmentOutput:
@@ -400,24 +487,20 @@ def run_damage_assessment(
     (``DeterministicDamageAssessor``/``DeterministicPhotoStore``) — the worker
     path always leaves them unset, which defers provider gating until a real
     call is actually about to happen.
-    """
-    claim = session.scalar(select(Claim).where(Claim.id == claim_id).with_for_update())
-    if claim is None:
-        raise ClaimNotFound("claim does not exist")
-    storm_file = session.get(StormFile, claim.storm_file_id)
-    if storm_file is None:
-        raise ClaimNotFound("claim Storm File does not exist")
-    if claim.status not in {ClaimStatus.VERIFIED, ClaimStatus.SETTLED}:
-        raise DamageAssessmentNotRunnable("claim is not in an assessable state")
 
-    latest = session.scalar(
-        select(DamageAssessment)
-        .where(DamageAssessment.claim_id == claim.id)
-        .order_by(DamageAssessment.created_at.desc(), DamageAssessment.id.desc())
-        .limit(1)
-    )
-    if latest is not None and latest.actor_kind is ActorKind.HUMAN:
-        raise DamageAssessmentNotRunnable("a Director decision is already latest")
+    The claim row lock is taken *after* the photos are fetched and read, not
+    before. Holding it across an object-store round trip and a multi-image
+    vision call parks every other writer on that claim — a Director's
+    decision, a status transition, settlement — behind an inference that can
+    run for the better part of a minute. So the gate is checked twice: once
+    unlocked, to avoid paying for work that is already done, and once under
+    the lock, which is the check that actually decides. The gap between them
+    can cost a duplicate vision call if two jobs for one claim overlap, which
+    is rare and bounded; it cannot produce a duplicate row, because the second
+    check runs where the insert does.
+    """
+    gate = _assessment_gate(session, claim_id, locked=False)
+    claim, storm_file = gate.claim, gate.storm_file
 
     photos = _readable_photo_evidence(session, claim.id)
     if not photos:
@@ -428,14 +511,9 @@ def run_damage_assessment(
     photos = photos[:MAX_ASSESSMENT_PHOTOS]
     evidence_ids = [str(photo.id) for photo in photos]
 
-    if latest is not None and latest.actor_kind is ActorKind.AGENT:
-        # Against what was sent, not against what the model chose to comment
-        # on. ``findings`` may legitimately omit a photo, and keying on it
-        # meant a proposal that skipped one could never match — every replay
-        # spending a second paid call and appending a duplicate PROPOSED row,
-        # which then makes the Director's assessment_id stale.
-        if list(latest.evidence_ids or []) == evidence_ids:
-            return DamageAssessmentRun(latest, _output_from_row(latest), False)
+    standing = _replay_or_refuse(gate, evidence_ids)
+    if standing is not None:
+        return DamageAssessmentRun(standing, _output_from_row(standing), False)
 
     location_source = _resolve_location_source(claim, storm_file)
     if location_source is None:
@@ -462,7 +540,7 @@ def run_damage_assessment(
         raise DamageAssessmentNotRunnable(str(exc)) from exc
 
     parsed = assessor.assess(claim=claim, photos=photos, media=media)
-    _validate_findings(parsed, photos)
+    _validate_output(parsed, photos)
     output = parsed.model_copy(
         update={
             "location_source": location_source,
@@ -471,12 +549,20 @@ def run_damage_assessment(
         }
     )
 
+    # The authoritative pass. Everything above was advisory: the claim may
+    # have moved, or another worker may have proposed against this same
+    # evidence, while the vision call was in flight.
+    gate = _assessment_gate(session, claim_id, locked=True)
+    standing = _replay_or_refuse(gate, evidence_ids)
+    if standing is not None:
+        return DamageAssessmentRun(standing, _output_from_row(standing), False)
+
     assessment = DamageAssessment(
-        claim_id=claim.id,
-        storm_file_id=storm_file.id,
+        claim_id=gate.claim.id,
+        storm_file_id=gate.storm_file.id,
         band=output.band,
         estimate_low=_quantize(output.estimate_low),
-        estimate_high=_quantize(max(output.estimate_high, output.estimate_low)),
+        estimate_high=_quantize(output.estimate_high),
         currency=output.currency,
         confidence=output.confidence,
         findings=[finding.model_dump(mode="json") for finding in output.findings],
@@ -537,21 +623,25 @@ def record_damage_assessment_decision(
     if director is None or not director.active or director.role is not AppRole.DIRECTOR:
         raise ReviewDecisionConflict("active Director authority is required")
 
-    existing = session.scalars(
-        select(DamageAssessment)
-        .where(DamageAssessment.overrides_id == assessment_id)
-        .order_by(DamageAssessment.created_at, DamageAssessment.id)
-    ).all()
-    if existing:
-        if len(existing) == 1:
-            row = existing[0]
-            if (
-                row.actor_kind is ActorKind.HUMAN
-                and row.actor_id == director_id
-                and row.verdict == verdict
-                and row.rationale == rationale
-            ):
-                return DamageAssessmentRun(row, _output_from_row(row), False)
+    # Scoped to the claim in the request path. Without it a replay could match
+    # an override belonging to a different claim and answer with that claim's
+    # record under this claim's URL — the staleness check below guards the
+    # ordinary path, but a replay never reaches it. One row at most:
+    # ``damage_assessment_overrides_uidx`` is unique on ``overrides_id``.
+    existing = session.scalar(
+        select(DamageAssessment).where(
+            DamageAssessment.claim_id == claim.id,
+            DamageAssessment.overrides_id == assessment_id,
+        )
+    )
+    if existing is not None:
+        if (
+            existing.actor_kind is ActorKind.HUMAN
+            and existing.actor_id == director_id
+            and existing.verdict == verdict
+            and existing.rationale == rationale
+        ):
+            return DamageAssessmentRun(existing, _output_from_row(existing), False)
         raise ReviewDecisionConflict("assessment already has a different override")
 
     latest = session.scalar(

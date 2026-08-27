@@ -340,6 +340,14 @@ class LogisticsAgentOutput(Contract):
 # ---------------------------------------------------------------------------
 
 
+#: ``damage_assessment.estimate_low``/``estimate_high`` are ``numeric(14,2)``,
+#: so twelve integer digits is what the column physically holds. Bounding the
+#: contract at exactly that keeps a hallucinated or fat-fingered figure a
+#: validation error at the edge instead of a numeric overflow at the INSERT,
+#: which reaches the caller as a bare 500 with no idea which field was wrong.
+MAX_ESTIMATE: float = 999_999_999_999.99
+
+
 class DamagePhotoFinding(Contract):
     evidence_id: UUID
     observed_damage: str
@@ -359,8 +367,8 @@ class DamageAssessmentOutput(Contract):
     rather than false precision."""
 
     band: DamageBand
-    estimate_low: float = Field(ge=0)
-    estimate_high: float = Field(ge=0)
+    estimate_low: float = Field(ge=0, le=MAX_ESTIMATE)
+    estimate_high: float = Field(ge=0, le=MAX_ESTIMATE)
     currency: str = "JMD"
     confidence: float = Field(ge=0, le=1)
     findings: list[DamagePhotoFinding]
