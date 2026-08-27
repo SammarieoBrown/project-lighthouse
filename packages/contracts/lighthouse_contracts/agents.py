@@ -22,6 +22,7 @@ Two conventions worth knowing before you add anything here:
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -332,7 +333,45 @@ class LogisticsAgentOutput(Contract):
 
 
 # ---------------------------------------------------------------------------
-# 8. Ledger Agent — autonomous audit. Records and reconciles; flags to humans.
+# 8. Damage Assessment Agent — PROPOSE ONLY. Never auto-transitions anything.
+#
+# A dollar figure is money-adjacent by nature, so unlike Verification there is
+# no confidence-gated fast path: every proposal waits for a Director, always.
+# ---------------------------------------------------------------------------
+
+
+class DamagePhotoFinding(Contract):
+    evidence_id: UUID
+    observed_damage: str
+    band: DamageBand
+    confidence: float = Field(ge=0, le=1)
+
+
+class DamageAssessmentInput(Contract):
+    claim_id: UUID
+    storm_file_id: UUID
+    evidence_ids: list[UUID]
+
+
+class DamageAssessmentOutput(Contract):
+    """A range, not a single figure — a photo-based estimate is inherently
+    uncertain, and a range gives the Director something honest to review
+    rather than false precision."""
+
+    band: DamageBand
+    estimate_low: float = Field(ge=0)
+    estimate_high: float = Field(ge=0)
+    currency: str = "JMD"
+    confidence: float = Field(ge=0, le=1)
+    findings: list[DamagePhotoFinding]
+    location_source: Literal["claim", "storm_file"]
+    model_version: str
+    requires_approval: bool = True
+    rationale: str
+
+
+# ---------------------------------------------------------------------------
+# 9. Ledger Agent — autonomous audit. Records and reconciles; flags to humans.
 # ---------------------------------------------------------------------------
 
 
@@ -370,11 +409,19 @@ AGENT_IO: dict[AgentName, tuple[type[Contract], type[Contract]]] = {
     AgentName.VERIFICATION_AGENT: (VerificationAgentInput, VerificationAgentOutput),
     AgentName.TRIAGE_AGENT: (TriageAgentInput, TriageAgentOutput),
     AgentName.LOGISTICS_AGENT: (LogisticsAgentInput, LogisticsAgentOutput),
+    AgentName.DAMAGE_ASSESSMENT_AGENT: (
+        DamageAssessmentInput,
+        DamageAssessmentOutput,
+    ),
     AgentName.LEDGER_AGENT: (LedgerAgentInput, LedgerAgentOutput),
 }
 
 #: Agents that may only propose. Their outputs carry ``requires_approval`` and
 #: the orchestrator refuses to act on them without a matching approval row.
 PROPOSE_ONLY: frozenset[AgentName] = frozenset(
-    {AgentName.ALERT_AGENT, AgentName.LOGISTICS_AGENT}
+    {
+        AgentName.ALERT_AGENT,
+        AgentName.LOGISTICS_AGENT,
+        AgentName.DAMAGE_ASSESSMENT_AGENT,
+    }
 )

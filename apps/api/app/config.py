@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # explicitly rather than getting simulated confirmations by accident.
     disbursement_executor_mode: Literal["disabled", "simulated"] = "disabled"
 
+    # Disabled is a deliberate local default, same reasoning as the
+    # transcription provider above: an agent must not silently start making
+    # paid vision calls just because a key happens to be set.
+    damage_assessment_provider: Literal["disabled", "anthropic"] = "disabled"
+    anthropic_api_key: str | None = None
+
     @property
     def sqlalchemy_url(self) -> str:
         """SQLAlchemy needs the driver named explicitly.

@@ -39,6 +39,8 @@ from lighthouse_contracts import (
     ActorKind,
     AppRole,
     ClaimStatus,
+    DamageAssessmentVerdict,
+    DamageBand,
     DisbursementChannel,
     DisbursementStatus,
     GateKind,
@@ -286,6 +288,45 @@ class Verification(Base):
     snapshot_hash: Mapped[str] = mapped_column(Text)
 
 
+class DamageAssessment(Base):
+    """Never updated in place. A Director override is a new row, same as
+    ``Verification``. No AUTO_VERIFIED counterpart — a dollar figure always
+    waits for a Director, so the agent's own row is always PROPOSED."""
+
+    __tablename__ = "damage_assessment"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    claim_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("claim.id", ondelete="CASCADE")
+    )
+    storm_file_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("storm_file.id")
+    )
+    band: Mapped[DamageBand] = mapped_column(_enum(DamageBand, "damage_band"))
+    estimate_low: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    estimate_high: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    currency: Mapped[str] = mapped_column(Text, default="JMD")
+    confidence: Mapped[float] = mapped_column(Numeric(asdecimal=False))
+    findings: Mapped[list] = mapped_column(JSONB, default=list)
+    evidence_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    location_source: Mapped[str] = mapped_column(Text)
+    verdict: Mapped[DamageAssessmentVerdict] = mapped_column(
+        _enum(DamageAssessmentVerdict, "damage_assessment_verdict")
+    )
+    actor_kind: Mapped[ActorKind] = mapped_column(_enum(ActorKind, "actor_kind"))
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("app_user.id"), nullable=True
+    )
+    agent_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    overrides_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("damage_assessment.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    snapshot_hash: Mapped[str] = mapped_column(Text)
+
+
 class Approval(Base):
     """Gates G1/G2/G3. ``reauth_at`` is required — ADM-02."""
 
@@ -457,6 +498,7 @@ __all__ = [
     "HazardEvent",
     "Claim",
     "Verification",
+    "DamageAssessment",
     "Approval",
     "AllocationPlan",
     "Allocation",

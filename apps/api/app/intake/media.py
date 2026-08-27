@@ -549,6 +549,41 @@ class R2MediaStore:
             size_bytes=len(media.data),
         )
 
+    def get(
+        self,
+        object_key: str,
+        *,
+        expected_sha256: str,
+        max_bytes: int = MAX_MEDIA_BYTES,
+    ) -> FetchedMedia:
+        """Read a previously stored object back, verifying its digest.
+
+        Every reader of stored evidence — not just the writer in ``put`` —
+        must not trust bytes that could have changed underneath the row, and
+        must not read an unbounded number of them into a worker because the
+        object store offered them. ``fetch`` bounds the inbound side; this is
+        the same bound on the way back out.
+        """
+        if max_bytes <= 0 or max_bytes > MAX_MEDIA_BYTES:
+            raise MediaBoundaryError("stored media byte limit is invalid")
+        obj = self.client.get_object(Bucket=self.bucket, Key=object_key)
+        declared = obj.get("ContentLength")
+        if declared is not None and int(declared) > max_bytes:
+            raise MediaBoundaryError("stored media exceeds the byte limit")
+        # One byte past the limit, so an object that under-declares its length
+        # is caught by what actually arrived rather than by what it claimed.
+        data = obj["Body"].read(max_bytes + 1)
+        if len(data) > max_bytes:
+            raise MediaBoundaryError("stored media exceeds the byte limit")
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != expected_sha256:
+            raise MediaBoundaryError("stored media digest does not match evidence row")
+        return FetchedMedia(
+            data=data,
+            content_type=str(obj.get("ContentType") or ""),
+            sha256=digest,
+        )
+
 
 __all__ = [
     "AUDIO_CONTENT_TYPES",

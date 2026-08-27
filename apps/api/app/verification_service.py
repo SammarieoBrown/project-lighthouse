@@ -41,6 +41,8 @@ from lighthouse_contracts.agents import (
 )
 
 from app import ledger, queue, statemachine
+from app.config import get_settings
+from app.damage_assessment_service import has_readable_photo_evidence
 from app.models import AppUser, Claim, StormFile, Verification
 
 
@@ -701,6 +703,33 @@ def _enqueue_triage(
     )
 
 
+def _enqueue_damage_assessment(session: Session, claim: Claim, storm_file: StormFile) -> None:
+    """Only when a paid vision call could actually succeed.
+
+    Two gates, and both of them are quiet rather than loud. A disabled
+    provider and a claim with no decodable photo are ordinary states, not
+    incidents — but a job enqueued in either one spends its whole retry budget
+    failing and then reports itself as an ANOMALY_FLAGGED, which reaches an
+    operator as a claim demanding attention rather than as a feature that is
+    switched off. The photo gate is ``has_readable_photo_evidence`` rather
+    than a second, looser query, so the enqueue side cannot drift from what
+    the handler will actually accept.
+    """
+    if get_settings().damage_assessment_provider == "disabled":
+        return
+    if not has_readable_photo_evidence(session, claim.id):
+        return
+    queue.enqueue(
+        session,
+        job_type=AgentName.DAMAGE_ASSESSMENT_AGENT,
+        priority=SOL_PRIORITY if claim.sol else 0,
+        payload={
+            "claim_id": str(claim.id),
+            "storm_file_id": str(storm_file.id),
+        },
+    )
+
+
 def _transition_approved(
     session: Session,
     claim: Claim,
@@ -748,6 +777,7 @@ def _transition_approved(
             },
         )
     _enqueue_triage(session, claim, storm_file, verification)
+    _enqueue_damage_assessment(session, claim, storm_file)
 
 
 def run_verification(session: Session, claim_id: uuid.UUID) -> VerificationRun:
