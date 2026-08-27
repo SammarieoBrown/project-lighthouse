@@ -6,9 +6,11 @@ paths require a human signature and the database enforces it.
 """
 
 from app.agents import (  # noqa: F401  — register handlers
+    alert_agent,
     damage_assessment_agent,
     forecast_sentinel,
     intake_agent,
+    ledger_agent,
     logistics_agent,
     risk_mapper,
     triage_agent,
@@ -16,9 +18,11 @@ from app.agents import (  # noqa: F401  — register handlers
 )
 
 __all__ = [
+    "alert_agent",
     "damage_assessment_agent",
     "forecast_sentinel",
     "intake_agent",
+    "ledger_agent",
     "logistics_agent",
     "risk_mapper",
     "triage_agent",

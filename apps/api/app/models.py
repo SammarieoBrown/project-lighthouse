@@ -327,6 +327,37 @@ class DamageAssessment(Base):
     snapshot_hash: Mapped[str] = mapped_column(Text)
 
 
+class RiskAssessment(Base):
+    """IMP-01. One advisory's predicted impact on one household.
+
+    ``method`` and ``model_version`` are on the row because a prediction that
+    cannot be explained is not usable evidence — v1 is a transparent parametric
+    lookup and the row says so.
+    """
+
+    __tablename__ = "risk_assessment"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    storm_file_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("storm_file.id", ondelete="CASCADE")
+    )
+    advisory_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("advisory.id", ondelete="CASCADE")
+    )
+    p34: Mapped[float | None] = mapped_column(Numeric(asdecimal=False), nullable=True)
+    p50: Mapped[float | None] = mapped_column(Numeric(asdecimal=False), nullable=True)
+    p64: Mapped[float | None] = mapped_column(Numeric(asdecimal=False), nullable=True)
+    predicted_band: Mapped[DamageBand | None] = mapped_column(
+        _enum(DamageBand, "damage_band"), nullable=True
+    )
+    confidence: Mapped[float | None] = mapped_column(
+        Numeric(asdecimal=False), nullable=True
+    )
+    method: Mapped[str] = mapped_column(Text)
+    model_version: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
 class Warehouse(Base):
     """LGX-01. Where relief stock physically is."""
 
@@ -530,6 +561,7 @@ __all__ = [
     "Claim",
     "Verification",
     "DamageAssessment",
+    "RiskAssessment",
     "Warehouse",
     "StockItem",
     "Approval",
