@@ -8,7 +8,6 @@ named rather than dropped, and that it never writes an allocation.
 
 from __future__ import annotations
 
-import uuid
 
 import pytest
 from sqlalchemy import func, select, text

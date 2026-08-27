@@ -14,7 +14,7 @@ Read this before the phase sections below. The phases were written as a plan and
 
 **The spine and the intake loop are real. The money half is a schema with almost no code behind it.**
 
-Six of the nine agents exist:
+Seven of the nine agents exist:
 
 | Agent | State |
 |---|---|
@@ -25,10 +25,10 @@ Six of the nine agents exist:
 | Forecast Sentinel | Built (Aug 27). The rules moved from `app/replay/posture.py` to `app/forecast_sentinel_service.py` and the transition joined them, so a posture change is now a ledger event — HAZ-03 had been unmet since the driver was written. The replay driver calls the same function the queued handler does. |
 | Triage | Built (Aug 27). TRI-01's four tiers as a readable lookup, writing severity and queue order and nothing else. Drains the backlog `verification_service` had been queuing and the worker had been parking since Act 2 landed. |
 | **Alert** | Not started. No cascade, so G1 has nothing to gate. |
-| **Logistics** | Not started. Allocation plans are created by a Director's manual approval request (`proposed_by="manual_request"`) and every payout is pinned to a flat `_CASH_GRANT` of J$45,000 — `approvals.py` actively rejects any other amount. The damage estimate therefore feeds nothing. |
+| Logistics | Built (Aug 27). Matches verified claims to cash and stock in triage order and proposes; G2 still releases. Cash stays flat by design (PAY-06 removes per-claim valuation from the agent path), so the damage estimate informs the Director rather than sizing the grant. The goods half required widening five allocation guards that 0007 had narrowed past PAY-06. |
 | **Ledger Agent** | Not started. No reconciliation, no cross-payer duplicate detection. |
 
-Three P0 subsystems have frozen tables and no code at all: payer routing (`routing_decision`, RTE-01/02), donations (`donation`, `donation_pool`, DON-01 to 04, including the donor journey that Act 3 closes on), and FNOL packets (INS-01, a serializer over data that already exists).
+Two P0 subsystems have frozen tables and no code at all: payer routing (`routing_decision`, RTE-01/02) and donations (`donation`, `donation_pool`, DON-01 to 04, including the donor journey that Act 3 closes on). FNOL packets (INS-01) are a serializer over data that already exists and are also unwritten. Both allocation halves stay pinned to `GOV_RELIEF` and bar donation pools until those two land, so nothing can quietly record that an insurer bought a tarpaulin.
 
 Two things are built but unreachable. Both review APIs — verification and damage assessment — are complete and role-gated with **no console surface**, so the screen Phase 2 called "the screen that proves human-in-the-loop to judges" is currently only reachable by `curl`. And `time_to_relief_hours()` is written and tested in `statemachine.py` with no caller in application code, so the T2R counter reads nothing.
 
@@ -143,7 +143,7 @@ Then the measurement that decides where GPU time goes: run the eval set, and spl
 - [ ] **The eval report exists.** Not started, and blocked on the Phase 1 eval set.
 - [ ] **Fifty concurrent conversations do not break the gateway.** Never load-tested.
 
-**Also not built from this phase:** the Logistics Agent, the live needs map, and the triage queue screen — the Triage Agent now computes the order that screen would render, so the queue is a read away.
+**Also not built from this phase:** the live needs map and the triage queue screen. The Triage Agent computes the order that screen would render and the Logistics Agent now consumes it, so the queue is a read away.
 
 **Outcome:** The emotional core of the demo works. Someone speaks, and thirty seconds later an emergency operations center sees a verified need. This is the moment judges will remember, so it exists a full week before demo day.
 
