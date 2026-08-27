@@ -42,6 +42,7 @@ from .models import (
     Approval,
     Claim,
     LedgerEntry,
+    StockItem,
     StormFile,
     Verification,
 )
@@ -74,6 +75,7 @@ class AllocationApprovalRequest(BaseModel):
     payer_route: PayerRoute
     sku: str | None = Field(default=None, max_length=120)
     quantity: int | None = Field(default=None, gt=0)
+    warehouse_id: uuid.UUID | None = None
     note: str | None = Field(default=None, max_length=500)
 
     @field_validator("currency")
@@ -94,14 +96,34 @@ class AllocationApprovalRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_resource_shape(self) -> AllocationApprovalRequest:
-        if self.resource is not ResourceKind.CASH:
-            raise ValueError("this release accepts CASH allocations only")
-        if self.amount != _CASH_GRANT or self.currency != "JMD":
-            raise ValueError("the current cash grant is exactly JMD 45000.00")
+        """PAY-06's two halves have two shapes, and neither bends.
+
+        Cash is one number a Director confirms rather than chooses, so no
+        amount other than the flat grant is accepted here at all. Goods carry
+        a SKU, a count, and the warehouse the stock leaves — that last one is
+        what makes LGX-01's decrement possible, so it is required rather than
+        inferred.
+        """
         if self.payer_route is not PayerRoute.GOV_RELIEF:
             raise ValueError("this release accepts GOV_RELIEF as the payer route only")
-        if self.sku is not None or self.quantity is not None:
-            raise ValueError("cash allocations cannot include sku or quantity")
+        if self.resource is ResourceKind.CASH:
+            if self.amount != _CASH_GRANT or self.currency != "JMD":
+                raise ValueError("the current cash grant is exactly JMD 45000.00")
+            if (
+                self.sku is not None
+                or self.quantity is not None
+                or self.warehouse_id is not None
+            ):
+                raise ValueError(
+                    "cash allocations cannot include sku, quantity or warehouse"
+                )
+            return self
+        if self.amount is not None:
+            raise ValueError("goods allocations do not carry an amount")
+        if self.sku is None or self.quantity is None or self.warehouse_id is None:
+            raise ValueError(
+                "goods allocations require sku, quantity and warehouse_id"
+            )
         return self
 
 
@@ -265,7 +287,7 @@ def allocation_ledger_payload(
     synthetic: bool,
 ) -> dict:
     """Build the immutable internal receipt; the public route re-whitelists it."""
-    return {
+    payload = {
         "approval_id": str(approval.id),
         "plan_id": str(plan.id),
         "allocation_id": str(allocation.id),
@@ -276,12 +298,54 @@ def allocation_ledger_payload(
         "parish": parish,
         "need_category": need_category,
         "resource": str(allocation.resource),
-        "amount": f"{allocation.amount:.2f}",
-        "currency": allocation.currency,
         "payer_route": str(allocation.payer_route),
         "synthetic": synthetic,
         "money_movement": "NOT_INITIATED_AT_APPROVAL",
     }
+    # The receipt says what was signed for in the terms that release used. A
+    # cash receipt carries an amount and no SKU; a goods receipt carries the
+    # SKU, the count, and the shelf they came off, and no amount at all — an
+    # amount on a goods row would be a valuation nobody made. The database
+    # checks both shapes against the row (``ledger_allocation_approval_guard``).
+    if allocation.resource is ResourceKind.CASH:
+        payload["amount"] = f"{allocation.amount:.2f}"
+        payload["currency"] = allocation.currency
+    else:
+        payload["sku"] = allocation.sku
+        payload["quantity"] = str(allocation.quantity)
+        payload["warehouse_id"] = str(allocation.warehouse_id)
+    return payload
+
+
+def _decrement_stock(session: Session, request: AllocationApprovalRequest) -> None:
+    """LGX-01: stock is decremented by approved allocations.
+
+    Locked and decremented in the signing transaction, so two Directors
+    signing the last tarpaulin at once cannot both succeed — one waits, sees
+    the reduced count, and is refused. ``stock_item``'s own ``quantity >= 0``
+    check is the backstop the row lock cannot be talked out of; this raises
+    first only so the Director gets a sentence instead of a constraint name.
+    """
+    row = session.execute(
+        select(StockItem)
+        .where(
+            StockItem.warehouse_id == request.warehouse_id,
+            StockItem.sku == request.sku,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if row is None:
+        raise ApprovalServiceError(
+            status.HTTP_409_CONFLICT,
+            "that warehouse does not stock this item",
+        )
+    if row.quantity < request.quantity:
+        raise ApprovalServiceError(
+            status.HTTP_409_CONFLICT,
+            f"only {row.quantity} of this item remain in that warehouse",
+        )
+    row.quantity -= request.quantity
+    session.flush()
 
 
 def _validate_idempotency_key(value: str | None) -> str:
@@ -463,19 +527,23 @@ def approve_claim_allocation(
     session.add(plan)
     session.flush()
 
+    is_cash = request.resource is ResourceKind.CASH
     allocation = Allocation(
         id=uuid.uuid4(),
         plan_id=plan.id,
         claim_id=claim.id,
-        resource=ResourceKind.CASH,
-        sku=None,
-        quantity=None,
-        amount=_CASH_GRANT,
+        resource=request.resource,
+        sku=None if is_cash else request.sku,
+        quantity=None if is_cash else request.quantity,
+        amount=_CASH_GRANT if is_cash else None,
         currency="JMD",
         payer_route=PayerRoute.GOV_RELIEF,
+        warehouse_id=None if is_cash else request.warehouse_id,
         verification_id=verification.id,
         verification_snapshot_hash=verification.snapshot_hash,
     )
+    if not is_cash:
+        _decrement_stock(session, request)
     session.add(allocation)
     session.flush()
 

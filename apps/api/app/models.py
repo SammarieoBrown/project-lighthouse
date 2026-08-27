@@ -327,6 +327,37 @@ class DamageAssessment(Base):
     snapshot_hash: Mapped[str] = mapped_column(Text)
 
 
+class Warehouse(Base):
+    """LGX-01. Where relief stock physically is."""
+
+    __tablename__ = "warehouse"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str] = mapped_column(Text)
+    parish: Mapped[str | None] = mapped_column(Text, nullable=True)
+    location: Mapped[object | None] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326), nullable=True
+    )
+
+
+class StockItem(Base):
+    """LGX-01. Counts on a shelf, decremented by approved allocations.
+
+    ``quantity >= 0`` is a database check rather than application arithmetic:
+    it is the last thing standing between a signed allocation and stock that
+    was never there.
+    """
+
+    __tablename__ = "stock_item"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("warehouse.id", ondelete="CASCADE")
+    )
+    sku: Mapped[str] = mapped_column(Text)
+    quantity: Mapped[int] = mapped_column(Integer)
+
+
 class Approval(Base):
     """Gates G1/G2/G3. ``reauth_at`` is required — ADM-02."""
 
@@ -499,6 +530,8 @@ __all__ = [
     "Claim",
     "Verification",
     "DamageAssessment",
+    "Warehouse",
+    "StockItem",
     "Approval",
     "AllocationPlan",
     "Allocation",
