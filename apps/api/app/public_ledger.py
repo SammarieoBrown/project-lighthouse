@@ -166,6 +166,11 @@ class PublicConfirmedReliefAggregate(BaseModel):
     currency: Literal["JMD"] = "JMD"
     no_real_money_moved: Literal[True] = True
     by_channel: list[PublicConfirmedReliefBucket]
+    #: LGR-02's median time to relief, in hours, measured the way PRD §3
+    #: insists: from when the household spoke to when relief was confirmed.
+    #: Null until something has actually been confirmed.
+    median_time_to_relief_hours: float | None = None
+    time_to_relief_sample: int = 0
 
 
 class PublicLedgerResponse(BaseModel):
@@ -317,6 +322,84 @@ def clear_aggregate_cache() -> None:
         _aggregate_cache = None
 
 
+def _median_time_to_relief(session) -> tuple[float | None, int]:
+    """Median hours from a household speaking to relief being confirmed.
+
+    Computed from ledger entries rather than from ``claim`` rows, for the same
+    reason the money aggregate is: a public figure should rest on immutable
+    receipts and not on a row that could be edited after the fact. The chain
+    that gets us there is ``claim.created`` -> ``allocation.approved`` (which
+    names the claim) -> ``disbursement.confirmed`` (which names the
+    allocation), and every link is a receipt the database already refuses to
+    let change.
+
+    Median rather than mean on purpose. One claim that sat for three weeks
+    behind a bad phone number should not be able to make the headline number
+    look worse than the experience of the households behind it, and one
+    instant confirmation should not make it look better.
+    """
+    filed: dict[str, object] = {}
+    claim_for_allocation: dict[str, str] = {}
+    confirmed: dict[str, object] = {}
+
+    rows = session.execute(
+        select(LedgerEntry.action, LedgerEntry.subject_id, LedgerEntry.payload, LedgerEntry.ts)
+        .where(
+            LedgerEntry.action.in_(
+                (
+                    str(Event.CLAIM_CREATED),
+                    str(Event.ALLOCATION_APPROVED),
+                    str(Event.DISBURSEMENT_CONFIRMED),
+                )
+            )
+        )
+        .order_by(LedgerEntry.seq)
+    ).all()
+    for action, subject_id, payload, ts in rows:
+        payload = payload or {}
+        if action == str(Event.CLAIM_CREATED) and subject_id is not None:
+            filed.setdefault(str(subject_id), ts)
+        elif action == str(Event.ALLOCATION_APPROVED):
+            allocation_id = payload.get("allocation_id")
+            claim_id = payload.get("claim_id")
+            if allocation_id and claim_id:
+                claim_for_allocation[str(allocation_id)] = str(claim_id)
+        elif action == str(Event.DISBURSEMENT_CONFIRMED):
+            allocation_id = payload.get("allocation_id")
+            claim_id = claim_for_allocation.get(str(allocation_id or ""))
+            if claim_id:
+                # First confirmation only. T2R stops at relief arriving, not
+                # at the last thing that happened to arrive.
+                confirmed.setdefault(claim_id, ts)
+
+    durations = sorted(
+        (confirmed[claim_id] - filed[claim_id]).total_seconds() / 3600.0
+        for claim_id in confirmed
+        if claim_id in filed
+    )
+    return _median(durations), len(durations)
+
+
+def _median(values: list[float]) -> float | None:
+    """Median rather than mean, and separated out so the choice is testable.
+
+    One claim that sat for three weeks behind a bad phone number should not be
+    able to make the headline number look worse than the experience of the
+    households behind it, and one instant confirmation should not make it look
+    better.
+    """
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    median = (
+        ordered[middle]
+        if len(ordered) % 2
+        else (ordered[middle - 1] + ordered[middle]) / 2
+    )
+    return round(median, 2)
+
+
 def _confirmed_aggregate(
     session,
     *,
@@ -355,6 +438,7 @@ def _confirmed_aggregate(
         bucket["count"] += 1
         bucket["amount"] += settlement["amount"]
     buckets = [grouped[channel] for channel in sorted(grouped, key=str)]
+    median_hours, sample = _median_time_to_relief(session)
     value = {
         "scope": "CONFIRMED_SIMULATED_RELIEF_ONLY",
         "count": sum(bucket["count"] for bucket in buckets),
@@ -365,6 +449,8 @@ def _confirmed_aggregate(
         "currency": "JMD",
         "no_real_money_moved": True,
         "by_channel": buckets,
+        "median_time_to_relief_hours": median_hours,
+        "time_to_relief_sample": sample,
     }
     with _aggregate_cache_lock:
         _aggregate_cache = _AggregateCache(
@@ -439,6 +525,7 @@ def read_public_ledger(
 
 __all__ = [
     "PublicLedgerResponse",
+    "_median",
     "clear_aggregate_cache",
     "read_public_ledger",
     "router",

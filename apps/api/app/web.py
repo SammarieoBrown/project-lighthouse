@@ -26,6 +26,8 @@ from .config import get_settings
 from .damage_assessment_reviews import router as damage_assessment_reviews_router
 from .db import session_scope
 from .disbursements import router as disbursements_router
+from .donations import router as donations_router
+from .fnol import router as fnol_router
 from .intake import router as intake_router
 from .auth_session import router as auth_router
 from .public_ledger import router as public_ledger_router
@@ -191,6 +193,8 @@ app.include_router(intake_router)
 app.include_router(approvals_router)
 app.include_router(alert_approvals_router)
 app.include_router(disbursements_router)
+app.include_router(donations_router)
+app.include_router(fnol_router)
 app.include_router(verification_reviews_router)
 app.include_router(damage_assessment_reviews_router)
 app.include_router(public_ledger_router)

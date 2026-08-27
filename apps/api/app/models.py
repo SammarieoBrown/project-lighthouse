@@ -327,6 +327,91 @@ class DamageAssessment(Base):
     snapshot_hash: Mapped[str] = mapped_column(Text)
 
 
+class DonationPool(Base):
+    """DON-01/02. A named pot of donated money, scoped event-wide or by parish.
+
+    Category scoping is deliberately absent (PRD 11.3): narrower pools
+    fragment the money and constrain the allocation agent before there is
+    volume to justify either.
+    """
+
+    __tablename__ = "donation_pool"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str] = mapped_column(Text)
+    scope_kind: Mapped[str] = mapped_column(Text)
+    scope_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class Donation(Base):
+    """DON-01. The platform records and directs; the sponsor holds the funds.
+
+    ``donor_handle`` is pseudonymous because DON-02 makes pool activity public
+    in real time, and a public ledger of who gave what is a different product
+    from a public ledger of what arrived.
+    """
+
+    __tablename__ = "donation"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    pool_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("donation_pool.id")
+    )
+    donor_handle: Mapped[str] = mapped_column(Text)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    currency: Mapped[str] = mapped_column(Text, default="JMD")
+    simulated: Mapped[bool] = mapped_column(Boolean, default=True)
+    received_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class Consent(Base):
+    """What a household agreed to, and when they agreed to it.
+
+    Scope is jsonb because consent is not one boolean: sharing a claim with a
+    named insurer is a different permission from being contacted, and a
+    household may grant one and not the other. ``revoked_at`` is the whole
+    reason this is a row rather than a flag — consent that cannot be withdrawn
+    is not consent.
+    """
+
+    __tablename__ = "consent"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    storm_file_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("storm_file.id", ondelete="CASCADE")
+    )
+    version: Mapped[str] = mapped_column(Text)
+    granted_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
+    scope: Mapped[dict] = mapped_column(JSONB, default=dict)
+    channel: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class RoutingDecision(Base):
+    """RTE-02. Who pays for this claim, and the consent that justified it.
+
+    ``consent_snapshot`` is a copy rather than a join on purpose: consent can
+    be revoked later, and the question a auditor asks is not "may we share
+    this now" but "what were we permitted to do at the moment we decided".
+    """
+
+    __tablename__ = "routing_decision"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    claim_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("claim.id", ondelete="CASCADE")
+    )
+    route: Mapped[PayerRoute] = mapped_column(_enum(PayerRoute, "payer_route"))
+    insurer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consent_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("consent.id"), nullable=True
+    )
+    consent_snapshot: Mapped[dict] = mapped_column(JSONB, default=dict)
+    decided_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
 class RiskAssessment(Base):
     """IMP-01. One advisory's predicted impact on one household.
 
@@ -561,6 +646,10 @@ __all__ = [
     "Claim",
     "Verification",
     "DamageAssessment",
+    "DonationPool",
+    "Donation",
+    "Consent",
+    "RoutingDecision",
     "RiskAssessment",
     "Warehouse",
     "StockItem",

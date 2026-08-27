@@ -35,6 +35,7 @@ from lighthouse_contracts import (
 
 from . import ledger
 from .db import session_scope
+from .donations_service import DonationRejected, PoolNotFound, draw_down
 from .human_auth import AuthenticatedHuman, authenticate_human
 from .models import (
     Allocation,
@@ -76,6 +77,7 @@ class AllocationApprovalRequest(BaseModel):
     sku: str | None = Field(default=None, max_length=120)
     quantity: int | None = Field(default=None, gt=0)
     warehouse_id: uuid.UUID | None = None
+    pool_id: uuid.UUID | None = None
     note: str | None = Field(default=None, max_length=500)
 
     @field_validator("currency")
@@ -104,8 +106,17 @@ class AllocationApprovalRequest(BaseModel):
         what makes LGX-01's decrement possible, so it is required rather than
         inferred.
         """
-        if self.payer_route is not PayerRoute.GOV_RELIEF:
-            raise ValueError("this release accepts GOV_RELIEF as the payer route only")
+        if self.payer_route not in {PayerRoute.GOV_RELIEF, PayerRoute.DONOR_POOL}:
+            # An insurer settles with its policyholder; it does not fund a
+            # relief allocation. Routing a claim to a carrier and funding a
+            # basket are different questions that share an enum.
+            raise ValueError(
+                "an allocation is funded by GOV_RELIEF or a DONOR_POOL"
+            )
+        if (self.payer_route is PayerRoute.DONOR_POOL) != (self.pool_id is not None):
+            raise ValueError(
+                "pool_id is required for DONOR_POOL and not allowed otherwise"
+            )
         if self.resource is ResourceKind.CASH:
             if self.amount != _CASH_GRANT or self.currency != "JMD":
                 raise ValueError("the current cash grant is exactly JMD 45000.00")
@@ -314,6 +325,8 @@ def allocation_ledger_payload(
         payload["sku"] = allocation.sku
         payload["quantity"] = str(allocation.quantity)
         payload["warehouse_id"] = str(allocation.warehouse_id)
+    if allocation.pool_id is not None:
+        payload["pool_id"] = str(allocation.pool_id)
     return payload
 
 
@@ -537,13 +550,21 @@ def approve_claim_allocation(
         quantity=None if is_cash else request.quantity,
         amount=_CASH_GRANT if is_cash else None,
         currency="JMD",
-        payer_route=PayerRoute.GOV_RELIEF,
+        payer_route=request.payer_route,
+        pool_id=request.pool_id,
         warehouse_id=None if is_cash else request.warehouse_id,
         verification_id=verification.id,
         verification_snapshot_hash=verification.snapshot_hash,
     )
     if not is_cash:
         _decrement_stock(session, request)
+    if request.payer_route is PayerRoute.DONOR_POOL:
+        # DON-03: allocations draw down pool balances visibly, in the signing
+        # transaction, for the same reason stock does.
+        try:
+            draw_down(session, request.pool_id, allocation.amount or Decimal("0.00"))
+        except (PoolNotFound, DonationRejected) as exc:
+            raise ApprovalServiceError(status.HTTP_409_CONFLICT, str(exc)) from exc
     session.add(allocation)
     session.flush()
 

@@ -311,6 +311,10 @@ def test_public_ledger_distinguishes_three_states_and_aggregates_without_identit
         "amount": "45000.00",
         "currency": "JMD",
         "no_real_money_moved": True,
+        # No claim.created receipt in a factory-built claim, so T2R has no
+        # start point and honestly reports none rather than guessing one.
+        "median_time_to_relief_hours": None,
+        "time_to_relief_sample": 0,
         "by_channel": [
             {
                 "channel": "BANK",

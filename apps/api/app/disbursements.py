@@ -174,9 +174,19 @@ class SimulatedExecutionResponse(BaseModel):
 class SettlementQueueItem(BaseModel):
     allocation_id: uuid.UUID
     claim_ref: str
-    amount: Decimal
+    #: Null for goods. A tarpaulin coming off a shelf has no amount, and
+    #: inventing one here would be a valuation nobody made.
+    amount: Decimal | None
     currency: Literal["JMD"] = "JMD"
-    payer_route: Literal["GOV_RELIEF"] = "GOV_RELIEF"
+    #: Who funded it. GOV_RELIEF or a donor pool — an insurer settles with its
+    #: policyholder and never appears on this queue.
+    payer_route: Literal["GOV_RELIEF", "DONOR_POOL"] = "GOV_RELIEF"
+    resource: Literal["CASH", "ITEM"] = "CASH"
+    sku: str | None = None
+    quantity: int | None = None
+    #: PAY-04's headline number, per claim: filed -> first relief confirmed.
+    #: Null until the claim settles, because until then there is no answer.
+    time_to_relief_hours: float | None = None
     state: Literal[
         "AWAITING_FINANCE_SIGNATURE",
         "SIGNED_PENDING_SIMULATED_EXECUTION",
@@ -786,6 +796,10 @@ def list_settlements(session: Session, *, limit: int = 100) -> list[dict]:
                 "amount": allocation.amount,
                 "currency": allocation.currency,
                 "payer_route": str(allocation.payer_route),
+                "resource": str(allocation.resource),
+                "sku": allocation.sku,
+                "quantity": allocation.quantity,
+                "time_to_relief_hours": statemachine.time_to_relief_hours(claim),
                 "state": state,
                 "batch_id": batch.id if batch else None,
                 "disbursement_id": disbursement.id if disbursement else None,
