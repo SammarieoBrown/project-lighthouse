@@ -73,6 +73,25 @@ class DamageAssessmentVerdict(StrEnum):
     REJECTED = "REJECTED"
 
 
+class AlertChannel(StrEnum):
+    """ALT-02's tiering. WhatsApp first, SMS for the phones it never reached."""
+
+    WHATSAPP = "WHATSAPP"
+    SMS = "SMS"
+
+
+class AlertDeliveryStatus(StrEnum):
+    """SUPERSEDED means a later channel carried the message instead — the
+    attempt is kept rather than deleted, because "we tried and it did not
+    confirm" is the fact that justifies the fallback."""
+
+    QUEUED = "QUEUED"
+    SENT = "SENT"
+    CONFIRMED = "CONFIRMED"
+    FAILED = "FAILED"
+    SUPERSEDED = "SUPERSEDED"
+
+
 class ActorKind(StrEnum):
     AGENT = "AGENT"
     HUMAN = "HUMAN"

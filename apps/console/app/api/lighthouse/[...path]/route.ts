@@ -14,6 +14,9 @@ const APPROVAL = new RegExp(`^/v1/claims/${UUID}/allocations/approve$`);
 const REVIEW = new RegExp(`^/v1/claims/${UUID}/verification/review$`);
 const SIGN_DISBURSEMENT = new RegExp(`^/v1/allocations/${UUID}/disbursements/sign$`);
 const EXECUTE_DISBURSEMENT = new RegExp(`^/v1/disbursements/${UUID}/execute$`);
+const DAMAGE_REVIEW = new RegExp(`^/v1/claims/${UUID}/damage-assessment/review$`);
+const FNOL_PDF = new RegExp(`^/v1/claims/${UUID}/fnol\\.pdf$`);
+const DONOR_JOURNEY = new RegExp(`^/v1/public/donations/${UUID}/journey$`);
 
 function apiBase(): URL | null {
   const configured = process.env.LIGHTHOUSE_API_URL?.trim();
@@ -36,9 +39,14 @@ function allowedPath(method: string, segments: string[]): string | null {
   if (method === "GET" && (
     path === "/api/claims"
     || path === "/v1/public/ledger"
+    // Public by design (DON-02, LGR-02): the portal is read by a donor or an
+    // auditor who has no account and should not need one.
+    || path === "/v1/public/pools"
     || path === "/v1/settlements"
     || path === "/v1/auth/session"
     || CLAIM_DETAIL.test(path)
+    || DONOR_JOURNEY.test(path)
+    || FNOL_PDF.test(path)
   )) return path;
   if (method === "POST" && (
     path === "/v1/auth/session"
@@ -47,6 +55,7 @@ function allowedPath(method: string, segments: string[]): string | null {
     || REVIEW.test(path)
     || SIGN_DISBURSEMENT.test(path)
     || EXECUTE_DISBURSEMENT.test(path)
+    || DAMAGE_REVIEW.test(path)
   )) return path;
   // Sign-out is the only DELETE the console may make.
   if (method === "DELETE" && path === "/v1/auth/session") return path;
@@ -170,6 +179,8 @@ async function proxy(
       "content-type": response.headers.get("content-type") ?? "application/json",
       "x-content-type-options": "nosniff",
     });
+    const disposition = response.headers.get("content-disposition");
+    if (disposition) responseHeaders.set("content-disposition", disposition);
     /* getSetCookie rather than get: sign-in sends one and sign-out sends
      * another, and a naive get() would silently drop all but the first if that
      * ever became two. */

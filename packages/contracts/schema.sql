@@ -894,6 +894,54 @@ CREATE TRIGGER approval_role_guard_trigger
 CREATE RULE approval_no_update AS ON UPDATE TO approval DO INSTEAD NOTHING;
 CREATE RULE approval_no_delete AS ON DELETE TO approval DO INSTEAD NOTHING;
 
+-- ALT-02: per-recipient delivery status, which is the acceptance criterion.
+-- One row per household per attempt, so a fallback is a second row rather than
+-- an overwrite: "we tried WhatsApp, it never confirmed, we sent an SMS" is
+-- three facts and a status column can only hold one of them.
+--
+-- The household is identified by phone_hash and storm_file_id, never by the
+-- number itself. Phone numbers are hashed everywhere except the StormFile row,
+-- and an alert log is exactly the kind of table that quietly becomes a
+-- directory if you let it.
+CREATE TYPE alert_channel AS ENUM ('WHATSAPP', 'SMS');
+
+CREATE TYPE alert_delivery_status AS ENUM (
+  'QUEUED', 'SENT', 'CONFIRMED', 'FAILED', 'SUPERSEDED'
+);
+
+CREATE TABLE alert_delivery (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- The signed cascade this went out under. An alert with no approval behind
+  -- it is the thing gate G1 exists to prevent, so the column is NOT NULL.
+  approval_id    uuid NOT NULL REFERENCES approval(id) ON DELETE RESTRICT,
+  storm_file_id  uuid NOT NULL REFERENCES storm_file(id) ON DELETE CASCADE,
+  phone_hash     text NOT NULL,
+  parish         text,
+  community      text,
+  channel        alert_channel NOT NULL,
+  status         alert_delivery_status NOT NULL DEFAULT 'QUEUED',
+  -- True for the entire buildathon. A delivery record that looks like a real
+  -- message and is not is how a demo becomes a claim nobody can support.
+  simulated      boolean NOT NULL DEFAULT true,
+  provider_ref   text,
+  failure_reason text,
+  attempted_at   timestamptz NOT NULL DEFAULT now(),
+  confirmed_at   timestamptz,
+  CONSTRAINT alert_delivery_confirmed_chk CHECK (
+    (status = 'CONFIRMED') = (confirmed_at IS NOT NULL)
+  )
+);
+
+CREATE INDEX alert_delivery_approval_idx
+  ON alert_delivery (approval_id, storm_file_id);
+
+-- One attempt per household per channel per signed cascade. A retry is the
+-- other channel, not the same one again: resending an identical WhatsApp
+-- message to a phone that never confirmed is noise, and the fallback exists
+-- precisely because the first channel may be down.
+CREATE UNIQUE INDEX alert_delivery_attempt_uidx
+  ON alert_delivery (approval_id, storm_file_id, channel);
+
 CREATE TABLE allocation_plan (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   hazard_event_id uuid NOT NULL REFERENCES hazard_event(id),

@@ -15,6 +15,8 @@ from .agents import AGENT_IO, PROPOSE_ONLY
 from .enums import (
     ActorKind,
     AgentName,
+    AlertChannel,
+    AlertDeliveryStatus,
     AppRole,
     ClaimStatus,
     DamageAssessmentVerdict,
@@ -40,6 +42,8 @@ __all__ = [
     "PROPOSE_ONLY",
     "ActorKind",
     "AgentName",
+    "AlertChannel",
+    "AlertDeliveryStatus",
     "AppRole",
     "ClaimStatus",
     "DamageAssessmentVerdict",

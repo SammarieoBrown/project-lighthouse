@@ -234,9 +234,13 @@ def test_the_handler_reads_the_posture_now_not_the_posture_when_queued(session):
 # -- gate G1 ----------------------------------------------------------------
 
 
-def test_a_director_signature_authorises_a_cascade_without_sending_it(
+def test_a_director_signature_authorises_and_simulates_the_send(
     session, monkeypatch
 ):
+    """The signature is what authorises the send, so the send happens on the
+    signature rather than on a later button somebody might not press. In this
+    release it is simulated and nothing leaves the process — the receipt says
+    which, so no reader mistakes a record for a delivered message."""
     event = _event_at(session, Posture.ACT)
     advisory = _advisory(session, event)
     _at_risk(session, advisory)
@@ -254,14 +258,18 @@ def test_a_director_signature_authorises_a_cascade_without_sending_it(
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["cascade"]["delivery"] == "NOT_SENT_AT_APPROVAL"
+    assert response.json()["cascade"]["delivery"] == "SIMULATED_SEND_NO_REAL_MESSAGE"
+    assert response.json()["cascade"]["recipients"] == 1
     approval = session.scalar(select(Approval))
     assert approval.gate is GateKind.ALERT_CASCADE
     assert approval.approved_by == director.id
+    # The signature receipt still says the signature itself moved nothing; the
+    # dispatch writes its own entry for what it actually attempted.
     receipt = session.scalar(
-        select(LedgerEntry).where(
-            LedgerEntry.action == str(Event.ALERT_CASCADE_APPROVED)
-        )
+        select(LedgerEntry)
+        .where(LedgerEntry.action == str(Event.ALERT_CASCADE_APPROVED))
+        .order_by(LedgerEntry.seq)
+        .limit(1)
     )
     assert receipt.payload["delivery"] == "NOT_SENT_AT_APPROVAL"
 

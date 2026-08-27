@@ -22,6 +22,7 @@ from sqlalchemy import select
 from lighthouse_contracts import ActorKind, AppRole, Event, GateKind
 
 from . import ledger
+from .alert_dispatch_service import DispatchResult, dispatch_cascade
 from .db import session_scope
 from .human_auth import authenticate_human
 from .models import Approval, LedgerEntry
@@ -129,10 +130,21 @@ def approve_alert_cascade_route(
             actor_kind=ActorKind.HUMAN,
             actor_id=human.user.id,
         )
-        return _response(approval, proposal, replay=False)
+        # The signature is what authorises the send, so the send happens on the
+        # signature rather than on a later button somebody might not press. It
+        # is simulated in this release and the receipt above already says the
+        # signature itself moved nothing.
+        dispatch = dispatch_cascade(session, approval.id)
+        return _response(approval, proposal, replay=False, dispatch=dispatch)
 
 
-def _response(approval: Approval, proposal: LedgerEntry, *, replay: bool) -> dict:
+def _response(
+    approval: Approval,
+    proposal: LedgerEntry,
+    *,
+    replay: bool,
+    dispatch: DispatchResult | None = None,
+) -> dict:
     return {
         "approval": {
             "id": approval.id,
@@ -147,7 +159,12 @@ def _response(approval: Approval, proposal: LedgerEntry, *, replay: bool) -> dic
             "posture": proposal.payload.get("posture"),
             "cascade_count": proposal.payload.get("cascade_count"),
             "recipient_count": proposal.payload.get("recipient_count"),
-            "delivery": "NOT_SENT_AT_APPROVAL",
+            "delivery": (
+                "SIMULATED_SEND_NO_REAL_MESSAGE"
+                if dispatch is not None
+                else "NOT_SENT_AT_APPROVAL"
+            ),
+            "recipients": dispatch.queued if dispatch is not None else None,
         },
         "idempotent_replay": replay,
     }

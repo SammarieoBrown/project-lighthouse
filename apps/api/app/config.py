@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # transcription provider above: an agent must not silently start making
     # paid vision calls just because a key happens to be set.
     damage_assessment_provider: Literal["disabled", "anthropic"] = "disabled"
+
+    # ALT-02. There is no live sender in this release and "simulated" is the
+    # only implemented mode. The registry is synthetic and so are its phone
+    # numbers; a real message to a real number is the one mistake in this
+    # system that cannot be taken back.
+    alert_channel_mode: Literal["simulated"] = "simulated"
     anthropic_api_key: str | None = None
 
     @property

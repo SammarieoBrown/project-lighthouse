@@ -16,12 +16,26 @@ from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from lighthouse_contracts import AgentName, AppRole, ClaimStatus, JobStatus, Verdict
+from lighthouse_contracts import (
+    ActorKind,
+    AgentName,
+    AppRole,
+    ClaimStatus,
+    JobStatus,
+    PayerRoute,
+    Verdict,
+)
 
 from app.db import session_scope
 from app.human_auth import authenticate_human
 from app.intake.media import TWILIO_MEDIA_JOB_TYPE
-from app.models import AgentJob, Claim, Verification
+from app.models import (
+    AgentJob,
+    Claim,
+    DamageAssessment,
+    RoutingDecision,
+    Verification,
+)
 
 router = APIRouter(prefix="/api", tags=["claims"])
 _CLAIM_ROLES = {AppRole.DIRECTOR, AppRole.REVIEW_CLERK}
@@ -133,6 +147,11 @@ def _summary(session: Session, row) -> dict:
         "parish": row.parish,
         "community": row.community,
         "sol": row.sol,
+        # TRI-02: the queue is live-sorted on the console and SOL pins to the
+        # top regardless. The Triage Agent computes both of these and nothing
+        # was carrying them out to the screen that needs them.
+        "severity": str(row.severity) if row.severity else None,
+        "triage_rank": row.triage_rank,
         "partial": row.partial,
         "channel": row.channel,
         "filed_at": row.filed_at,
@@ -151,6 +170,7 @@ def list_redacted_claims(
             """
             SELECT c.id, c.claim_ref, c.status::text AS status, c.damage_type,
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
+                   c.severity, c.triage_rank,
                    c.channel, c.filed_at,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
                      AS evidence_count,
@@ -197,7 +217,12 @@ def list_redacted_claims(
             ) media_job ON TRUE
             WHERE (CAST(:event_id AS uuid) IS NULL
                    OR c.hazard_event_id = CAST(:event_id AS uuid))
-            ORDER BY c.sol DESC, c.filed_at DESC, c.id
+            -- TRI-02's order, computed once here rather than in the browser:
+            -- safety-of-life first, then the rank the Triage Agent assigned,
+            -- then newest. A claim triage has not reached yet sorts after the
+            -- ones it has rather than jumping the queue on recency alone.
+            ORDER BY c.sol DESC, c.triage_rank ASC NULLS LAST,
+                     c.filed_at DESC, c.id
             LIMIT :limit
             """
         ),
@@ -275,6 +300,7 @@ def get_redacted_claim(session: Session, claim_id: uuid.UUID) -> dict | None:
             """
             SELECT c.id, c.claim_ref, c.status::text AS status, c.damage_type,
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
+                   c.severity, c.triage_rank,
                    c.channel, c.filed_at,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
                      AS evidence_count
@@ -327,6 +353,52 @@ def get_redacted_claim(session: Session, claim_id: uuid.UUID) -> dict | None:
             "created_at": latest.created_at,
         }
         if latest is not None
+        else None
+    )
+
+    # The standing damage estimate, so a Director can act on it without
+    # leaving the claim. Bands and a range only — the figure is a proposal
+    # until a Director signs it, and the row says which.
+    assessment = session.scalar(
+        select(DamageAssessment)
+        .where(DamageAssessment.claim_id == claim_id)
+        .order_by(DamageAssessment.created_at.desc(), DamageAssessment.id.desc())
+        .limit(1)
+    )
+    detail["damage_assessment"] = (
+        {
+            "id": assessment.id,
+            "verdict": str(assessment.verdict),
+            "band": str(assessment.band),
+            "estimate_low": float(assessment.estimate_low),
+            "estimate_high": float(assessment.estimate_high),
+            "currency": assessment.currency,
+            "confidence": float(assessment.confidence),
+            "rationale": assessment.rationale,
+            "evidence_count": len(assessment.evidence_ids or []),
+            "decided": assessment.actor_kind is ActorKind.HUMAN,
+            "created_at": assessment.created_at,
+        }
+        if assessment is not None
+        else None
+    )
+
+    # Who pays, and whether an FNOL packet exists to fetch. The insurer is
+    # named because a named third party may receive this household's claim.
+    routing = session.scalar(
+        select(RoutingDecision)
+        .where(RoutingDecision.claim_id == claim_id)
+        .order_by(RoutingDecision.decided_at.desc(), RoutingDecision.id.desc())
+        .limit(1)
+    )
+    detail["routing"] = (
+        {
+            "route": str(routing.route),
+            "insurer_name": routing.insurer_name,
+            "fnol_available": routing.route in {PayerRoute.INSURER, PayerRoute.BOTH},
+            "decided_at": routing.decided_at,
+        }
+        if routing is not None
         else None
     )
     return detail
