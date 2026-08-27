@@ -50,6 +50,18 @@ MODEL_VERSION = f"anthropic:{MODEL_NAME}"
 #: lock into the record, because an override must copy currency unchanged.
 CURRENCY = "JMD"
 
+#: What one vision call is allowed to carry. Bounded here and re-checked
+#: inside the provider, for the reason ``transcription.py`` states at its own
+#: boundary: a test double or a future store adapter must not be able to
+#: submit an inference call larger than the provider will accept.
+#:
+#: The count is a trim, not a refusal — a household that sent twelve photos of
+#: its roof is better served by an estimate read from eight of them than by a
+#: dead job. Which eight is not left implicit: ``evidence_ids`` on the stored
+#: row is the exact list, so a trimmed assessment says so on its face.
+MAX_ASSESSMENT_PHOTOS = 8
+MAX_ASSESSMENT_BYTES = 16 * 1024 * 1024
+
 #: Media types the vision call accepts. HEIC/HEIF is excluded for the same
 #: reason the perceptual hash skips it (media.py) — Pillow, and the vision
 #: API, both need a directly decodable format.
@@ -227,6 +239,15 @@ class ClaudeDamageAssessor:
     ) -> DamageAssessmentOutput:
         import anthropic
 
+        if not media or len(media) > MAX_ASSESSMENT_PHOTOS:
+            raise DamageAssessmentNotRunnable(
+                "assessment photo count is outside the provider boundary"
+            )
+        if sum(len(fetched.data) for fetched in media) > MAX_ASSESSMENT_BYTES:
+            raise DamageAssessmentNotRunnable(
+                "assessment payload exceeds the provider byte boundary"
+            )
+
         client = anthropic.Anthropic(api_key=self.api_key)
 
         content: list[dict] = []
@@ -353,6 +374,7 @@ def _append_ledger(
             "confidence": output.confidence,
             "location_source": output.location_source,
             "model_version": output.model_version,
+            "evidence_count": len(assessment.evidence_ids or []),
         },
         actor_kind=actor_kind,
         actor_id=actor_id,
@@ -400,14 +422,19 @@ def run_damage_assessment(
     photos = _readable_photo_evidence(session, claim.id)
     if not photos:
         raise DamageAssessmentNotRunnable("claim has no readable photo evidence")
+    # Trimmed before the replay check, in the evidence table's own
+    # ``(created_at, id)`` order, so one evidence set always yields the same
+    # selection and a replay compares like with like.
+    photos = photos[:MAX_ASSESSMENT_PHOTOS]
+    evidence_ids = [str(photo.id) for photo in photos]
 
     if latest is not None and latest.actor_kind is ActorKind.AGENT:
-        latest_evidence_ids = {
-            str(finding.get("evidence_id"))
-            for finding in (latest.findings or [])
-            if isinstance(finding, dict)
-        }
-        if latest_evidence_ids == {str(photo.id) for photo in photos}:
+        # Against what was sent, not against what the model chose to comment
+        # on. ``findings`` may legitimately omit a photo, and keying on it
+        # meant a proposal that skipped one could never match — every replay
+        # spending a second paid call and appending a duplicate PROPOSED row,
+        # which then makes the Director's assessment_id stale.
+        if list(latest.evidence_ids or []) == evidence_ids:
             return DamageAssessmentRun(latest, _output_from_row(latest), False)
 
     location_source = _resolve_location_source(claim, storm_file)
@@ -421,10 +448,16 @@ def run_damage_assessment(
     store = store or R2MediaStore.from_settings(settings)
 
     try:
-        media = [
-            store.get(_object_key(photo.uri), expected_sha256=photo.sha256)
-            for photo in photos
-        ]
+        media: list[FetchedMedia] = []
+        aggregate_bytes = 0
+        for photo in photos:
+            fetched = store.get(_object_key(photo.uri), expected_sha256=photo.sha256)
+            aggregate_bytes += len(fetched.data)
+            if aggregate_bytes > MAX_ASSESSMENT_BYTES:
+                raise MediaBoundaryError(
+                    "claim photo evidence exceeds the assessment byte boundary"
+                )
+            media.append(fetched)
     except MediaBoundaryError as exc:
         raise DamageAssessmentNotRunnable(str(exc)) from exc
 
@@ -447,6 +480,7 @@ def run_damage_assessment(
         currency=output.currency,
         confidence=output.confidence,
         findings=[finding.model_dump(mode="json") for finding in output.findings],
+        evidence_ids=evidence_ids,
         location_source=output.location_source,
         verdict=DamageAssessmentVerdict.PROPOSED,
         actor_kind=ActorKind.AGENT,
@@ -548,6 +582,7 @@ def record_damage_assessment_decision(
         currency=latest.currency,
         confidence=float(latest.confidence),
         findings=latest.findings,
+        evidence_ids=latest.evidence_ids,
         location_source=latest.location_source,
         verdict=DamageAssessmentVerdict(verdict),
         actor_kind=ActorKind.HUMAN,
@@ -576,6 +611,8 @@ def record_damage_assessment_decision(
 
 __all__ = [
     "CURRENCY",
+    "MAX_ASSESSMENT_BYTES",
+    "MAX_ASSESSMENT_PHOTOS",
     "ClaimNotFound",
     "ClaudeDamageAssessor",
     "DamageAssessmentNotRunnable",

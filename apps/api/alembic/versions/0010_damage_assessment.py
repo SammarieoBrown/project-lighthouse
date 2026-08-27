@@ -71,6 +71,7 @@ def upgrade() -> None:
           confidence        real NOT NULL CHECK (confidence BETWEEN 0 AND 1),
 
           findings          jsonb NOT NULL DEFAULT '[]'::jsonb,
+          evidence_ids      jsonb NOT NULL DEFAULT '[]'::jsonb,
           location_source   text NOT NULL CHECK (location_source IN ('claim', 'storm_file')),
 
           verdict           damage_assessment_verdict NOT NULL,
@@ -108,6 +109,7 @@ def upgrade() -> None:
                   'currency', d.currency,
                   'confidence', d.confidence,
                   'findings', d.findings,
+                  'evidence_ids', d.evidence_ids,
                   'location_source', d.location_source,
                   'verdict', d.verdict::text,
                   'actor_kind', d.actor_kind::text,
@@ -182,6 +184,7 @@ def upgrade() -> None:
                OR NEW.currency IS DISTINCT FROM parent.currency
                OR NEW.confidence IS DISTINCT FROM parent.confidence
                OR NEW.findings IS DISTINCT FROM parent.findings
+               OR NEW.evidence_ids IS DISTINCT FROM parent.evidence_ids
                OR NEW.location_source IS DISTINCT FROM parent.location_source
                OR NEW.model_version IS DISTINCT FROM parent.model_version THEN
               RAISE EXCEPTION

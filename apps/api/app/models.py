@@ -308,6 +308,7 @@ class DamageAssessment(Base):
     currency: Mapped[str] = mapped_column(Text, default="JMD")
     confidence: Mapped[float] = mapped_column(Numeric(asdecimal=False))
     findings: Mapped[list] = mapped_column(JSONB, default=list)
+    evidence_ids: Mapped[list] = mapped_column(JSONB, default=list)
     location_source: Mapped[str] = mapped_column(Text)
     verdict: Mapped[DamageAssessmentVerdict] = mapped_column(
         _enum(DamageAssessmentVerdict, "damage_assessment_verdict")

@@ -31,6 +31,8 @@ from lighthouse_contracts.agents import (
 from app import verification_service
 from app.damage_assessment_service import (
     CURRENCY,
+    MAX_ASSESSMENT_BYTES,
+    MAX_ASSESSMENT_PHOTOS,
     ClaudeDamageAssessor,
     DamageAssessmentNotRunnable,
     DamageAssessmentProviderDisabled,
@@ -406,6 +408,7 @@ def _raw_assessment(claim, sf, **kw) -> DamageAssessment:
         currency=CURRENCY,
         confidence=0.5,
         findings=[],
+        evidence_ids=[],
         location_source="claim",
         verdict=DamageAssessmentVerdict.PROPOSED,
         actor_kind=ActorKind.AGENT,
@@ -428,6 +431,7 @@ def _raw_override(claim, parent, actor_id, **kw) -> DamageAssessment:
         currency=parent.currency,
         confidence=float(parent.confidence),
         findings=parent.findings,
+        evidence_ids=parent.evidence_ids,
         location_source=parent.location_source,
         verdict=DamageAssessmentVerdict.APPROVED,
         actor_kind=ActorKind.HUMAN,
@@ -603,3 +607,127 @@ def test_the_ledger_records_which_way_the_director_decided(session):
     assert entry.payload["verdict"] == "REJECTED"
     assert entry.payload["snapshot_hash"] == decision.assessment.snapshot_hash
     assert entry.payload["overrides_id"] == str(proposal.assessment.id)
+
+
+# ---------------------------------------------------------------------------
+# What the proposal was made from is recorded by the service, not inferred
+# from what the model chose to talk about.
+# ---------------------------------------------------------------------------
+
+
+def _ordered_evidence_ids(session, claim_id: uuid.UUID) -> list[str]:
+    """The order ``_readable_photo_evidence`` sees, which is the table's."""
+    rows = session.execute(
+        text(
+            "SELECT id FROM evidence WHERE claim_id = :claim_id AND kind = 'PHOTO'"
+            " ORDER BY created_at, id"
+        ),
+        {"claim_id": claim_id},
+    ).all()
+    return [str(row.id) for row in rows]
+
+
+def test_a_replay_reuses_the_row_even_when_findings_skip_a_photo(session):
+    """The model may legitimately have nothing to say about one photo.
+    Keying the replay check on ``findings`` meant that proposal could never
+    match its own evidence set: every redelivery spent another paid vision
+    call, appended a duplicate PROPOSED row, and made the Director's
+    assessment_id stale."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session, n_photos=3)
+    store = _seed_store(session, claim.id, evidence_ids)
+    # Findings for two of the three photos.
+    assessor = _assessor(evidence_ids=evidence_ids[:2])
+
+    first = run_damage_assessment(session, claim.id, assessor=assessor, store=store)
+    assert first.created is True
+    assert len(first.assessment.findings) == 2
+    assert first.assessment.evidence_ids == _ordered_evidence_ids(session, claim.id)
+
+    replay = run_damage_assessment(session, claim.id, assessor=assessor, store=store)
+
+    assert replay.created is False
+    assert replay.assessment.id == first.assessment.id
+    assert len(assessor.calls) == 1
+    assert session.scalar(
+        select(func.count())
+        .select_from(DamageAssessment)
+        .where(DamageAssessment.claim_id == claim.id)
+    ) == 1
+
+
+def test_a_new_photo_produces_a_new_proposal(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session, n_photos=1)
+    store = _seed_store(session, claim.id, evidence_ids)
+    first = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    )
+
+    evidence_ids.append(_photo_evidence(session, claim.id))
+    session.flush()
+    store = _seed_store(session, claim.id, evidence_ids)
+
+    second = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    )
+
+    assert second.created is True
+    assert second.assessment.id != first.assessment.id
+    assert len(second.assessment.evidence_ids) == 2
+
+
+def test_the_photo_count_is_trimmed_and_the_row_says_which_were_read(session):
+    """A trim is not a refusal — twelve photos of a roof should still get an
+    estimate — but it is not silent either: the row names the exact set."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session, n_photos=12)
+    store = _seed_store(session, claim.id, evidence_ids)
+    expected = _ordered_evidence_ids(session, claim.id)[:MAX_ASSESSMENT_PHOTOS]
+    assessor = _assessor(evidence_ids=[uuid.UUID(eid) for eid in expected])
+
+    result = run_damage_assessment(session, claim.id, assessor=assessor, store=store)
+
+    assert result.assessment.evidence_ids == expected
+    assert len(result.assessment.evidence_ids) == MAX_ASSESSMENT_PHOTOS
+    sent_claim_id, sent_photo_ids = assessor.calls[0]
+    assert [str(pid) for pid in sent_photo_ids] == expected
+
+
+def test_oversized_photo_evidence_never_reaches_the_paid_call(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session, n_photos=2)
+    store = _seed_store(session, claim.id, evidence_ids)
+    oversized = b"\x00" * (MAX_ASSESSMENT_BYTES // 2 + 1)
+    for key, media in store.media_by_key.items():
+        store.media_by_key[key] = FetchedMedia(
+            data=oversized, content_type="image/jpeg", sha256=media.sha256
+        )
+    assessor = _assessor(evidence_ids=evidence_ids)
+
+    with pytest.raises(DamageAssessmentNotRunnable, match="byte boundary"):
+        run_damage_assessment(session, claim.id, assessor=assessor, store=store)
+
+    assert assessor.calls == []
+
+
+def test_the_provider_rechecks_the_boundary_it_was_handed():
+    """The fetch-side cap is not the provider's cap. A test double or a future
+    store adapter must not be able to hand `assess` more than the API takes."""
+    assessor = ClaudeDamageAssessor(api_key="test-key")
+    too_many = [
+        FetchedMedia(data=b"x", content_type="image/jpeg", sha256="0" * 64)
+        for _ in range(MAX_ASSESSMENT_PHOTOS + 1)
+    ]
+
+    with pytest.raises(DamageAssessmentNotRunnable, match="photo count"):
+        assessor.assess(claim=None, photos=[], media=too_many)
+
+    with pytest.raises(DamageAssessmentNotRunnable, match="photo count"):
+        assessor.assess(claim=None, photos=[], media=[])
+
+    too_big = [
+        FetchedMedia(
+            data=b"x" * (MAX_ASSESSMENT_BYTES + 1),
+            content_type="image/jpeg",
+            sha256="0" * 64,
+        )
+    ]
+    with pytest.raises(DamageAssessmentNotRunnable, match="byte boundary"):
+        assessor.assess(claim=None, photos=[], media=too_big)

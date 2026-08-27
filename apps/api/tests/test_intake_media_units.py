@@ -15,6 +15,7 @@ from app.intake.extraction import extract_claim_fields
 from app.intake.media import (
     FetchedMedia,
     MAX_AUDIO_BYTES,
+    MAX_MEDIA_BYTES,
     MediaBoundaryError,
     MediaConfigurationError,
     R2MediaStore,
@@ -173,8 +174,10 @@ def test_production_media_fetch_requires_restricted_api_key():
 
 
 class _FakeR2:
-    def __init__(self):
+    def __init__(self, *, body: bytes | None = None, declared_length: int | None = None):
         self.put: dict | None = None
+        self.body = body
+        self.declared_length = declared_length
 
     def put_object(self, **kwargs):
         self.put = kwargs
@@ -185,6 +188,61 @@ class _FakeR2:
             "ContentLength": self.put["ContentLength"],
             "Metadata": self.put["Metadata"],
         }
+
+    def get_object(self, **_):
+        assert self.body is not None
+        length = (
+            self.declared_length if self.declared_length is not None else len(self.body)
+        )
+        return {
+            "Body": io.BytesIO(self.body),
+            "ContentLength": length,
+            "ContentType": "image/jpeg",
+        }
+
+
+def _store(client) -> R2MediaStore:
+    return R2MediaStore(
+        account_id="e" * 32,
+        access_key_id="key",
+        secret_access_key="secret",
+        bucket="lighthouse-media",
+        client=client,
+    )
+
+
+def test_reading_stored_media_back_verifies_its_digest():
+    data = b"a stored photo"
+    digest = hashlib.sha256(data).hexdigest()
+    store = _store(_FakeR2(body=data))
+
+    media = store.get("intake/sha256/aa/whatever", expected_sha256=digest)
+    assert media.data == data
+    assert media.sha256 == digest
+
+    with pytest.raises(MediaBoundaryError, match="digest does not match"):
+        store.get("intake/sha256/aa/whatever", expected_sha256="0" * 64)
+
+
+def test_reading_stored_media_is_bounded_even_when_the_store_under_declares():
+    """``fetch`` bounds the inbound side. A reader that trusts ContentLength —
+    or omits the bound entirely — pulls whatever the bucket offers into a
+    worker's memory."""
+    data = b"x" * 4096
+    digest = hashlib.sha256(data).hexdigest()
+
+    # An honest ContentLength over the limit is refused before the read.
+    store = _store(_FakeR2(body=data))
+    with pytest.raises(MediaBoundaryError, match="exceeds the byte limit"):
+        store.get("k", expected_sha256=digest, max_bytes=1024)
+
+    # A ContentLength that lies is caught by what actually arrived.
+    store = _store(_FakeR2(body=data, declared_length=10))
+    with pytest.raises(MediaBoundaryError, match="exceeds the byte limit"):
+        store.get("k", expected_sha256=digest, max_bytes=1024)
+
+    with pytest.raises(MediaBoundaryError, match="byte limit is invalid"):
+        store.get("k", expected_sha256=digest, max_bytes=MAX_MEDIA_BYTES + 1)
 
 
 def test_r2_store_is_content_addressed_private_and_integrity_checked():
