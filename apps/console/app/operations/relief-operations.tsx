@@ -19,6 +19,8 @@ type Claim = {
   parish: string | null;
   community: string | null;
   sol: boolean;
+  severity: string | null;
+  triage_rank: number | null;
   partial: boolean;
   channel: string;
   filed_at: string;
@@ -40,6 +42,25 @@ type ClaimDetail = Claim & {
     capped: boolean;
     signals: Partial<Record<VerificationSignalName, VerificationSignal>>;
     created_at: string;
+  };
+  damage_assessment: null | {
+    id: string;
+    verdict: string;
+    band: string;
+    estimate_low: number;
+    estimate_high: number;
+    currency: string;
+    confidence: number;
+    rationale: string | null;
+    evidence_count: number;
+    decided: boolean;
+    created_at: string;
+  };
+  routing: null | {
+    route: string;
+    insurer_name: string | null;
+    fnol_available: boolean;
+    decided_at: string;
   };
 };
 
@@ -218,6 +239,10 @@ export function ReliefOperations() {
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
+  const [damageNote, setDamageNote] = useState("");
+  const [deciding, setDeciding] = useState(false);
+  const [damageNotice, setDamageNotice] = useState<string | null>(null);
+  const [damageError, setDamageError] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const claimsRequest = useRef(0);
@@ -418,6 +443,45 @@ export function ReliefOperations() {
     ? claims.find((claim) => claim.id === approval.allocation.claim_id) ?? null
     : null;
 
+  const decideDamage = useCallback(async (verdict: "APPROVED" | "REJECTED") => {
+    const assessment = claimDetail?.damage_assessment;
+    if (!selected || !activeToken || !assessment || damageNote.trim().length < 10) return;
+    setDeciding(true);
+    setDamageError(null);
+    setDamageNotice(null);
+    try {
+      const response = await fetch(
+        `/api/lighthouse/v1/claims/${encodeURIComponent(selected.id)}/damage-assessment/review`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${activeToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            assessment_id: assessment.id,
+            verdict,
+            rationale: damageNote.trim(),
+          }),
+        },
+      );
+      const result = (await jsonOrDetail(response)) as { idempotent_replay?: boolean };
+      setDamageNote("");
+      setDamageNotice(
+        `${verdict === "APPROVED" ? "Estimate approved" : "Estimate rejected"} by Director`
+        + (result.idempotent_replay
+          ? " · existing decision replayed safely"
+          : " · immutable decision recorded"),
+      );
+      setDetailRefresh((value) => value + 1);
+      await loadLedger();
+    } catch (error) {
+      setDamageError(error instanceof Error ? error.message : "Decision failed.");
+    } finally {
+      setDeciding(false);
+    }
+  }, [selected, activeToken, claimDetail, damageNote, loadLedger]);
+
   const reviewClaim = useCallback(async (verdict: "APPROVED" | "REJECTED") => {
     if (!selected || !reviewReady || !activeToken) return;
     setReviewing(true);
@@ -561,7 +625,8 @@ export function ReliefOperations() {
           ) : (
             <div className={styles.claimTable} aria-label="Redacted claims">
               <div className={styles.tableHead} aria-hidden="true">
-                <span>Claim</span><span>Place</span><span>Evidence</span><span>State</span>
+                <span>Claim</span><span>Place</span><span>Triage</span>
+                <span>Evidence</span><span>State</span>
               </div>
               {claims.map((claim) => (
                 <button
@@ -585,6 +650,12 @@ export function ReliefOperations() {
                   <span>
                     {claim.community ?? "Location pending"}
                     <small>{claim.parish ?? "Parish unconfirmed"}</small>
+                  </span>
+                  <span className={styles.triage} data-severity={claim.severity ?? undefined}>
+                    {claim.sol ? "SOL" : claim.severity ?? "—"}
+                    <small className="lh-data">
+                      {claim.triage_rank === null ? "not triaged" : `rank ${claim.triage_rank}`}
+                    </small>
                   </span>
                   <span className={styles.data}>{claim.evidence_count}</span>
                   <span className={styles.state} data-state={claim.status}>
@@ -739,6 +810,107 @@ export function ReliefOperations() {
                   </div>
                   {reviewNotice ? <p className={styles.successLine} role="status">{reviewNotice}</p> : null}
                   {reviewError ? <p className={styles.error} role="alert">{reviewError}</p> : null}
+                </div>
+              ) : null}
+              {claimDetail?.damage_assessment ? (
+                <div className={styles.reviewGate}>
+                  <span className={styles.eyebrow}>Act 2 · Director estimate decision</span>
+                  <dl className={styles.estimate}>
+                    <div>
+                      <dt>Band</dt>
+                      <dd>{claimDetail.damage_assessment.band}</dd>
+                    </div>
+                    <div>
+                      <dt>Range</dt>
+                      <dd className="lh-data">
+                        {claimDetail.damage_assessment.currency}{" "}
+                        {claimDetail.damage_assessment.estimate_low.toFixed(2)}
+                        {" \u2013 "}
+                        {claimDetail.damage_assessment.estimate_high.toFixed(2)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Photos read</dt>
+                      <dd className="lh-data">{claimDetail.damage_assessment.evidence_count}</dd>
+                    </div>
+                    <div>
+                      <dt>Confidence</dt>
+                      <dd className="lh-data">
+                        {claimDetail.damage_assessment.confidence.toFixed(2)}
+                      </dd>
+                    </div>
+                  </dl>
+                  {claimDetail.damage_assessment.rationale ? (
+                    <p className={styles.limit}>{claimDetail.damage_assessment.rationale}</p>
+                  ) : null}
+                  {claimDetail.damage_assessment.decided ? (
+                    <p className={styles.limit}>
+                      A Director has already recorded{" "}
+                      {claimDetail.damage_assessment.verdict.toLowerCase()} on this estimate.
+                      A further decision would be a second signature on the same figure.
+                    </p>
+                  ) : (
+                    <>
+                      <p className={styles.limit}>
+                        A range, not a figure. The estimate does not size the grant \u2014 relief is a
+                        flat J$45,000 \u2014 and nothing is released by this decision.
+                      </p>
+                      <label className={styles.field}>
+                        <span>Decision reason \u00b7 required</span>
+                        <textarea
+                          value={damageNote}
+                          onChange={(event) => setDamageNote(event.target.value)}
+                          minLength={10}
+                          maxLength={500}
+                          disabled={deciding}
+                          placeholder="Photos reviewed; explain the approval or rejection."
+                        />
+                      </label>
+                      <div className={styles.gateActions}>
+                        <button
+                          type="button"
+                          className={styles.approveButton}
+                          disabled={deciding || damageNote.trim().length < 10}
+                          onClick={() => void decideDamage("APPROVED")}
+                        >
+                          {deciding ? "Recording\u2026" : "Approve estimate"}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.approveButton} ${styles.rejectButton}`}
+                          disabled={deciding || damageNote.trim().length < 10}
+                          onClick={() => void decideDamage("REJECTED")}
+                        >
+                          Reject estimate
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {damageNotice ? (
+                    <p className={styles.successLine} role="status">{damageNotice}</p>
+                  ) : null}
+                  {damageError ? <p className={styles.error} role="alert">{damageError}</p> : null}
+                </div>
+              ) : null}
+              {claimDetail?.routing ? (
+                <div className={styles.routing}>
+                  <span className={styles.eyebrow}>Payer route</span>
+                  <p className={styles.limit}>
+                    {claimDetail.routing.route.replaceAll("_", " ")}
+                    {claimDetail.routing.insurer_name
+                      ? ` \u00b7 ${claimDetail.routing.insurer_name}`
+                      : " \u00b7 no insurer-sharing consent on file"}
+                  </p>
+                  {claimDetail.routing.fnol_available ? (
+                    <a
+                      className={styles.fnolLink}
+                      href={`/api/lighthouse/v1/claims/${encodeURIComponent(selected.id)}/fnol.pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open FNOL packet (PDF)
+                    </a>
+                  ) : null}
                 </div>
               ) : null}
               <label className={styles.field}>

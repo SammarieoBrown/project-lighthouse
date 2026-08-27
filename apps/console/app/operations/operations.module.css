@@ -116,7 +116,8 @@
 .tableHead,
 .claimRow {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) 9ch minmax(150px, 0.8fr);
+  grid-template-columns:
+    minmax(140px, 1fr) minmax(130px, 1fr) 11ch 9ch minmax(140px, 0.8fr);
   gap: var(--lh-space-4);
   align-items: center;
 }
@@ -146,6 +147,17 @@
 .claimRow[data-selected="true"] { box-shadow: inset 2px 0 0 var(--lh-figure); }
 .claimRow[data-sol="true"] { box-shadow: inset 2px 0 0 var(--lh-critical); }
 .claimRow:disabled { cursor: wait; opacity: 0.72; }
+
+/* TRI-01's three severities are categorical, so they take the three meaning
+ * hues and nothing in between — a ramp across them would assert that severity
+ * is continuous, which it is not (design rules, Part 1 rule 12). SOL is not a
+ * fourth severity; it is the pin, and it borrows critical because that is
+ * exactly what it means. */
+.triage { color: var(--lh-quiet); font-size: var(--lh-text-fine); }
+.triage[data-severity="URGENT"] { color: var(--lh-critical-text); }
+.triage[data-severity="HIGH"] { color: var(--lh-elevated-text); }
+.triage[data-severity="MED"] { color: var(--lh-watch-text); }
+.claimRow[data-sol="true"] .triage { color: var(--lh-critical-text); }
 .claimRow span { min-width: 0; }
 .claimRow small, .ledgerRow small { color: var(--lh-quiet); display: block; font-size: var(--lh-text-micro); margin-top: var(--lh-space-1); }
 
@@ -365,3 +377,44 @@
   font-size: var(--lh-text-micro);
   letter-spacing: 0.06em;
 }
+
+/* The estimate a Director signs. Set as a definition list rather than a card
+ * because the four facts are peers — the band does not outrank the range —
+ * and because a card here would be the third level of containment inside the
+ * approval aside (design rules, Part 1 rule 4). Figures are tabular: the
+ * range changes between claims and values that jitter horizontally are
+ * unreadable in a queue (rule C7). */
+.estimate {
+  display: grid;
+  gap: var(--lh-space-2) var(--lh-space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: var(--lh-space-3) 0;
+}
+.estimate div { min-width: 0; }
+.estimate dt {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.estimate dd {
+  font-size: var(--lh-text-fine);
+  font-variant-numeric: tabular-nums;
+  margin: var(--lh-space-1) 0 0;
+}
+
+/* Who pays. No hue: a payer route is not a severity and borrowing a meaning
+ * colour for it would be the first crack in rule C1. */
+.routing {
+  border-top: 1px solid var(--lh-rule);
+  margin-top: var(--lh-space-4);
+  padding-top: var(--lh-space-4);
+}
+.fnolLink {
+  color: var(--lh-figure);
+  display: inline-block;
+  font-size: var(--lh-text-fine);
+  margin-top: var(--lh-space-2);
+  text-underline-offset: 3px;
+}
+.fnolLink:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }

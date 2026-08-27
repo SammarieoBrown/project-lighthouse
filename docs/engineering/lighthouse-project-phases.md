@@ -35,7 +35,9 @@ An allocation may now be funded by `GOV_RELIEF` or a donor pool. `INSURER` and `
 
 T2R now reads a real number. The public portal publishes a **median** time to relief computed from immutable ledger receipts — `claim.created` to the first `disbursement.confirmed` — rather than from mutable claim rows, for the same reason the money aggregate is. Median rather than mean, so one claim stuck behind a bad phone number cannot make the headline worse than the experience of the households behind it. The per-claim figure appears on the operator settlement queue.
 
-What is still built but unreachable: both review APIs — verification and damage assessment — are complete and role-gated with **no console surface**, so the screen Phase 2 called "the screen that proves human-in-the-loop to judges" is only reachable by `curl`.
+**Correction (Aug 27).** An earlier revision of this section said both review APIs were unreachable without `curl`. That was wrong about verification: `relief-operations.tsx` renders all five signals with individual scores and posts a Clerk decision to `/v1/claims/{id}/verification/review`. The screen Phase 2 called "the screen that proves human-in-the-loop to judges" exists and works. The error came from grepping for literal API paths and missing the template-literal call sites — worth recording because the same grep would make the same mistake again.
+
+What is genuinely missing on the console: the triage queue's ordering (TRI-02 — the claims API does not return `severity` or `triage_rank` at all, so the queue cannot sort by them), the damage assessment review surface, a public portal that does not require signing in (LGR-02 — the ledger renders inside the authenticated operations screen), the donation portal and donor journey (DON-01/02/04), and an FNOL download on the claim.
 
 The Patois eval set was never built. It appears only in this document and the PRD, which means there is no WER baseline, and the Phase 2 decision that makes the LoRA fine-tune conditional on measurement has nothing to condition on.
 
