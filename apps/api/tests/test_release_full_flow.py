@@ -266,6 +266,13 @@ def test_signed_intake_review_and_simulated_settlement_release_flow(
         "SIMULATION_EXECUTED_NO_REAL_FUNDS",
         "SIMULATED_CONFIRMATION_RECORDED_NO_REAL_FUNDS",
     ]
+    # T2R resolves on the real path: this flow writes a claim.created receipt,
+    # so the chain claim.created -> allocation.approved -> disbursement
+    # .confirmed closes. It reads 0.0 because the whole flow runs inside one
+    # test transaction, which is the honest number for a storm that took no
+    # time to happen.
+    assert body["aggregate"].pop("time_to_relief_sample") == 1
+    assert body["aggregate"].pop("median_time_to_relief_hours") == 0.0
     assert body["aggregate"] == {
         "scope": "CONFIRMED_SIMULATED_RELIEF_ONLY",
         "count": 1,
