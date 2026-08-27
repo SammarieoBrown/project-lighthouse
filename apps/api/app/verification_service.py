@@ -41,6 +41,8 @@ from lighthouse_contracts.agents import (
 )
 
 from app import ledger, queue, statemachine
+from app.config import get_settings
+from app.damage_assessment_service import has_readable_photo_evidence
 from app.models import AppUser, Claim, StormFile, Verification
 
 
@@ -701,28 +703,21 @@ def _enqueue_triage(
     )
 
 
-def _has_stored_photo_evidence(session: Session, claim_id: uuid.UUID) -> bool:
-    return bool(
-        session.execute(
-            text(
-                """
-                SELECT 1 FROM evidence
-                 WHERE claim_id = :claim_id
-                   AND kind = 'PHOTO'
-                   AND uri LIKE 'r2://%'
-                   AND payload ->> 'media_state' = 'STORED'
-                 LIMIT 1
-                """
-            ),
-            {"claim_id": claim_id},
-        ).first()
-    )
-
-
 def _enqueue_damage_assessment(session: Session, claim: Claim, storm_file: StormFile) -> None:
-    """Only for verified claims with stored photo evidence — a rejected or
-    photo-less claim never burns a paid vision call."""
-    if not _has_stored_photo_evidence(session, claim.id):
+    """Only when a paid vision call could actually succeed.
+
+    Two gates, and both of them are quiet rather than loud. A disabled
+    provider and a claim with no decodable photo are ordinary states, not
+    incidents — but a job enqueued in either one spends its whole retry budget
+    failing and then reports itself as an ANOMALY_FLAGGED, which reaches an
+    operator as a claim demanding attention rather than as a feature that is
+    switched off. The photo gate is ``has_readable_photo_evidence`` rather
+    than a second, looser query, so the enqueue side cannot drift from what
+    the handler will actually accept.
+    """
+    if get_settings().damage_assessment_provider == "disabled":
+        return
+    if not has_readable_photo_evidence(session, claim.id):
         return
     queue.enqueue(
         session,

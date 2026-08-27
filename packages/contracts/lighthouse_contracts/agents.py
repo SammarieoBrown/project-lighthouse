@@ -366,6 +366,7 @@ class DamageAssessmentOutput(Contract):
     findings: list[DamagePhotoFinding]
     location_source: Literal["claim", "storm_file"]
     model_version: str
+    requires_approval: bool = True
     rationale: str
 
 

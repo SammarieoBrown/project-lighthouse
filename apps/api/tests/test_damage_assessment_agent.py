@@ -4,15 +4,34 @@ from __future__ import annotations
 
 import json
 import uuid
+from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import DBAPIError
 
-from lighthouse_contracts import ActorKind, AgentName, AppRole, ClaimStatus, StormFileState
-from lighthouse_contracts.agents import DamageAssessmentOutput, DamagePhotoFinding
+from lighthouse_contracts import (
+    ActorKind,
+    AgentName,
+    AppRole,
+    ClaimStatus,
+    DamageAssessmentVerdict,
+    DamageBand,
+    Event,
+    StormFileState,
+)
+from lighthouse_contracts.agents import (
+    AGENT_IO,
+    PROPOSE_ONLY,
+    DamageAssessmentOutput,
+    DamagePhotoFinding,
+)
 
+from app import verification_service
 from app.damage_assessment_service import (
-    ClaimNotFound,
+    CURRENCY,
+    ClaudeDamageAssessor,
     DamageAssessmentNotRunnable,
     DamageAssessmentProviderDisabled,
     DeterministicDamageAssessor,
@@ -22,8 +41,8 @@ from app.damage_assessment_service import (
     run_damage_assessment,
 )
 from app.intake.media import FetchedMedia
-from app.models import AgentJob, DamageAssessment
-from app.worker import HANDLERS, load_handlers
+from app.models import AgentJob, DamageAssessment, LedgerEntry
+from app.worker import load_handlers
 
 from factories import make_claim, make_event, make_storm_file, make_user
 
@@ -282,3 +301,305 @@ def test_agent_refuses_to_run_once_a_director_decision_is_latest(session):
 def test_worker_registers_damage_assessment_handler():
     handlers = load_handlers()
     assert str(AgentName.DAMAGE_ASSESSMENT_AGENT) in handlers
+
+
+# ---------------------------------------------------------------------------
+# The contract's own invariant. No database, so this one still runs when the
+# Neon branch is unreachable — which is exactly when a frozen-contract drift
+# would otherwise go unnoticed.
+# ---------------------------------------------------------------------------
+
+
+def test_every_propose_only_agent_output_carries_requires_approval():
+    """PROPOSE_ONLY documents itself as "their outputs carry
+    ``requires_approval``". An agent added to the set without the field reads
+    as gated and answers AttributeError when something checks."""
+    for agent in PROPOSE_ONLY:
+        output_contract = AGENT_IO[agent][1]
+        assert "requires_approval" in output_contract.model_fields, agent
+    assert AgentName.DAMAGE_ASSESSMENT_AGENT in PROPOSE_ONLY
+    field = DamageAssessmentOutput.model_fields["requires_approval"]
+    assert field.default is True
+
+
+# ---------------------------------------------------------------------------
+# Database-enforced guarantees. These live in triggers rather than in Python
+# on purpose, so they are tested through SQL that bypasses the service.
+# ---------------------------------------------------------------------------
+
+
+def test_stored_assessments_cannot_be_edited_or_deleted(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    proposal = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    )
+
+    with pytest.raises(DBAPIError), session.begin_nested():
+        session.execute(
+            text("UPDATE damage_assessment SET rationale = 'tampered' WHERE id = :id"),
+            {"id": proposal.assessment.id},
+        )
+
+    with pytest.raises(DBAPIError), session.begin_nested():
+        session.execute(
+            text("DELETE FROM damage_assessment WHERE id = :id"),
+            {"id": proposal.assessment.id},
+        )
+
+
+def test_database_refuses_forged_agent_rows(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+
+    # An agent that signs with someone else's authority.
+    with pytest.raises(DBAPIError), session.begin_nested():
+        session.add(
+            _raw_assessment(
+                claim, sf, agent_name=str(AgentName.VERIFICATION_AGENT)
+            )
+        )
+        session.flush()
+
+    # An agent that decides instead of proposing.
+    with pytest.raises(DBAPIError), session.begin_nested():
+        session.add(
+            _raw_assessment(claim, sf, verdict=DamageAssessmentVerdict.APPROVED)
+        )
+        session.flush()
+
+
+def test_database_refuses_forged_director_overrides(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    parent = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    ).assessment
+    clerk = make_user(session, AppRole.REVIEW_CLERK)
+    director = make_user(session, AppRole.DIRECTOR)
+
+    # A Review Clerk is not a Director. Money-adjacent means Director only.
+    with pytest.raises(DBAPIError), session.begin_nested():
+        session.add(_raw_override(claim, parent, clerk.id))
+        session.flush()
+
+    # A Director who rewrites what the photos showed rather than the range.
+    with pytest.raises(DBAPIError), session.begin_nested():
+        session.add(_raw_override(claim, parent, director.id, band=DamageBand.DESTROYED))
+        session.flush()
+
+    # A decision floating free of the proposal it is supposed to dispose of.
+    with pytest.raises(DBAPIError), session.begin_nested():
+        override = _raw_override(claim, parent, director.id)
+        override.overrides_id = None
+        session.add(override)
+        session.flush()
+
+
+def _raw_assessment(claim, sf, **kw) -> DamageAssessment:
+    """A proposal built by hand, so the trigger is what rejects it."""
+    defaults = dict(
+        claim_id=claim.id,
+        storm_file_id=sf.id,
+        band=DamageBand.MAJOR,
+        estimate_low=Decimal("1000.00"),
+        estimate_high=Decimal("2000.00"),
+        currency=CURRENCY,
+        confidence=0.5,
+        findings=[],
+        location_source="claim",
+        verdict=DamageAssessmentVerdict.PROPOSED,
+        actor_kind=ActorKind.AGENT,
+        actor_id=None,
+        agent_name=str(AgentName.DAMAGE_ASSESSMENT_AGENT),
+        model_version="test",
+        rationale="hand-built",
+    )
+    defaults.update(kw)
+    return DamageAssessment(**defaults)
+
+
+def _raw_override(claim, parent, actor_id, **kw) -> DamageAssessment:
+    defaults = dict(
+        claim_id=claim.id,
+        storm_file_id=parent.storm_file_id,
+        band=parent.band,
+        estimate_low=parent.estimate_low,
+        estimate_high=parent.estimate_high,
+        currency=parent.currency,
+        confidence=float(parent.confidence),
+        findings=parent.findings,
+        location_source=parent.location_source,
+        verdict=DamageAssessmentVerdict.APPROVED,
+        actor_kind=ActorKind.HUMAN,
+        actor_id=actor_id,
+        agent_name=None,
+        model_version=parent.model_version,
+        rationale="hand-built override",
+        overrides_id=parent.id,
+    )
+    defaults.update(kw)
+    return DamageAssessment(**defaults)
+
+
+# ---------------------------------------------------------------------------
+# The seam that connects this agent to the claim pipeline.
+# ---------------------------------------------------------------------------
+
+
+def _enqueued(session, claim) -> int:
+    return session.scalar(
+        select(func.count())
+        .select_from(AgentJob)
+        .where(
+            AgentJob.job_type == str(AgentName.DAMAGE_ASSESSMENT_AGENT),
+            AgentJob.payload["claim_id"].astext == str(claim.id),
+        )
+    )
+
+
+def _provider(monkeypatch, value: str) -> None:
+    patched = verification_service.get_settings().model_copy(
+        update={"damage_assessment_provider": value}
+    )
+    monkeypatch.setattr(verification_service, "get_settings", lambda: patched)
+
+
+def test_a_readable_photo_and_a_live_provider_enqueue_the_agent(session, monkeypatch):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    _provider(monkeypatch, "anthropic")
+
+    verification_service._enqueue_damage_assessment(session, claim, sf)
+    session.flush()
+
+    assert _enqueued(session, claim) == 1
+
+
+def test_a_disabled_provider_enqueues_nothing(session, monkeypatch):
+    """The shipped default. A job queued here cannot succeed, and its dead
+    body becomes an ANOMALY_FLAGGED that names a claim needing nothing."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    _provider(monkeypatch, "disabled")
+
+    verification_service._enqueue_damage_assessment(session, claim, sf)
+    session.flush()
+
+    assert _enqueued(session, claim) == 0
+
+
+def test_an_undecodable_photo_enqueues_nothing(session, monkeypatch):
+    """The enqueue gate and the handler have to agree on "readable". A HEIC
+    photo passes a media_state check and fails the handler every time."""
+    event = make_event(session)
+    sf = make_storm_file(session, state=StormFileState.VERIFIED)
+    claim = make_claim(session, sf, event, status=ClaimStatus.VERIFIED)
+    _set_location(session, "claim", claim.id)
+    _photo_evidence(session, claim.id, content_type="image/heic")
+    session.flush()
+    _provider(monkeypatch, "anthropic")
+
+    verification_service._enqueue_damage_assessment(session, claim, sf)
+    session.flush()
+
+    assert _enqueued(session, claim) == 0
+
+
+# ---------------------------------------------------------------------------
+# Money-shaped facts we do not take the model's word for.
+# ---------------------------------------------------------------------------
+
+
+def test_the_currency_is_pinned_server_side(session):
+    """A silent "USD" is a 150x error, and the immutability trigger would
+    then require every override to copy it forward unchanged."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    assessor = _assessor(evidence_ids=evidence_ids)
+    assessor.output = assessor.output.model_copy(update={"currency": "USD"})
+
+    result = run_damage_assessment(session, claim.id, assessor=assessor, store=store)
+
+    assert result.assessment.currency == "JMD"
+    assert result.output.currency == "JMD"
+
+
+def test_the_vision_call_sends_the_media_type_the_allow_list_checked(session, monkeypatch):
+    """``_readable_photo_evidence`` validates the evidence row's content type.
+    R2 hands back whatever ContentType survived on the object, which for an
+    object stored without one is the empty string."""
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    for key, media in store.media_by_key.items():
+        store.media_by_key[key] = FetchedMedia(
+            data=media.data, content_type="", sha256=media.sha256
+        )
+
+    sent: dict = {}
+
+    class _FakeMessages:
+        def parse(self, **kw):
+            sent.update(kw)
+            return SimpleNamespace(
+                parsed_output=_assessor(evidence_ids=evidence_ids).output
+            )
+
+    class _FakeAnthropic:
+        def __init__(self, **kw):
+            self.messages = _FakeMessages()
+
+    import anthropic
+
+    monkeypatch.setattr(anthropic, "Anthropic", _FakeAnthropic)
+
+    run_damage_assessment(
+        session,
+        claim.id,
+        assessor=ClaudeDamageAssessor(api_key="test-key"),
+        store=store,
+    )
+
+    images = [
+        block
+        for block in sent["messages"][0]["content"]
+        if block.get("type") == "image"
+    ]
+    assert images
+    assert {block["source"]["media_type"] for block in images} == {"image/jpeg"}
+
+
+# ---------------------------------------------------------------------------
+# The ledger has to remember what was disposed, not just that something was.
+# ---------------------------------------------------------------------------
+
+
+def test_the_ledger_records_which_way_the_director_decided(session):
+    sf, claim, evidence_ids = _verified_claim_with_photo(session)
+    store = _seed_store(session, claim.id, evidence_ids)
+    proposal = run_damage_assessment(
+        session, claim.id, assessor=_assessor(evidence_ids=evidence_ids), store=store
+    )
+    director = make_user(session, AppRole.DIRECTOR)
+
+    decision = record_damage_assessment_decision(
+        session,
+        claim_id=claim.id,
+        assessment_id=proposal.assessment.id,
+        director_id=director.id,
+        verdict="REJECTED",
+        rationale="Photos do not support the claimed severity.",
+    )
+    session.flush()
+
+    entry = session.scalar(
+        select(LedgerEntry)
+        .where(
+            LedgerEntry.action == str(Event.DAMAGE_ASSESSMENT_DECIDED),
+            LedgerEntry.subject_id == decision.assessment.id,
+        )
+        .order_by(LedgerEntry.seq.desc())
+        .limit(1)
+    )
+    assert entry is not None
+    # Without the verdict this entry is a dollar range and no disposition.
+    assert entry.payload["verdict"] == "REJECTED"
+    assert entry.payload["snapshot_hash"] == decision.assessment.snapshot_hash
+    assert entry.payload["overrides_id"] == str(proposal.assessment.id)

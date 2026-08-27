@@ -44,6 +44,12 @@ from app.models import AppUser, Claim, DamageAssessment, StormFile
 MODEL_NAME = "claude-opus-5"
 MODEL_VERSION = f"anthropic:{MODEL_NAME}"
 
+#: The programme disburses in Jamaican dollars and nothing else. The model is
+#: asked for JMD, but a unit is not a thing we take a model's word for: a
+#: silent "USD" here is a 150x error that the immutability trigger would then
+#: lock into the record, because an override must copy currency unchanged.
+CURRENCY = "JMD"
+
 #: Media types the vision call accepts. HEIC/HEIF is excluded for the same
 #: reason the perceptual hash skips it (media.py) — Pillow, and the vision
 #: API, both need a directly decodable format.
@@ -142,6 +148,17 @@ def _readable_photo_evidence(session: Session, claim_id: uuid.UUID) -> list[_Pho
     return photos
 
 
+def has_readable_photo_evidence(session: Session, claim_id: uuid.UUID) -> bool:
+    """The one definition of "there is something here worth a vision call".
+
+    The enqueue side and the handler have to agree on this. When they do not,
+    a claim whose only photo is HEIC — or has no digest — passes the looser
+    gate, fails every retry against the stricter one, and surfaces to an
+    operator as an ANOMALY_FLAGGED naming a claim that needs nothing done.
+    """
+    return bool(_readable_photo_evidence(session, claim_id))
+
+
 def _resolve_location_source(
     claim: Claim, storm_file: StormFile
 ) -> Literal["claim", "storm_file"] | None:
@@ -220,7 +237,11 @@ class ClaudeDamageAssessor:
                     "type": "image",
                     "source": {
                         "type": "base64",
-                        "media_type": fetched.content_type,
+                        # The evidence row's type, not the one R2 echoes back:
+                        # ``_readable_photo_evidence`` checked *this* value
+                        # against ``_SUPPORTED_IMAGE_MEDIA_TYPES``, and an
+                        # object stored without ContentType reads back as "".
+                        "media_type": photo.content_type,
                         "data": base64.standard_b64encode(fetched.data).decode("ascii"),
                     },
                 }
@@ -317,6 +338,14 @@ def _append_ledger(
         payload={
             "claim_id": str(assessment.claim_id),
             "damage_assessment_id": str(assessment.id),
+            # Without these two a `decided` entry carries a dollar range and no
+            # way to tell an approval from a rejection, which is precisely the
+            # disposition the ledger exists to remember.
+            "verdict": str(assessment.verdict),
+            "snapshot_hash": assessment.snapshot_hash,
+            "overrides_id": (
+                str(assessment.overrides_id) if assessment.overrides_id else None
+            ),
             "band": str(output.band),
             "estimate_low": float(output.estimate_low),
             "estimate_high": float(output.estimate_high),
@@ -402,7 +431,11 @@ def run_damage_assessment(
     parsed = assessor.assess(claim=claim, photos=photos, media=media)
     _validate_findings(parsed, photos)
     output = parsed.model_copy(
-        update={"location_source": location_source, "model_version": MODEL_VERSION}
+        update={
+            "location_source": location_source,
+            "model_version": MODEL_VERSION,
+            "currency": CURRENCY,
+        }
     )
 
     assessment = DamageAssessment(
@@ -542,6 +575,7 @@ def record_damage_assessment_decision(
 
 
 __all__ = [
+    "CURRENCY",
     "ClaimNotFound",
     "ClaudeDamageAssessor",
     "DamageAssessmentNotRunnable",
@@ -553,6 +587,7 @@ __all__ = [
     "MODEL_VERSION",
     "PhotoStore",
     "ReviewDecisionConflict",
+    "has_readable_photo_evidence",
     "record_damage_assessment_decision",
     "run_damage_assessment",
 ]
