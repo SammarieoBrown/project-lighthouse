@@ -165,11 +165,12 @@ type LedgerAggregate = {
 
 type LoadState = "locked" | "loading" | "ready" | "error";
 
-const money = new Intl.NumberFormat("en-JM", {
-  style: "currency",
-  currency: "JMD",
-  maximumFractionDigits: 0,
-});
+/* J$ rather than a bare "$". `Intl` with en-JM renders JMD as "$45,000",
+ * which on a screen that also discusses insurers and donor pools could be
+ * read as US dollars — and the prose elsewhere on this screen already writes
+ * J$45,000, so the figure and the sentence about it disagreed. */
+const jmd = new Intl.NumberFormat("en-JM", { maximumFractionDigits: 0 });
+const money = { format: (value: number) => `J$${jmd.format(value)}` };
 const when = new Intl.DateTimeFormat("en-JM", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -201,13 +202,32 @@ function evidenceSummary(value: Record<string, unknown> | undefined): string | n
   return parts.length ? parts.join(" · ") : null;
 }
 
+/* The API answers a 500 with "internal error" and no more, deliberately: a
+ * SQLAlchemy exception carries its bound parameters, so the detail of an
+ * intake failure can contain a phone number. That is the right call there and
+ * the wrong thing to show an operator, who needs to know what to do rather
+ * than that something was internal. */
+function operatorMessage(status: number, detail: string | null): string {
+  if (status >= 500) {
+    return "The API failed to complete that. Nothing was recorded. "
+      + "Try again, and if it repeats the server log has the detail this "
+      + "screen deliberately does not.";
+  }
+  if (status === 401 || status === 403) {
+    return detail
+      ?? "Your credential does not permit that, or it has expired. "
+        + "Confirm your password again.";
+  }
+  return detail ?? `The API refused that request (${status}).`;
+}
+
 async function jsonOrDetail(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = body && typeof body === "object" && "detail" in body
       ? String((body as { detail: unknown }).detail)
-      : `Request failed (${response.status})`;
-    throw new Error(detail);
+      : null;
+    throw new Error(operatorMessage(response.status, detail));
   }
   return body;
 }
@@ -392,6 +412,12 @@ export function ReliefOperations() {
   );
   const verified = claims.filter((claim) => claim.status === "VERIFIED").length;
   const safetyOfLife = claims.filter((claim) => claim.sol).length;
+  const metricReason =
+    claimsState === "locked"
+      ? "queue locked"
+      : claimsState === "loading"
+        ? "reading"
+        : "unavailable";
 
   const approve = useCallback(async () => {
     if (!selected || !approvalReady || !activeToken) return;
@@ -569,7 +595,9 @@ export function ReliefOperations() {
         {sessionState.status === "loading" ? (
           <p className={styles.empty}>Checking your session…</p>
         ) : (
+          <div className={styles.signInScreen}>
           <SignIn onSignIn={signIn} />
+        </div>
         )}
       </main>
     );
@@ -580,19 +608,32 @@ export function ReliefOperations() {
       {chrome}
 
       <section className={styles.metrics} aria-label="Relief operation measures">
+        {/* An em-dash on its own reads as broken. These figures are absent for
+            a reason the operator can act on — the queue is locked until a
+            credential is presented — so the reason is on screen beside the
+            dash rather than left to be inferred (rule C4). */}
         <div>
           <strong>{claimsState === "ready" ? claims.length : "—"}</strong>
           <span>Redacted claims received</span>
+          {claimsState !== "ready" ? (
+            <small className={styles.metricWhy}>{metricReason}</small>
+          ) : null}
         </div>
         <div>
           <strong>{claimsState === "ready" ? verified : "—"}</strong>
           <span>Verified · eligible for allocation</span>
+          {claimsState !== "ready" ? (
+            <small className={styles.metricWhy}>{metricReason}</small>
+          ) : null}
         </div>
         <div>
           <strong data-alert={safetyOfLife > 0 ? "true" : undefined}>
             {claimsState === "ready" ? safetyOfLife : "—"}
           </strong>
           <span>Safety-of-life priority</span>
+          {claimsState !== "ready" ? (
+            <small className={styles.metricWhy}>{metricReason}</small>
+          ) : null}
         </div>
         <div>
           <strong>{ledgerState === "ready" ? ledgerAggregate?.count ?? 0 : "—"}</strong>

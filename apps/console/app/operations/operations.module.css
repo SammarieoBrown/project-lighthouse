@@ -227,6 +227,7 @@
   width: 100%;
 }
 .approveButton:disabled { background: transparent; border-color: var(--lh-rule); color: var(--lh-quiet); cursor: not-allowed; }
+.signIn .approveButton { margin-top: var(--lh-space-2); }
 .openButton { background: transparent; color: var(--lh-figure); margin-bottom: 0; }
 .reviewGate { border-top: 1px solid var(--lh-elevated); margin-top: var(--lh-space-5); padding-top: var(--lh-space-4); }
 .gateActions { gap: var(--lh-space-3); align-items: stretch; }
@@ -342,15 +343,34 @@
  * fields and a button, and giving it the full width of an operations screen
  * would make it read as the product rather than the door to it.
  */
+/* One form, one action, and nothing else on the screen — so it sits in the
+ * optical centre of what is left under the header rather than pinned to the
+ * top of a full-height column with several hundred pixels of nothing beneath
+ * it. The header is 72px and the screen carries a bottom pad; subtracting both
+ * is what stops "centred" from meaning "slightly too low".
+ *
+ * The panel keeps a rule and a ground of its own because it is the one thing
+ * being asked for on an otherwise empty screen, and a bordered block on a
+ * bare ground is how this console distinguishes a surface from the page
+ * everywhere else. It is one level of containment, not three. */
 .signIn {
+  align-content: center;
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
   display: grid;
   gap: var(--lh-space-4);
-  align-content: start;
-  max-width: 44ch;
-  margin: var(--lh-space-8) auto;
+  margin: 0 auto;
+  max-width: 42ch;
   padding: var(--lh-space-6);
-  border: 1px solid var(--lh-rule);
-  border-radius: var(--lh-radius);
+  width: 100%;
+}
+
+.signInScreen {
+  align-items: center;
+  display: grid;
+  min-height: calc(100vh - 72px - var(--lh-space-8));
+  padding: var(--lh-space-6) var(--lh-space-5);
 }
 
 .signIn h2 {
@@ -418,3 +438,15 @@
   text-underline-offset: 3px;
 }
 .fnolLink:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
+
+/* Why a figure is a dash. Quiet, because it is an explanation and not a
+ * status — a locked queue is the normal state before a credential, not a
+ * fault, and colouring it would say otherwise. */
+.metricWhy {
+  color: var(--lh-quiet);
+  display: block;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.06em;
+  margin-top: var(--lh-space-1);
+  text-transform: uppercase;
+}

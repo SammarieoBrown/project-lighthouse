@@ -67,7 +67,7 @@ export function SignIn({
         />
       </label>
 
-      <button type="submit" className={styles.openButton} disabled={!ready}>
+      <button type="submit" className={styles.approveButton} disabled={!ready}>
         {busy ? "Signing in…" : "Sign in"}
       </button>
 
