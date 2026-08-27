@@ -101,10 +101,26 @@
 .settlement { border-bottom: 1px solid var(--lh-rule); }
 
 .sectionHead { justify-content: space-between; gap: var(--lh-space-4); margin-bottom: var(--lh-space-5); }
-.sectionHead h1, .sectionHead h2, .approval h2 {
+
+/* The type ladder, and the reason the old screen read as a spaceship: every
+ * section heading sat at the same size and weight, so four surfaces shouted
+ * at once and none of them won. One rung per job now —
+ *   h1  the workspace (the claim queue): title size, heaviest
+ *   h2  the panels that act on it (gates): lead size
+ *   h3  groups inside a panel: carried by the eyebrow alone
+ * Density is untouched; what changed is that the eye has an order to read
+ * things in. */
+.sectionHead h1 {
   font-family: var(--lh-font-display);
   font-size: var(--lh-text-title);
   font-weight: 750;
+  line-height: var(--lh-leading-tight);
+  margin: var(--lh-space-1) 0 0;
+}
+.sectionHead h2, .approval h2 {
+  font-family: var(--lh-font-display);
+  font-size: var(--lh-text-lead);
+  font-weight: 700;
   line-height: var(--lh-leading-tight);
   margin: var(--lh-space-1) 0 0;
 }
@@ -246,12 +262,6 @@
 }
 .success span { color: var(--lh-figure); }
 
-.settlement .sectionHead h2 {
-  font-family: var(--lh-font-display);
-  font-size: var(--lh-text-title);
-  line-height: var(--lh-leading-tight);
-  margin: var(--lh-space-1) 0 0;
-}
 .simulationBadge {
   border: 1px solid var(--lh-elevated);
   color: var(--lh-elevated);
@@ -438,6 +448,45 @@
   text-underline-offset: 3px;
 }
 .fnolLink:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
+
+/* An open credential is a state, not a pending action, so once the queue is
+ * unlocked the password field gives way to this line: what is active, when it
+ * dies, and a small refresh. Keeping a filled field and a big button on screen
+ * after they had done their job was half of the two-password confusion. */
+/* Why the password field came back. An expired credential is not a failure —
+ * nothing was refused and nothing was lost — it is work the operator has to
+ * do before the gate opens again, which is what elevated means. */
+.credentialNotice {
+  color: var(--lh-elevated-text);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+  margin: 0 0 var(--lh-space-3);
+}
+
+.credentialLine {
+  align-items: baseline;
+  border-top: 1px solid var(--lh-rule);
+  color: var(--lh-quiet);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--lh-text-micro);
+  gap: var(--lh-space-2) var(--lh-space-3);
+  letter-spacing: 0.07em;
+  padding-top: var(--lh-space-3);
+  text-transform: uppercase;
+}
+.credentialLine button {
+  background: transparent;
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  color: var(--lh-figure);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: var(--lh-space-1) var(--lh-space-3);
+  text-transform: inherit;
+}
+.credentialLine button:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
 
 /* Why a figure is a dash. Quiet, because it is an explanation and not a
  * status — a locked queue is the normal state before a credential, not a

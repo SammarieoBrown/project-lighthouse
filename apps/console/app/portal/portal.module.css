@@ -213,3 +213,88 @@
   .entries li { grid-template-columns: 5ch 1fr; }
   .entries time { grid-column: 2; }
 }
+
+/* The give form. Register III sets it like everything else here: labelled
+ * fields on rules, no card, and the submit says "simulated" in its own label
+ * because a button that reads "Give" over money that does not move would be
+ * the one lie this page cannot tell. */
+.give {
+  display: grid;
+  gap: var(--lh-space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--lh-space-4);
+}
+.give label { display: block; }
+.give label span {
+  color: var(--lh-quiet);
+  display: block;
+  font-size: var(--lh-text-micro);
+  letter-spacing: 0.08em;
+  margin-bottom: var(--lh-space-2);
+  text-transform: uppercase;
+}
+.give input, .give select {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  color: var(--lh-figure);
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-fine);
+  padding: var(--lh-space-3);
+  width: 100%;
+}
+.give button {
+  background: var(--lh-figure);
+  border: 1px solid var(--lh-figure);
+  border-radius: var(--lh-radius);
+  color: var(--lh-ground);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--lh-body-weight-strong);
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: var(--lh-space-3) var(--lh-space-6);
+}
+.give button:disabled { cursor: wait; opacity: 0.7; }
+.give input:focus-visible, .give select:focus-visible, .give button:focus-visible,
+.receipt button:focus-visible {
+  outline: 2px solid var(--lh-figure);
+  outline-offset: 2px;
+}
+.give .error { grid-column: 1 / -1; }
+
+/* The receipt. The reference is the load-bearing line — it is the only key a
+ * donor will ever hold to their own journey — so it is the thing set in the
+ * data face, and the copy says to save it rather than assuming they will.
+ *
+ * The rule is the hairline, not the confirmed green. A donation that has just
+ * been recorded is at "Received" — the first of the four stages this same page
+ * draws below it, with nothing confirmed and nothing delivered. Painting it
+ * with the terminal-good hue would say the money had already arrived, which is
+ * the exact collapse C1 exists to stop. */
+.receipt {
+  border-left: 1px solid var(--lh-rule);
+  margin-top: var(--lh-space-4);
+  padding-left: var(--lh-space-4);
+}
+.receipt p {
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-read);
+  margin: 0 0 var(--lh-space-2);
+}
+.receipt code { font-size: var(--lh-text-fine); word-break: break-all; }
+.receipt button {
+  background: transparent;
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+  color: var(--lh-figure);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--lh-text-fine);
+  margin-top: var(--lh-space-2);
+  padding: var(--lh-space-2) var(--lh-space-4);
+}
+
+@media (max-width: 40rem) {
+  .give { grid-template-columns: 1fr; }
+}

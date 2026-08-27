@@ -49,7 +49,10 @@ function allowedPath(method: string, segments: string[]): string | null {
     || FNOL_PDF.test(path)
   )) return path;
   if (method === "POST" && (
-    path === "/v1/auth/session"
+    // Public by design (DON-01): a donor has no account and needs none. The
+    // API validates the body; the proxy only opens the door.
+    path === "/v1/public/donations"
+    || path === "/v1/auth/session"
     || path === "/v1/auth/step-up"
     || APPROVAL.test(path)
     || REVIEW.test(path)

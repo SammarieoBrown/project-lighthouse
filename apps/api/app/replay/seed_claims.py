@@ -291,6 +291,52 @@ def seed_claims(
     )
 
 
+#: The pools the demo stands up. "St Elizabeth pool" is named in the
+#: buildathon acceptance test (step 6) and the parishes are the replay area's.
+#: Seeded here because the replay seeder is the shared heartbeat — a demo that
+#: has claims but nowhere for a donor to give is only half of Act 3.
+#:
+#: The pool *name* is the PRD's literal string; the scope is
+#: ``REPLAY_PARISHES``'s. Those differ on purpose — "St Elizabeth pool" is what
+#: step 6 types, while "Saint Elizabeth" is the platform's canonical parish
+#: everywhere else, and parish name is the join key precisely because the COD
+#: p-codes disagree. A pool scoped to a parish string nothing else uses would
+#: read correctly on the portal and match nothing the day scope starts being
+#: enforced.
+DEMO_POOLS: tuple[tuple[str, str, str | None], ...] = (
+    ("St Elizabeth pool", "PARISH", "Saint Elizabeth"),
+    ("Westmoreland pool", "PARISH", "Westmoreland"),
+    ("Melissa response fund", "EVENT", None),
+)
+
+
+def seed_pools(session: Session) -> int:
+    """Create the demo donation pools that do not already exist, and pull the
+    scope of any that do back to ``DEMO_POOLS``. Idempotent by name, because a
+    re-run of the seeder must not mint duplicate pots — but a pool seeded by an
+    earlier run with a parish spelled differently from every other row is a
+    demo fixture that has drifted, and the heartbeat is what corrects it.
+
+    Returns the number of pools created; a repaired scope is not a new pot.
+    """
+    from app.donations_service import create_pool
+    from app.models import DonationPool
+
+    created = 0
+    for name, scope_kind, scope_value in DEMO_POOLS:
+        existing = session.scalar(
+            select(DonationPool).where(DonationPool.name == name)
+        )
+        if existing is not None:
+            if (existing.scope_kind, existing.scope_value) != (scope_kind, scope_value):
+                existing.scope_kind = scope_kind
+                existing.scope_value = scope_value
+            continue
+        create_pool(session, name=name, scope_kind=scope_kind, scope_value=scope_value)
+        created += 1
+    return created
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -328,11 +374,14 @@ def main(argv: list[str] | None = None) -> int:
                 event_ref=event_ref,
                 seed=args.seed if args.seed is not None else settings.replay_seed,
             )
+            pools = seed_pools(session)
     except SeedError as error:
         print(f"Refused: {error}", file=sys.stderr)
         return 2
 
     print(report.render())
+    if pools:
+        print(f"donation pools created: {pools}")
     return 0
 
 

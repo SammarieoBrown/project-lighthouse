@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LighthouseMark } from "../logo";
+import {
+  CREDENTIAL_LIFETIME_MS,
+  credentialIsDead,
+  jsonOrDetail,
+} from "./credential";
 import styles from "./operations.module.css";
 import { stepUp, useOperatorSession } from "./operator-session";
 import { SettlementWorkbench } from "./settlement-workbench";
@@ -202,36 +207,6 @@ function evidenceSummary(value: Record<string, unknown> | undefined): string | n
   return parts.length ? parts.join(" · ") : null;
 }
 
-/* The API answers a 500 with "internal error" and no more, deliberately: a
- * SQLAlchemy exception carries its bound parameters, so the detail of an
- * intake failure can contain a phone number. That is the right call there and
- * the wrong thing to show an operator, who needs to know what to do rather
- * than that something was internal. */
-function operatorMessage(status: number, detail: string | null): string {
-  if (status >= 500) {
-    return "The API failed to complete that. Nothing was recorded. "
-      + "Try again, and if it repeats the server log has the detail this "
-      + "screen deliberately does not.";
-  }
-  if (status === 401 || status === 403) {
-    return detail
-      ?? "Your credential does not permit that, or it has expired. "
-        + "Confirm your password again.";
-  }
-  return detail ?? `The API refused that request (${status}).`;
-}
-
-async function jsonOrDetail(response: Response): Promise<unknown> {
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = body && typeof body === "object" && "detail" in body
-      ? String((body as { detail: unknown }).detail)
-      : null;
-    throw new Error(operatorMessage(response.status, detail));
-  }
-  return body;
-}
-
 export function ReliefOperations() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -253,6 +228,8 @@ export function ReliefOperations() {
   const [operatorPassword, setOperatorPassword] = useState("");
   const [stepUpError, setStepUpError] = useState<string | null>(null);
   const [activeToken, setActiveToken] = useState("");
+  const [credentialExpiry, setCredentialExpiry] = useState<number | null>(null);
+  const [credentialNotice, setCredentialNotice] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [approving, setApproving] = useState(false);
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
@@ -267,6 +244,34 @@ export function ReliefOperations() {
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const claimsRequest = useRef(0);
   const approvalIntent = useRef<{ signature: string; key: string } | null>(null);
+
+  /* One way out of an open credential, taken by the expiry timer, by any 401
+   * the API answers, and by Sign out. It puts the queue back behind the
+   * password field so the recovery the error copy names actually exists on
+   * screen. */
+  const closeCredential = useCallback((notice: string | null) => {
+    setActiveToken("");
+    setCredentialExpiry(null);
+    setCredentialNotice(notice);
+    setClaims([]);
+    setSelectedId(null);
+    setClaimsState("locked");
+    setClaimsError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!credentialExpiry) return;
+    const remaining = credentialExpiry - Date.now();
+    const close = () => closeCredential(
+      "Your credential expired after five minutes. Confirm your password to reopen the queue.",
+    );
+    if (remaining <= 0) {
+      close();
+      return;
+    }
+    const timer = window.setTimeout(close, remaining);
+    return () => window.clearTimeout(timer);
+  }, [credentialExpiry, closeCredential]);
 
   const loadClaims = useCallback(async (token = activeToken) => {
     const requestId = ++claimsRequest.current;
@@ -295,12 +300,18 @@ export function ReliefOperations() {
       });
     } catch (error) {
       if (requestId !== claimsRequest.current) return;
+      if (credentialIsDead(error)) {
+        closeCredential(
+          error instanceof Error ? error.message : "Your credential is no longer accepted.",
+        );
+        return;
+      }
       setClaims([]);
       setSelectedId(null);
       setClaimsState("error");
       setClaimsError(error instanceof Error ? error.message : "Claims are unavailable.");
     }
-  }, [activeToken]);
+  }, [activeToken, closeCredential]);
 
   const loadLedger = useCallback(async () => {
     try {
@@ -362,14 +373,19 @@ export function ReliefOperations() {
         }
       })
       .catch((error) => {
-        if (!controller.signal.aborted) {
-          setClaimDetail(null);
-          setDetailState("error");
-          setDetailError(error instanceof Error ? error.message : "Claim evidence is unavailable.");
+        if (controller.signal.aborted) return;
+        if (credentialIsDead(error)) {
+          closeCredential(
+            error instanceof Error ? error.message : "Your credential is no longer accepted.",
+          );
+          return;
         }
+        setClaimDetail(null);
+        setDetailState("error");
+        setDetailError(error instanceof Error ? error.message : "Claim evidence is unavailable.");
       });
     return () => controller.abort();
-  }, [selectedId, activeToken, detailRefresh]);
+  }, [selectedId, activeToken, detailRefresh, closeCredential]);
 
   const selected = useMemo(
     () => claims.find((claim) => claim.id === selectedId) ?? null,
@@ -460,10 +476,11 @@ export function ReliefOperations() {
       await loadLedger();
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : "Approval failed.");
+      if (credentialIsDead(error)) closeCredential(null);
     } finally {
       setApproving(false);
     }
-  }, [selected, approvalReady, activeToken, note, loadLedger]);
+  }, [selected, approvalReady, activeToken, note, loadLedger, closeCredential]);
 
   const approvalClaim = approval
     ? claims.find((claim) => claim.id === approval.allocation.claim_id) ?? null
@@ -503,10 +520,11 @@ export function ReliefOperations() {
       await loadLedger();
     } catch (error) {
       setDamageError(error instanceof Error ? error.message : "Decision failed.");
+      if (credentialIsDead(error)) closeCredential(null);
     } finally {
       setDeciding(false);
     }
-  }, [selected, activeToken, claimDetail, damageNote, loadLedger]);
+  }, [selected, activeToken, claimDetail, damageNote, loadLedger, closeCredential]);
 
   const reviewClaim = useCallback(async (verdict: "APPROVED" | "REJECTED") => {
     if (!selected || !reviewReady || !activeToken) return;
@@ -539,10 +557,11 @@ export function ReliefOperations() {
       setDetailRefresh((value) => value + 1);
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : "Review decision failed.");
+      if (credentialIsDead(error)) closeCredential(null);
     } finally {
       setReviewing(false);
     }
-  }, [activeToken, claimDetail, loadClaims, reviewNote, reviewReady, selected]);
+  }, [activeToken, claimDetail, closeCredential, loadClaims, reviewNote, reviewReady, selected]);
 
   /* The shift, not the approval. Signing in opens the queues this role may
    * read; it never approves anything on its own — that still costs a password
@@ -576,7 +595,7 @@ export function ReliefOperations() {
             <button
               type="button"
               onClick={() => {
-                setActiveToken("");
+                closeCredential(null);
                 void signOut();
               }}
             >
@@ -716,44 +735,79 @@ export function ReliefOperations() {
         <aside className={styles.approval}>
           <span className={styles.eyebrow}>Act 3 · human gate</span>
           <h2>Approve relief allocation</h2>
-          <label className={styles.field}>
-            <span>Confirm your password</span>
-            <input
-              type="password"
-              value={operatorPassword}
-              autoComplete="current-password"
-              spellCheck={false}
-              disabled={approving}
-              onChange={(event) => setOperatorPassword(event.target.value)}
-              placeholder="Password"
-            />
-          </label>
-          <button
-            type="button"
-            className={`${styles.approveButton} ${styles.openButton}`}
-            disabled={!operatorPassword || claimsState === "loading" || approving}
-            onClick={async () => {
-              setStepUpError(null);
-              try {
-                const token = await stepUp(operatorPassword);
-                setOperatorPassword("");
-                setActiveToken(token);
-                await loadClaims(token);
-              } catch (failure) {
-                setStepUpError(
-                  failure instanceof Error ? failure.message : "Could not confirm your password.",
-                );
-              }
-            }}
-          >
-            {claimsState === "loading" ? "Opening…" : activeToken ? "Refresh protected queue" : "Open protected queue"}
-          </button>
+          {activeToken ? (
+            /* An open credential is a state, not a pending action. The field
+             * and the filled button leave once they have done their job. The
+             * time is the one the console itself set, not a claim about a
+             * server it cannot see. */
+            <p className={styles.credentialLine}>
+              <span>
+                Credential active · expires
+                {" "}
+                <span className={styles.data}>
+                  {credentialExpiry
+                    ? new Date(credentialExpiry).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                    : "in five minutes"}
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled={claimsState === "loading" || approving}
+                onClick={() => void loadClaims(activeToken)}
+              >
+                {claimsState === "loading" ? "Reading…" : "Refresh queue"}
+              </button>
+            </p>
+          ) : (
+            <>
+              {credentialNotice ? (
+                <p className={styles.credentialNotice} role="status">{credentialNotice}</p>
+              ) : null}
+              <label className={styles.field}>
+                <span>Your password · opens the claim queue</span>
+                <input
+                  type="password"
+                  value={operatorPassword}
+                  autoComplete="current-password"
+                  spellCheck={false}
+                  disabled={approving}
+                  onChange={(event) => setOperatorPassword(event.target.value)}
+                  placeholder="Password"
+                />
+              </label>
+              <button
+                type="button"
+                className={styles.approveButton}
+                disabled={!operatorPassword || claimsState === "loading" || approving}
+                onClick={async () => {
+                  setStepUpError(null);
+                  try {
+                    const token = await stepUp(operatorPassword);
+                    setOperatorPassword("");
+                    setCredentialNotice(null);
+                    setActiveToken(token);
+                    setCredentialExpiry(Date.now() + CREDENTIAL_LIFETIME_MS);
+                    await loadClaims(token);
+                  } catch (failure) {
+                    setStepUpError(
+                      failure instanceof Error ? failure.message : "Could not confirm your password.",
+                    );
+                  }
+                }}
+              >
+                {claimsState === "loading" ? "Opening…" : "Open protected queue"}
+              </button>
+              <p className={styles.noMovement}>
+                The credential stays in this tab&apos;s memory only and expires after five minutes.
+              </p>
+            </>
+          )}
           {stepUpError ? (
             <p className={styles.signInError} role="alert">{stepUpError}</p>
           ) : null}
-          <p className={styles.noMovement}>
-            The credential stays in this tab&apos;s memory only and expires after five minutes.
-          </p>
           {selected ? (
             <>
               <dl className={styles.selection}>
