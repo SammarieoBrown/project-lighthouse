@@ -197,7 +197,7 @@ def _verification_authorizes_claim(
             and verification.overrides_id is not None
             and clerk is not None
             and clerk.active
-            and clerk.role is AppRole.REVIEW_CLERK
+            and clerk.role in {AppRole.REVIEW_CLERK, AppRole.DIRECTOR}
         )
     else:
         eligible = False
