@@ -978,11 +978,11 @@ export function ReliefOperations() {
                   ) : (
                     <>
                       <p className={styles.limit}>
-                        A range, not a figure. The estimate does not size the grant \u2014 relief is a
-                        flat J$45,000 \u2014 and nothing is released by this decision.
+                        A range, not a figure. The estimate does not size the grant: relief is a
+                        flat J$45,000, and nothing is released by this decision.
                       </p>
                       <label className={styles.field}>
-                        <span>Decision reason \u00b7 required</span>
+                        <span>Decision reason · required</span>
                         <textarea
                           value={damageNote}
                           onChange={(event) => setDamageNote(event.target.value)}
