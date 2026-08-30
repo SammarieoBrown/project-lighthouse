@@ -33,7 +33,9 @@ from lighthouse_contracts import (
 from app import ledger, queue, statemachine
 from app.config import get_settings
 from app.models import AgentJob, Claim, HazardEvent, StormFile
+from app.registry.geography import parish_at
 
+from . import replies
 from .extraction import extract_claim_fields
 from .media import (
     MAX_AUDIO_BYTES,
@@ -219,6 +221,8 @@ def enqueue_twilio_inbound(
             ],
             "sol_keywords": sol_keywords,
             "hazard_external_ref": hazard_external_ref,
+            "latitude": inbound.latitude,
+            "longitude": inbound.longitude,
         },
     )
     return EnqueueResult(job_id=job.id, storm_file_id=storm_file.id, created=True)
@@ -506,11 +510,43 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
         supported_media.append(
             {"index": index, "url": url, "content_type": str(item["content_type"])}
         )
-    if not body and not supported_media:
+    point: str | None = None
+    parish: str | None = None
+    raw_latitude, raw_longitude = payload.get("latitude"), payload.get("longitude")
+    if raw_latitude is not None and raw_longitude is not None:
+        latitude, longitude = float(raw_latitude), float(raw_longitude)
+        point = f"SRID=4326;POINT({longitude} {latitude})"
+        parish = parish_at(longitude, latitude)
+
+    if not body and not supported_media and point is None:
         raise UnsupportedInboundMedia("message has no supported text, audio, or image evidence")
 
     sol_keywords = list(payload.get("sol_keywords") or safety_of_life_matches(body))
     damage_type, reported_needs = _extract_text(body)
+
+    if point is not None:
+        storm_file.location = point
+        # A registered household's parish is authoritative; a thin file's
+        # parish is whatever the share proves.
+        if parish is not None and (storm_file.thin or not storm_file.parish):
+            storm_file.parish = parish
+
+    open_claim = _open_claim(
+        session, storm_file_id=storm_file.id, hazard_event_id=event.id
+    )
+    if open_claim is not None:
+        return _apply_follow_up(
+            session,
+            claim=open_claim,
+            storm_file=storm_file,
+            sid=sid,
+            body=body,
+            supported_media=supported_media,
+            sol_keywords=sol_keywords,
+            damage_type=damage_type,
+            reported_needs=reported_needs,
+            point=point,
+        )
 
     if storm_file.state in {StormFileState.REGISTERED, StormFileState.AT_RISK}:
         # ``record_claim_creation`` below is the one verification enqueue.  T4's
@@ -532,6 +568,7 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
         status=ClaimStatus.FILED,
         damage_type=damage_type,
         reported_needs=reported_needs,
+        location=point,
         transcript=body or None,
         transcript_alt=None,
         lang=None,
@@ -622,6 +659,11 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
 
     _minimize_intake_job(session, sid=sid, claim=claim)
 
+    applied = ["location"] if point is not None else []
+    replies.maybe_reply(
+        session, claim=claim, storm_file=storm_file, created=True, applied=applied
+    )
+
     return IntakeResult(
         claim_id=claim.id,
         claim_ref=claim.claim_ref,
@@ -631,12 +673,172 @@ def process_intake_job(session: Session, payload: dict) -> IntakeResult:
     )
 
 
+def _open_claim(
+    session: Session, *, storm_file_id: UUID, hazard_event_id: UUID
+) -> Claim | None:
+    """The household's claim still being assembled for this event, if any.
+
+    Only ``FILED`` qualifies: once a claim is verified or beyond, a new report
+    is a new claim rather than an edit to a decided one.
+    """
+    return session.scalar(
+        select(Claim)
+        .where(
+            Claim.storm_file_id == storm_file_id,
+            Claim.hazard_event_id == hazard_event_id,
+            Claim.status == ClaimStatus.FILED,
+        )
+        .order_by(Claim.filed_at.desc(), Claim.id.desc())
+        .limit(1)
+    )
+
+
+def _apply_follow_up(
+    session: Session,
+    *,
+    claim: Claim,
+    storm_file: StormFile,
+    sid: str,
+    body: str,
+    supported_media: list[dict],
+    sol_keywords: list[str],
+    damage_type: str | None,
+    reported_needs: list[str],
+    point: str | None,
+) -> IntakeResult:
+    """Fold one follow-up message into the household's open claim.
+
+    One conversation, one claim: the spec's intake loop fills a single claim
+    over several messages rather than filing a claim per message. Every field
+    only ever gains information — nothing a household already said is erased
+    by a later message.
+    """
+    applied: list[str] = []
+
+    if point is not None:
+        claim.location = point
+        applied.append("location")
+
+    if body:
+        _insert_evidence(
+            session,
+            claim_id=claim.id,
+            kind=EvidenceKind.TRANSCRIPT,
+            uri=None,
+            sha256=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+            payload={
+                "provider": "twilio",
+                "provider_message_sid": sid,
+                "content_type": "text/plain",
+            },
+        )
+        claim.transcript = f"{claim.transcript}\n{body}" if claim.transcript else body
+        if damage_type and not claim.damage_type:
+            claim.damage_type = damage_type
+        if reported_needs:
+            merged = list(claim.reported_needs or [])
+            merged.extend(n for n in reported_needs if n not in merged)
+            claim.reported_needs = merged
+        applied.append("message")
+
+    media_evidence: list[tuple[UUID, EvidenceKind]] = []
+    for item in supported_media:
+        kind = _media_kind(item.get("content_type"))
+        assert kind is not None
+        evidence_id = _insert_evidence(
+            session,
+            claim_id=claim.id,
+            kind=kind,
+            uri=str(item["url"]),
+            payload={
+                "provider": "twilio",
+                "provider_message_sid": sid,
+                "media_index": int(item.get("index", 0)),
+                "content_type": item.get("content_type"),
+                "media_state": "PENDING_FETCH",
+                "transcription_state": "PENDING" if kind is EvidenceKind.AUDIO else None,
+                "phash_state": "PENDING" if kind is EvidenceKind.PHOTO else None,
+            },
+        )
+        media_evidence.append((evidence_id, kind))
+        applied.append("voice note" if kind is EvidenceKind.AUDIO else "photo")
+
+    if sol_keywords and not claim.sol:
+        claim.sol = True
+        ledger.append(
+            session,
+            action=str(Event.CLAIM_SOL_RAISED),
+            subject_type="claim",
+            subject_id=claim.id,
+            payload={"keywords": sol_keywords, "priority": SOL_PRIORITY},
+            agent=AgentName.INTAKE_AGENT,
+        )
+
+    session.flush()
+    ledger.append(
+        session,
+        action="claim.follow_up_applied",
+        subject_type="claim",
+        subject_id=claim.id,
+        payload={
+            "claim_ref": claim.claim_ref,
+            "provider_message_sid": sid,
+            "applied": sorted(set(applied)),
+        },
+        agent=AgentName.INTAKE_AGENT,
+    )
+
+    for evidence_id, kind in media_evidence:
+        voice_priority = kind is EvidenceKind.AUDIO
+        queue.enqueue(
+            session,
+            job_type=TWILIO_MEDIA_JOB_TYPE,
+            priority=SOL_PRIORITY if claim.sol or voice_priority else 0,
+            payload={
+                "claim_id": str(claim.id),
+                "evidence_ids": [str(evidence_id)],
+                "voice_priority": voice_priority,
+            },
+        )
+    # New media defers re-verification to the media pipeline's completion
+    # hook, exactly as claim creation does.
+    if not media_evidence and applied:
+        _ensure_verification_queued(session, claim)
+
+    _minimize_intake_job(session, sid=sid, claim=claim)
+
+    evidence_count = session.execute(
+        text("SELECT count(*) FROM evidence WHERE claim_id = :claim_id"),
+        {"claim_id": claim.id},
+    ).scalar_one()
+
+    replies.maybe_reply(
+        session, claim=claim, storm_file=storm_file, created=False, applied=applied
+    )
+
+    return IntakeResult(
+        claim_id=claim.id,
+        claim_ref=claim.claim_ref,
+        storm_file_id=storm_file.id,
+        evidence_count=evidence_count,
+        verification_state=_pipeline_state(session, claim.id),
+    )
+
+
 def _ensure_verification_queued(session: Session, claim: Claim) -> None:
+    """Queue a verification run unless one is already waiting to happen.
+
+    Only QUEUED and RUNNING block a new enqueue: a completed run is history,
+    not cover. Evidence that arrives after a verdict — a photo, a location
+    share — must produce a fresh verification row, because the verdict that
+    exists was rendered without it.
+    """
     existing = session.scalar(
         select(AgentJob.id)
         .where(
             AgentJob.job_type == str(AgentName.VERIFICATION_AGENT),
             AgentJob.payload["claim_id"].astext == str(claim.id),
+            AgentJob.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
         )
         .limit(1)
     )

@@ -171,3 +171,46 @@ def cache_is_present() -> bool:
 
 def missing_files() -> list[Path]:
     return [p for p in (BOUNDARIES, POPULATION) if not p.exists()]
+
+
+def _ring_contains(ring: list[list[float]], lon: float, lat: float) -> bool:
+    """Ray-cast one linear ring. Pure Python so the intake path needs no GIS."""
+    inside = False
+    for i in range(len(ring)):
+        x1, y1 = ring[i - 1][0], ring[i - 1][1]
+        x2, y2 = ring[i][0], ring[i][1]
+        if (y1 > lat) != (y2 > lat) and lon < (x2 - x1) * (lat - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _geometry_contains(geometry: dict[str, Any], lon: float, lat: float) -> bool:
+    kind = geometry.get("type")
+    if kind == "Polygon":
+        polygons = [geometry["coordinates"]]
+    elif kind == "MultiPolygon":
+        polygons = geometry["coordinates"]
+    else:
+        return False
+    for rings in polygons:
+        if not rings:
+            continue
+        if _ring_contains(rings[0], lon, lat) and not any(
+            _ring_contains(hole, lon, lat) for hole in rings[1:]
+        ):
+            return True
+    return False
+
+
+def parish_at(lon: float, lat: float) -> str | None:
+    """The parish containing a point, from the COD admin-1 boundaries.
+
+    ``None`` for a point outside every parish — offshore, or off-island. The
+    caller must treat that as "unconfirmed", never guess the nearest one: a
+    wrong parish would route relief through the wrong pool.
+    """
+    for name, shape in _parish_shapes().items():
+        geometry = shape.get("geometry")
+        if geometry and _geometry_contains(geometry, lon, lat):
+            return name
+    return None
