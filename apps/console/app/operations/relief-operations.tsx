@@ -172,9 +172,25 @@ type LedgerAggregate = {
 type DonationPool = {
   pool_id: string;
   name: string;
+  scope_kind: string;
+  scope_value: string | null;
   balance: string;
   simulated: boolean;
 };
+
+/* The default the Director sees, never the decision: the pool scoped to the
+ * claim's parish when it can cover the flat grant, else the event-wide pool,
+ * else government relief. A hand-picked payer is left alone. */
+function suggestPayer(pools: DonationPool[], parish: string | null): string {
+  const funded = pools.filter((pool) => Number.parseFloat(pool.balance) >= 45_000);
+  const parishPool = parish
+    ? funded.find((pool) => pool.scope_kind === "PARISH" && pool.scope_value === parish)
+    : undefined;
+  if (parishPool) return parishPool.pool_id;
+  const eventPool = funded.find((pool) => pool.scope_kind === "EVENT");
+  if (eventPool) return eventPool.pool_id;
+  return "GOV_RELIEF";
+}
 
 type LoadState = "locked" | "loading" | "ready" | "error";
 
@@ -241,6 +257,7 @@ export function ReliefOperations() {
   const [note, setNote] = useState("");
   const [pools, setPools] = useState<DonationPool[]>([]);
   const [payerChoice, setPayerChoice] = useState<string>("GOV_RELIEF");
+  const payerTouched = useRef(false);
   const [approving, setApproving] = useState(false);
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
@@ -470,6 +487,15 @@ export function ReliefOperations() {
   const verified = claims.filter((claim) => claim.status === "VERIFIED").length;
   const safetyOfLife = claims.filter((claim) => claim.sol).length;
   const metricReason = claimsState === "loading" ? "reading" : "unavailable";
+
+  useEffect(() => {
+    payerTouched.current = false;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (payerTouched.current) return;
+    setPayerChoice(suggestPayer(pools, selected?.parish ?? null));
+  }, [pools, selected, selectedId]);
 
   const approve = useCallback(async () => {
     if (!selected || !approvalReady || !activeToken) return;
@@ -863,7 +889,10 @@ export function ReliefOperations() {
                       className={styles.payerSelect}
                       value={payerChoice}
                       disabled={approving}
-                      onChange={(event) => setPayerChoice(event.target.value)}
+                      onChange={(event) => {
+                        payerTouched.current = true;
+                        setPayerChoice(event.target.value);
+                      }}
                     >
                       <option value="GOV_RELIEF">Government relief</option>
                       {pools.map((pool) => {
