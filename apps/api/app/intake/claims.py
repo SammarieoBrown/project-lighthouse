@@ -170,6 +170,7 @@ def _summary(session: Session, row) -> dict:
         "filed_at": row.filed_at,
         "evidence_count": row.evidence_count,
         "transcript": row.transcript,
+        "hazard_event_id": row.hazard_event_id,
     }
 
 
@@ -184,7 +185,7 @@ def list_redacted_claims(
             """
             SELECT c.id, c.claim_ref, c.status::text AS status, c.damage_type,
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
-                   c.severity, c.triage_rank,
+                   c.severity, c.triage_rank, c.hazard_event_id,
                    c.channel, c.filed_at, c.transcript,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
                      AS evidence_count,
@@ -314,7 +315,7 @@ def get_redacted_claim(session: Session, claim_id: uuid.UUID) -> dict | None:
             """
             SELECT c.id, c.claim_ref, c.status::text AS status, c.damage_type,
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
-                   c.severity, c.triage_rank,
+                   c.severity, c.triage_rank, c.hazard_event_id,
                    c.channel, c.filed_at, c.transcript,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
                      AS evidence_count
@@ -473,6 +474,168 @@ def claim_detail_route(
         if detail is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="claim not found")
         return detail
+
+
+def claim_agent_timeline(session: Session, claim_id: uuid.UUID) -> list[dict]:
+    """Every agent's work on one claim, oldest first.
+
+    Four sources, one order: the jobs the workers ran, the verification rows
+    they wrote, the damage assessments they proposed, and the ledger entries
+    that record what each decision meant. Read together they are the account
+    of how a claim reached its current state — including the runs that failed
+    and the decisions an agent declined to make.
+    """
+    events: list[dict] = []
+
+    jobs = session.execute(
+        text(
+            """
+            SELECT job_type, status::text AS status, attempts, last_error,
+                   created_at, finished_at, payload
+              FROM agent_job
+             WHERE payload->>'claim_id' = :claim_id
+             ORDER BY created_at, id
+            """
+        ),
+        {"claim_id": str(claim_id)},
+    ).all()
+    for job in jobs:
+        events.append(
+            {
+                "at": job.finished_at or job.created_at,
+                "source": "job",
+                "actor": job.job_type,
+                "title": job.job_type.replace("_", " "),
+                "state": job.status,
+                "detail": (job.last_error or "")[:300] or None,
+                "data": {
+                    "attempts": job.attempts,
+                    "queued_at": job.created_at,
+                    "trigger": (job.payload or {}).get("trigger"),
+                },
+            }
+        )
+
+    verifications = session.scalars(
+        select(Verification)
+        .where(Verification.claim_id == claim_id)
+        .order_by(Verification.created_at, Verification.id)
+    ).all()
+    for row in verifications:
+        signals = _safe_signals(row.signals)
+        scored = [name for name, value in signals.items() if value.get("present")]
+        events.append(
+            {
+                "at": row.created_at,
+                "source": "verification",
+                "actor": row.agent_name or "review clerk",
+                "title": f"verification · {str(row.verdict).replace('_', ' ').lower()}",
+                "state": str(row.verdict),
+                "detail": row.rationale,
+                "data": {
+                    "confidence": float(row.confidence),
+                    "capped": row.capped,
+                    "signals_scored": len(scored),
+                    "signals": signals,
+                    "actor_kind": str(row.actor_kind),
+                    "overrides": str(row.overrides_id) if row.overrides_id else None,
+                },
+            }
+        )
+
+    assessments = session.scalars(
+        select(DamageAssessment)
+        .where(DamageAssessment.claim_id == claim_id)
+        .order_by(DamageAssessment.created_at, DamageAssessment.id)
+    ).all()
+    for row in assessments:
+        findings = row.findings if isinstance(row.findings, list) else []
+        events.append(
+            {
+                "at": row.created_at,
+                "source": "damage_assessment",
+                "actor": row.agent_name or "director",
+                "title": f"damage assessment · {str(row.verdict).lower()}",
+                "state": str(row.verdict),
+                "detail": row.rationale,
+                "data": {
+                    "band": str(row.band),
+                    "estimate_low": float(row.estimate_low),
+                    "estimate_high": float(row.estimate_high),
+                    "currency": row.currency,
+                    "confidence": float(row.confidence),
+                    "model_version": row.model_version,
+                    "photos_read": len(row.evidence_ids or []),
+                    "findings": [
+                        {
+                            "observed_damage": str(item.get("observed_damage") or ""),
+                            "band": str(item.get("band") or ""),
+                            "confidence": item.get("confidence"),
+                        }
+                        for item in findings
+                        if isinstance(item, dict)
+                    ],
+                },
+            }
+        )
+
+    entries = session.execute(
+        text(
+            """
+            SELECT seq, action, agent_name, actor_kind::text AS actor_kind,
+                   ts, payload
+              FROM ledger_entry
+             WHERE (subject_type = 'claim' AND subject_id = :claim_id)
+                OR payload->>'claim_id' = :claim_id_text
+             ORDER BY seq
+            """
+        ),
+        {"claim_id": claim_id, "claim_id_text": str(claim_id)},
+    ).all()
+    for entry in entries:
+        payload = dict(entry.payload or {})
+        # The ledger carries operational detail that is safe to show an
+        # operator, but it is not a place to re-export household text.
+        detail = payload.get("reason") or payload.get("note")
+        events.append(
+            {
+                "at": entry.ts,
+                "source": "ledger",
+                "actor": entry.agent_name or str(entry.actor_kind).lower(),
+                "title": str(entry.action).replace("_", " ").replace(".", " · "),
+                "state": None,
+                "detail": detail if isinstance(detail, str) else None,
+                "data": {
+                    "seq": entry.seq,
+                    "amount": payload.get("amount"),
+                    "currency": payload.get("currency"),
+                    "payer_route": payload.get("payer_route"),
+                    "severity": payload.get("severity"),
+                    "rank": payload.get("rank"),
+                    "policy_id": payload.get("policy_id"),
+                },
+            }
+        )
+
+    events.sort(key=lambda event: (event["at"] is None, event["at"]))
+    return events
+
+
+@router.get("/claims/{claim_id}/timeline")
+def claim_timeline_route(
+    claim_id: uuid.UUID,
+    response: Response,
+    authorization: str | None = Header(default=None),
+    lh_session: str | None = Cookie(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    with session_scope() as session:
+        _authenticate_reader(session, authorization, lh_session)
+        if session.get(Claim, claim_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="claim not found"
+            )
+        return {"events": claim_agent_timeline(session, claim_id)}
 
 
 @router.get("/claims/{claim_id}/evidence/{evidence_id}/media")

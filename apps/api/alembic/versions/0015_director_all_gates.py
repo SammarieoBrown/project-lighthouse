@@ -16,6 +16,7 @@ drift from packages/contracts/schema.sql.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from alembic import op
 
@@ -63,59 +64,34 @@ def upgrade() -> None:
         op.execute(_canonical_function(name))
 
 
+def _vendored_sql(name: str) -> str:
+    """The pre-0015 function bodies, kept beside this file — ``schema.sql`` has
+    moved on and no longer contains them."""
+    return (Path(__file__).resolve().parent / "downgrade_sql" / name).read_text(
+        encoding="utf-8"
+    )
+
+
 def downgrade() -> None:
+    """Return each gate to the single role that owned it.
+
+    Signatures a Director gave under the widened rules would violate the
+    restored constraint, so they go with the rows that depend on them. Like
+    0016, this is a development path: withdrawing delegated authority in
+    production is a decision to make forward.
+    """
     op.execute(
         """
+        DELETE FROM disbursement;
+        DELETE FROM disbursement_batch;
+        DELETE FROM approval
+         WHERE gate = 'DISBURSEMENT_BATCH' AND role_at_time <> 'FINANCE_OFFICER';
+
         ALTER TABLE approval DROP CONSTRAINT approval_gate_role_chk;
         ALTER TABLE approval ADD CONSTRAINT approval_gate_role_chk CHECK (
           (gate IN ('ALERT_CASCADE', 'ALLOCATION_PLAN') AND role_at_time = 'DIRECTOR')
           OR (gate = 'DISBURSEMENT_BATCH' AND role_at_time = 'FINANCE_OFFICER')
         );
-
-        CREATE OR REPLACE FUNCTION approval_role_guard()
-        RETURNS trigger LANGUAGE plpgsql AS $function$
-        DECLARE
-          signer_role app_role;
-          signer_active boolean;
-        BEGIN
-          SELECT role, active
-            INTO signer_role, signer_active
-            FROM app_user
-           WHERE id = NEW.approved_by;
-
-          IF NOT FOUND OR NOT signer_active THEN
-            RAISE EXCEPTION 'approval signer % is missing or inactive', NEW.approved_by;
-          END IF;
-
-          IF NEW.role_at_time IS DISTINCT FROM signer_role THEN
-            RAISE EXCEPTION
-              'approval role snapshot % does not match signer role %',
-              NEW.role_at_time, signer_role;
-          END IF;
-
-          IF NEW.gate IN ('ALERT_CASCADE', 'ALLOCATION_PLAN')
-             AND signer_role <> 'DIRECTOR' THEN
-            RAISE EXCEPTION 'gate % requires DIRECTOR, got %', NEW.gate, signer_role;
-          END IF;
-
-          IF NEW.gate = 'DISBURSEMENT_BATCH'
-             AND signer_role <> 'FINANCE_OFFICER' THEN
-            RAISE EXCEPTION
-              'gate DISBURSEMENT_BATCH requires FINANCE_OFFICER, got %', signer_role;
-          END IF;
-
-          NEW.approved_at := statement_timestamp();
-          RETURN NEW;
-        END
-        $function$;
         """
     )
-    # The pre-0015 bodies of the other three functions live in git history;
-    # restoring them wholesale here would freeze stale copies of unrelated
-    # logic into this file. Downgrading past 0015 is a git checkout of the
-    # schema plus a manual re-apply, and the demo decision it reverses should
-    # be reverted forward anyway.
-    raise RuntimeError(
-        "0015 downgrade is intentionally partial: re-apply the pre-0015 "
-        "guard functions from git history deliberately."
-    )
+    op.execute(_vendored_sql("0015_downgrade.sql"))

@@ -327,19 +327,22 @@ def test_review_clerk_approval_appends_override_and_performs_t7_idempotently(ses
     ) == 2
 
 
-def test_review_override_rejects_non_clerk_and_stale_or_conflicting_decisions(session):
+def test_review_override_rejects_unauthorized_and_stale_or_conflicting_decisions(session):
     event = make_event(session)
     sf = make_storm_file(session, state=StormFileState.AFFECTED)
     claim = make_claim(session, sf, event)
     agent_run = run_verification(session, claim.id)
-    director = make_user(session, AppRole.DIRECTOR)
+    # Since 0015 a Director carries authority at every gate, so the role that
+    # must still be refused here is one that never judged evidence: Finance
+    # signs money, and signing money is not the same as deciding what is true.
+    finance = make_user(session, AppRole.FINANCE_OFFICER)
 
-    with pytest.raises(ReviewDecisionConflict, match="Review Clerk"):
+    with pytest.raises(ReviewDecisionConflict, match="Review Clerk or Director"):
         record_review_decision(
             session,
             claim_id=claim.id,
             verification_id=agent_run.verification.id,
-            clerk_id=director.id,
+            clerk_id=finance.id,
             verdict=Verdict.APPROVED,
             rationale="Not authorised.",
         )

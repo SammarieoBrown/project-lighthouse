@@ -43,6 +43,7 @@ from .donations_service import (
 )
 from .human_auth import AuthenticatedHuman, authenticate_human
 from .models import (
+    AutoApprovalPolicy,
     Allocation,
     AllocationPlan,
     Approval,
@@ -452,19 +453,29 @@ def _existing_outcome(
 def approve_claim_allocation(
     session: Session,
     *,
-    human: AuthenticatedHuman,
     claim_id: uuid.UUID,
     request: AllocationApprovalRequest,
     idempotency_key: str | None,
+    human: AuthenticatedHuman | None = None,
+    policy: AutoApprovalPolicy | None = None,
 ) -> ApprovalOutcome:
-    """Create the signature, plan, allocation, and ledger row atomically."""
+    """Create the signature, plan, allocation, and ledger row atomically.
+
+    Signed either by a human at a keyboard or by an agent drawing on a
+    Director's standing authorization. Both paths write the same rows through
+    the same checks; only the identity on the signature and the actor on the
+    ledger differ, because those are the two things that genuinely differ.
+    """
+    if (human is None) == (policy is None):
+        raise ValueError("an approval is signed by exactly one of a human or a policy")
+    signer_id = human.user.id if human is not None else policy.created_by
     key = _validate_idempotency_key(idempotency_key)
     request_hash = _request_hash(claim_id, request)
-    _idempotency_lock(session, human.user.id, key)
+    _idempotency_lock(session, signer_id, key)
 
     existing = session.scalar(
         select(Approval).where(
-            Approval.approved_by == human.user.id,
+            Approval.approved_by == signer_id,
             Approval.idempotency_key == key,
         )
     )
@@ -533,17 +544,24 @@ def approve_claim_allocation(
         gate=GateKind.ALLOCATION_PLAN,
         subject_type="allocation_plan",
         subject_id=plan_id,
-        approved_by=human.user.id,
-        role_at_time=human.user.role,
-        reauth_at=human.credential.reauthenticated_at,
+        approved_by=signer_id,
+        role_at_time=(
+            human.user.role if human is not None else policy.role_at_time
+        ),
+        reauth_at=(
+            human.credential.reauthenticated_at
+            if human is not None
+            else policy.reauth_at
+        ),
         note=request.note,
         idempotency_key=key,
         request_hash=request_hash,
+        policy_id=None if policy is None else policy.id,
     )
     plan = AllocationPlan(
         id=plan_id,
         hazard_event_id=claim.hazard_event_id,
-        proposed_by="manual_request",
+        proposed_by="manual_request" if human is not None else "auto_approval_policy",
         approval_id=approval.id,
     )
     # The approval points to a pre-generated polymorphic subject ID, while the
@@ -597,8 +615,12 @@ def approve_claim_allocation(
         action=str(Event.ALLOCATION_APPROVED),
         subject_type="allocation",
         subject_id=allocation.id,
+        # HUMAN on both paths, and truthfully so: the signature backing an
+        # auto-approved allocation is the Director's, given in advance. The
+        # agent is the instrument, and the policy it drew on is recorded
+        # beside this entry rather than inside a hash-covered receipt.
         actor_kind=ActorKind.HUMAN,
-        actor_id=human.user.id,
+        actor_id=signer_id,
         payload=allocation_ledger_payload(
             approval=approval,
             plan=plan,

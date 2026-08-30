@@ -11,6 +11,8 @@ const MAX_REQUEST_BYTES = 16 * 1024;
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}";
 const CLAIM_DETAIL = new RegExp(`^/api/claims/${UUID}$`);
 const CLAIM_EVIDENCE_MEDIA = new RegExp(`^/api/claims/${UUID}/evidence/${UUID}/media$`);
+const CLAIM_TIMELINE = new RegExp(`^/api/claims/${UUID}/timeline$`);
+const POLICY_REVOKE = new RegExp(`^/v1/auto-approval/policies/${UUID}/revoke$`);
 const APPROVAL = new RegExp(`^/v1/claims/${UUID}/allocations/approve$`);
 const REVIEW = new RegExp(`^/v1/claims/${UUID}/verification/review$`);
 const SIGN_DISBURSEMENT = new RegExp(`^/v1/allocations/${UUID}/disbursements/sign$`);
@@ -50,6 +52,8 @@ function allowedPath(method: string, segments: string[]): string | null {
     || path === "/v1/auth/session"
     || CLAIM_DETAIL.test(path)
     || CLAIM_EVIDENCE_MEDIA.test(path)
+    || CLAIM_TIMELINE.test(path)
+    || path === "/v1/auto-approval/policies"
     || DONOR_JOURNEY.test(path)
     || FNOL_PDF.test(path)
   )) return path;
@@ -64,6 +68,8 @@ function allowedPath(method: string, segments: string[]): string | null {
     || SIGN_DISBURSEMENT.test(path)
     || EXECUTE_DISBURSEMENT.test(path)
     || DAMAGE_REVIEW.test(path)
+    || path === "/v1/auto-approval/policies"
+    || POLICY_REVOKE.test(path)
   )) return path;
   // Sign-out is the only DELETE the console may make.
   if (method === "DELETE" && path === "/v1/auth/session") return path;

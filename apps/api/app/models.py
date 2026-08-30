@@ -528,6 +528,44 @@ class Approval(Base):
     idempotency_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     request_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    #: Set exactly when an agent signed under a Director's standing policy.
+    policy_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("auto_approval_policy.id"), nullable=True
+    )
+
+
+class AutoApprovalPolicy(Base):
+    """A Director's delegated authority, bounded and revocable (ADM-02).
+
+    The human decision, made once for a class of claims. Every bound here is
+    re-checked by the database when an agent signs against it, so this row is
+    the authorization rather than a hint the agent may choose to respect.
+    """
+
+    __tablename__ = "auto_approval_policy"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    hazard_event_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("hazard_event.id")
+    )
+    max_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    min_confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3))
+    min_signals: Mapped[int] = mapped_column(SmallInteger)
+    requires_assessment: Mapped[bool] = mapped_column(Boolean, default=True)
+    payer_route: Mapped[PayerRoute] = mapped_column(_enum(PayerRoute, "payer_route"))
+    pool_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("donation_pool.id"), nullable=True
+    )
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("app_user.id")
+    )
+    role_at_time: Mapped[AppRole] = mapped_column(_enum(AppRole, "app_role"))
+    reauth_at: Mapped[datetime] = mapped_column(TS)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("app_user.id"), nullable=True
+    )
 
 
 class AllocationPlan(Base):

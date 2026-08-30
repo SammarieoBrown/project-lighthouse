@@ -813,6 +813,43 @@ CREATE TABLE stock_item (
 -- Human gates G1/G2/G3. One table, role-checked. ADM-02 requires
 -- re-authentication at the moment of signing; reauth_at records that it
 -- happened, and a signature without it is invalid.
+-- A Director's standing authorization: the human decision made once, for a
+-- class of claims, instead of once per claim. It is what lets an agent write
+-- an approval at all — the signature on every auto-approved allocation is
+-- still a named human's, and the bounds they set are enforced below rather
+-- than trusted to the agent that reads them.
+CREATE TABLE auto_approval_policy (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  hazard_event_id   uuid NOT NULL REFERENCES hazard_event(id) ON DELETE RESTRICT,
+  -- The ceiling on one claim. Above it, a human decides that claim.
+  max_amount        numeric(14,2) NOT NULL CHECK (max_amount > 0),
+  min_confidence    numeric(4,3) NOT NULL
+    CHECK (min_confidence >= 0 AND min_confidence <= 1),
+  -- How much independent evidence must have scored, out of the five signals.
+  min_signals       smallint NOT NULL CHECK (min_signals BETWEEN 1 AND 5),
+  requires_assessment boolean NOT NULL DEFAULT true,
+  payer_route       payer_route NOT NULL,
+  pool_id           uuid REFERENCES donation_pool(id),
+  created_by        uuid NOT NULL REFERENCES app_user(id) ON DELETE RESTRICT,
+  role_at_time      app_role NOT NULL,
+  reauth_at         timestamptz NOT NULL,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  revoked_at        timestamptz,
+  revoked_by        uuid REFERENCES app_user(id),
+  CONSTRAINT auto_approval_policy_route_chk CHECK (
+    (payer_route = 'DONOR_POOL' AND pool_id IS NOT NULL)
+    OR (payer_route = 'GOV_RELIEF' AND pool_id IS NULL)
+  ),
+  CONSTRAINT auto_approval_policy_revocation_chk CHECK (
+    (revoked_at IS NULL) = (revoked_by IS NULL)
+  ),
+  -- Delegated authority is a Director's to give. Nobody else's.
+  CONSTRAINT auto_approval_policy_author_chk CHECK (role_at_time = 'DIRECTOR')
+);
+
+CREATE INDEX auto_approval_policy_active_idx
+  ON auto_approval_policy (hazard_event_id) WHERE revoked_at IS NULL;
+
 CREATE TABLE approval (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   gate            gate_kind NOT NULL,
@@ -825,6 +862,10 @@ CREATE TABLE approval (
   idempotency_key text,
   request_hash    text,
   approved_at     timestamptz NOT NULL DEFAULT now(),
+  -- Set exactly when an agent signed under a Director's standing policy. The
+  -- signature still names the Director; this says which authorization it drew
+  -- on, so an auto-approval can never be mistaken for someone at a keyboard.
+  policy_id       uuid REFERENCES auto_approval_policy(id) ON DELETE RESTRICT,
   CONSTRAINT approval_request_pair_chk
     CHECK ((idempotency_key IS NULL) = (request_hash IS NULL)),
   CONSTRAINT approval_idempotency_key_length_chk
@@ -840,9 +881,15 @@ CREATE TABLE approval (
     OR (gate = 'DISBURSEMENT_BATCH'
         AND role_at_time IN ('FINANCE_OFFICER', 'DIRECTOR'))
   ),
+  -- A human at a keyboard must have re-proved their password moments ago. An
+  -- agent signing under a policy inherits the reauthentication the Director
+  -- performed when they set it, and the trigger checks it matches exactly.
   CONSTRAINT approval_recent_reauth_chk CHECK (
-    reauth_at >= approved_at - interval '5 minutes'
-    AND reauth_at <= approved_at + interval '1 minute'
+    policy_id IS NOT NULL
+    OR (
+      reauth_at >= approved_at - interval '5 minutes'
+      AND reauth_at <= approved_at + interval '1 minute'
+    )
   )
 );
 
@@ -863,6 +910,7 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   signer_role app_role;
   signer_active boolean;
+  policy_row auto_approval_policy%ROWTYPE;
 BEGIN
   SELECT role, active
     INTO signer_role, signer_active
@@ -889,6 +937,25 @@ BEGIN
     RAISE EXCEPTION
       'gate DISBURSEMENT_BATCH requires FINANCE_OFFICER or DIRECTOR, got %',
       signer_role;
+  END IF;
+
+  IF NEW.policy_id IS NOT NULL THEN
+    SELECT * INTO policy_row FROM auto_approval_policy WHERE id = NEW.policy_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'approval names a policy that does not exist';
+    END IF;
+    IF policy_row.revoked_at IS NOT NULL THEN
+      RAISE EXCEPTION 'approval draws on a revoked authorization';
+    END IF;
+    IF NEW.gate <> 'ALLOCATION_PLAN' THEN
+      RAISE EXCEPTION 'a standing authorization covers allocations only';
+    END IF;
+    -- The signature must be the Director who gave the authority, carrying the
+    -- reauthentication they performed at the time they gave it.
+    IF NEW.approved_by IS DISTINCT FROM policy_row.created_by
+       OR NEW.reauth_at IS DISTINCT FROM policy_row.reauth_at THEN
+      RAISE EXCEPTION 'auto-approval must carry its policy author and reauthentication';
+    END IF;
   END IF;
 
   NEW.approved_at := statement_timestamp();
@@ -1230,6 +1297,7 @@ DECLARE
   signal_present boolean;
   signal_score numeric;
   all_present boolean := true;
+  policy_row auto_approval_policy%ROWTYPE;
 BEGIN
   IF TG_OP IN ('UPDATE', 'DELETE') THEN
     RAISE EXCEPTION 'signed allocation is immutable';
@@ -1263,6 +1331,29 @@ BEGIN
     END IF;
   ELSE
     RAISE EXCEPTION 'allocation resource is not releasable';
+  END IF;
+
+  -- A delegated signature may not exceed what was delegated. The agent that
+  -- writes an auto-approval reads the same policy, but reading it is not the
+  -- guarantee — this is.
+  SELECT p.* INTO policy_row
+    FROM allocation_plan pl
+    JOIN approval a ON a.id = pl.approval_id
+    JOIN auto_approval_policy p ON p.id = a.policy_id
+   WHERE pl.id = NEW.plan_id;
+  IF FOUND THEN
+    IF NEW.resource <> 'CASH' THEN
+      RAISE EXCEPTION 'a standing authorization covers cash relief only';
+    END IF;
+    IF NEW.amount > policy_row.max_amount THEN
+      RAISE EXCEPTION
+        'auto-approved allocation of % exceeds the authorized ceiling of %',
+        NEW.amount, policy_row.max_amount;
+    END IF;
+    IF NEW.payer_route IS DISTINCT FROM policy_row.payer_route
+       OR NEW.pool_id IS DISTINCT FROM policy_row.pool_id THEN
+      RAISE EXCEPTION 'auto-approved allocation draws on an unauthorized funding source';
+    END IF;
   END IF;
 
   IF NEW.payer_route = 'DONOR_POOL' THEN
