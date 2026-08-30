@@ -117,6 +117,22 @@ def downgrade() -> None:
     """
     op.execute(
         """
+        -- Order matters: a plan points at its approval and an allocation at
+        -- its plan, so the signature cannot go first.
+        DELETE FROM disbursement WHERE approval_id IN (
+          SELECT id FROM approval WHERE policy_id IS NOT NULL
+        );
+        DELETE FROM disbursement_batch WHERE approval_id IN (
+          SELECT id FROM approval WHERE policy_id IS NOT NULL
+        );
+        DELETE FROM allocation WHERE plan_id IN (
+          SELECT id FROM allocation_plan WHERE approval_id IN (
+            SELECT id FROM approval WHERE policy_id IS NOT NULL
+          )
+        );
+        DELETE FROM allocation_plan WHERE approval_id IN (
+          SELECT id FROM approval WHERE policy_id IS NOT NULL
+        );
         DELETE FROM approval WHERE policy_id IS NOT NULL;
         ALTER TABLE approval DROP CONSTRAINT approval_recent_reauth_chk;
         ALTER TABLE approval ADD CONSTRAINT approval_recent_reauth_chk CHECK (
