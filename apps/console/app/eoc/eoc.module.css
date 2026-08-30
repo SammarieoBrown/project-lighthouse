@@ -396,6 +396,69 @@
   overflow: hidden;
 }
 
+/* The live board carries a fourth block — the outlook — and it is the one
+ * with unbounded content (NHC writes as much prose as the basin needs), so it
+ * takes the flexible row and scrolls; the status feed beneath is two fixed
+ * lines and sizes to itself. */
+.sideLive {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.outlook {
+  border-bottom: 1px solid var(--lh-rule);
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--lh-space-4);
+}
+
+.outlookArea {
+  border-top: 1px solid var(--lh-rule);
+  padding: var(--lh-space-3) var(--lh-space-5);
+}
+.outlookArea:first-of-type { border-top: 0; }
+
+.outlookSummary {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lh-space-1);
+  list-style: none;
+}
+.outlookSummary::-webkit-details-marker { display: none; }
+.outlookSummary:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
+
+.outlookTitle {
+  font-size: var(--lh-text-fine);
+  font-weight: var(--lh-body-weight-strong);
+}
+
+/* The published numbers, in the data face because they are read as figures.
+ * No hue: a formation chance is a forecast probability, not a severity, and
+ * borrowing a meaning colour for it would be the first crack in rule C1. */
+.outlookChance {
+  color: var(--lh-quiet);
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-micro);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.outlookText {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+  margin: var(--lh-space-3) 0 0;
+}
+
+.outlookNote {
+  color: var(--lh-quiet);
+  font-size: var(--lh-text-fine);
+  line-height: var(--lh-leading-base);
+  margin: 0;
+  padding: var(--lh-space-3) var(--lh-space-5) 0;
+}
+
 /* The one open human gate. The only thing on this screen permitted to move.
  *
  * It had an amber left-border until it was read back against rule 14 — a thick

@@ -759,7 +759,11 @@ export function EocConsole() {
                     ? liveBoard.basin.storms === null
                       ? "NHC basin feed unreachable · posture remains live"
                       : liveBoard.basin.storms.length === 0
-                        ? "No active Atlantic system in NHC's live feed"
+                        ? `No active Atlantic system in NHC's live feed${
+                            liveBoard.outlook?.areas?.length
+                              ? ` · ${liveBoard.outlook.areas.length} outlook disturbance(s) in the side panel`
+                              : ""
+                          }`
                         : `${liveBoard.basin.storms.length} active Atlantic system(s) · nearest centred on the map when in range`
                     : "Reading the live board…"}
               </span>
@@ -848,7 +852,7 @@ export function EocConsole() {
         </section>
 
         {live ? (
-          <aside className={styles.side}>
+          <aside className={`${styles.side} ${styles.sideLive}`}>
             <div className={styles.gate}>
               <span className={styles.gateRole}>Live board</span>
               <h2 className={styles.gateAsk}>
@@ -914,6 +918,57 @@ export function EocConsole() {
                   <span className={styles.countValue}>—</span>
                 </div>
               )}
+            </div>
+
+            <div className={styles.outlook}>
+              <div className={styles.panelHead}>
+                <span>
+                  Disturbances · Tropical Weather Outlook
+                  {liveBoard?.outlook?.issued ? ` · ${liveBoard.outlook.issued}` : ""}
+                </span>
+              </div>
+              {!liveBoard?.outlook ? (
+                <p className={styles.outlookNote}>
+                  {liveBoard
+                    ? "This API does not publish the outlook yet."
+                    : "The outlook arrives with the board."}
+                </p>
+              ) : liveBoard.outlook.areas === null ? (
+                <p className={styles.outlookNote}>
+                  {liveBoard.outlook.status === "unparsed"
+                    ? "NHC's outlook was fetched but its format has drifted past this reader. Nothing is summarised in its place — read the product directly."
+                    : "NHC's outlook is unreachable. Nothing is substituted."}
+                </p>
+              ) : liveBoard.outlook.areas.length === 0 ? (
+                <p className={styles.outlookNote}>
+                  Tropical cyclone formation is not expected in NHC&apos;s current
+                  Atlantic outlook.
+                </p>
+              ) : (
+                liveBoard.outlook.areas.map((area) => (
+                  <details className={styles.outlookArea} key={area.title}>
+                    <summary className={styles.outlookSummary}>
+                      <span className={styles.outlookTitle}>{area.title}</span>
+                      <span className={styles.outlookChance}>
+                        {area.chance_48h
+                          ? `${area.chance_48h.percent}% · 48 h`
+                          : "48 h chance unavailable"}
+                        {" · "}
+                        {area.chance_7day
+                          ? `${area.chance_7day.percent}% · 7 d`
+                          : "7 d chance unavailable"}
+                      </span>
+                    </summary>
+                    <p className={styles.outlookText}>{area.text}</p>
+                  </details>
+                ))
+              )}
+              {liveBoard?.outlook?.status === "stale" ? (
+                <p className={styles.outlookNote}>
+                  Shown from the last successful read — the outlook feed is
+                  currently unreachable.
+                </p>
+              ) : null}
             </div>
 
             <div className={styles.feed}>

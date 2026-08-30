@@ -16,8 +16,110 @@ from factories import make_event
 @pytest.fixture(autouse=True)
 def clear_basin_cache():
     hazard_live._cache = None
+    hazard_live._two_cache = None
     yield
     hazard_live._cache = None
+    hazard_live._two_cache = None
+
+
+# The Atlantic outlook of 2026-08-30 12z, verbatim: the morning the remnants
+# of Tropical Storm Dolly were the reason this parser got written.
+OUTLOOK_SAMPLE = """\
+ABNT20 KNHC 301136
+TWOAT
+
+Tropical Weather Outlook
+NWS National Hurricane Center Miami FL
+800 AM EDT Sun Aug 30 2026
+
+For the North Atlantic...Caribbean Sea and the Gulf of America:
+
+East of the Leeward Islands (Remnants of Dolly):
+A strong tropical wave, the remnants of Tropical Storm Dolly, is
+producing an area of showers and thunderstorms from Puerto Rico
+eastward across the Virgin Islands and the northern Leeward Islands.
+Conditions may become more conducive for redevelopment by the middle
+of the week as the system reaches the southeastern Gulf of America.
+* Formation chance through 48 hours...low...near 0 percent.
+* Formation chance through 7 days...low...20 percent.
+
+Northern Gulf of America (AL97):
+Showers and thunderstorms associated with an area of low pressure
+have become more concentrated. Interests along the Louisiana and
+Upper Texas coasts should monitor the progress of this system.
+* Formation chance through 48 hours...low...30 percent.
+* Formation chance through 7 days...low...30 percent.
+
+$$
+Forecaster Beven
+"""
+
+QUIET_OUTLOOK = """\
+ABNT20 KNHC 151136
+TWOAT
+
+Tropical Weather Outlook
+NWS National Hurricane Center Miami FL
+800 AM EST Sun Nov 15 2026
+
+For the North Atlantic...Caribbean Sea and the Gulf of America:
+
+Tropical cyclone formation is not expected during the next 7 days.
+
+$$
+Forecaster Beven
+"""
+
+
+def test_outlook_parses_areas_titles_and_chances():
+    parsed = hazard_live.parse_outlook(OUTLOOK_SAMPLE)
+
+    assert parsed["status"] == "ok"
+    assert parsed["issued"] == "800 AM EDT Sun Aug 30 2026"
+    titles = [area["title"] for area in parsed["areas"]]
+    assert titles == [
+        "East of the Leeward Islands (Remnants of Dolly)",
+        "Northern Gulf of America (AL97)",
+    ]
+    dolly, invest = parsed["areas"]
+    # "near 0 percent" reads as 0, not as a parse failure.
+    assert dolly["chance_48h"] == {"band": "low", "percent": 0}
+    assert dolly["chance_7day"] == {"band": "low", "percent": 20}
+    assert invest["chance_7day"] == {"band": "low", "percent": 30}
+    assert "remnants of Tropical Storm Dolly" in dolly["text"]
+    # The sign-off never leaks into an area.
+    assert "Forecaster" not in invest["text"]
+
+
+def test_quiet_outlook_is_zero_areas_not_a_failure():
+    parsed = hazard_live.parse_outlook(QUIET_OUTLOOK)
+
+    assert parsed["status"] == "ok"
+    assert parsed["areas"] == []
+
+
+def test_area_with_drifted_chance_lines_is_kept_with_null_chances():
+    mangled = OUTLOOK_SAMPLE.replace(
+        "* Formation chance through 48 hours...low...near 0 percent.",
+        "* Formation chance through 48 hours...uncertain at this time.",
+    )
+
+    parsed = hazard_live.parse_outlook(mangled)
+
+    dolly = parsed["areas"][0]
+    assert dolly["chance_48h"] is None
+    assert dolly["chance_7day"] == {"band": "low", "percent": 20}
+
+
+def test_unsegmentable_outlook_reports_unparsed_not_quiet():
+    # Formation lines present but the block structure gone: the parser must
+    # not report a quiet basin it cannot actually read.
+    flattened = " ".join(OUTLOOK_SAMPLE.split())
+
+    parsed = hazard_live.parse_outlook(flattened)
+
+    assert parsed["status"] == "unparsed"
+    assert parsed["areas"] is None
 
 
 def _client(monkeypatch: pytest.MonkeyPatch, session) -> TestClient:
