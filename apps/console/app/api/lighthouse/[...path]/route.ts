@@ -54,6 +54,7 @@ function allowedPath(method: string, segments: string[]): string | null {
     || CLAIM_EVIDENCE_MEDIA.test(path)
     || CLAIM_TIMELINE.test(path)
     || path === "/v1/auto-approval/policies"
+    || path === "/v1/warehouses"
     || DONOR_JOURNEY.test(path)
     || FNOL_PDF.test(path)
   )) return path;
