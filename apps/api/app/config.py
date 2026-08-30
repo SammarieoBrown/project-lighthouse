@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     # system that cannot be taken back.
     alert_channel_mode: Literal["simulated"] = "simulated"
     anthropic_api_key: str | None = None
+    # Which Claude model the assessor calls. Env-configured so changing tier
+    # is a deployment decision, not a code change; the default is the cheapest
+    # vision-capable tier because triaging a handful of photos does not need a
+    # frontier model.
+    damage_assessment_model: str = "claude-haiku-4-5"
 
     @property
     def sqlalchemy_url(self) -> str:

@@ -41,8 +41,12 @@ from app.config import get_settings
 from app.intake.media import FetchedMedia, MediaBoundaryError, R2MediaStore
 from app.models import AppUser, Claim, DamageAssessment, StormFile
 
-MODEL_NAME = "claude-opus-5"
-MODEL_VERSION = f"anthropic:{MODEL_NAME}"
+def _model_name() -> str:
+    return get_settings().damage_assessment_model
+
+
+def _model_version() -> str:
+    return f"anthropic:{_model_name()}"
 
 #: The programme disburses in Jamaican dollars and nothing else. The model is
 #: asked for JMD, but a unit is not a thing we take a model's word for: a
@@ -279,7 +283,7 @@ class ClaudeDamageAssessor:
         )
 
         response = client.messages.parse(
-            model=MODEL_NAME,
+            model=_model_name(),
             max_tokens=4096,
             system=_ASSESSMENT_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": content}],
@@ -544,7 +548,7 @@ def run_damage_assessment(
     output = parsed.model_copy(
         update={
             "location_source": location_source,
-            "model_version": MODEL_VERSION,
+            "model_version": _model_version(),
             "currency": CURRENCY,
         }
     )
@@ -711,7 +715,6 @@ __all__ = [
     "DamageAssessor",
     "DeterministicDamageAssessor",
     "DeterministicPhotoStore",
-    "MODEL_VERSION",
     "PhotoStore",
     "ReviewDecisionConflict",
     "has_readable_photo_evidence",

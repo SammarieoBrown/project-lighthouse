@@ -171,8 +171,20 @@ def test_no_usable_location_is_not_runnable(session):
         run_damage_assessment(session, claim.id, assessor=_assessor(), store=DeterministicPhotoStore())
 
 
-def test_disabled_provider_is_refused_when_no_assessor_injected(session):
+def test_disabled_provider_is_refused_when_no_assessor_injected(session, monkeypatch):
     sf, claim, evidence_ids = _verified_claim_with_photo(session)
+
+    # Pin the provider off rather than trusting the developer's .env: a local
+    # environment with a live key enabled would otherwise turn this test into
+    # a real paid vision call.
+    from app.config import get_settings
+
+    disabled = get_settings().model_copy(
+        update={"damage_assessment_provider": "disabled"}
+    )
+    monkeypatch.setattr(
+        "app.damage_assessment_service.get_settings", lambda: disabled
+    )
 
     with pytest.raises(DamageAssessmentProviderDisabled):
         run_damage_assessment(session, claim.id)
@@ -192,7 +204,7 @@ def test_happy_path_stores_proposal_ties_location_and_never_transitions_claim(se
     assert result.assessment.location_source == "claim"
     assert float(result.assessment.estimate_low) == 40000.0
     assert float(result.assessment.estimate_high) == 90000.0
-    assert result.output.model_version == "anthropic:claude-opus-5"
+    assert result.output.model_version == "anthropic:claude-haiku-4-5"
     assert claim.status is ClaimStatus.VERIFIED  # untouched
     assert assessor.calls == [(claim.id, evidence_ids)]
     assert set(store.calls) == {
