@@ -339,7 +339,11 @@ def test_authenticated_claim_reads_are_redacted(monkeypatch, session):
     serialized = json.dumps({"list": list_body, "detail": detail_body})
     assert PHONE not in serialized
     assert phone_hash(PHONE) not in serialized
-    assert body not in serialized
+    # Revised 2026-08-30: the operator view deliberately carries the message
+    # text so a clerk can read what the household said. Phones, provider ids,
+    # and media URIs stay inside the API.
+    assert list_body["claims"][0]["transcript"] == body
+    assert detail_body["transcript"] == body
     assert "provider_message_sid" not in serialized
     assert "uri" not in detail_body["evidence"][0]
 

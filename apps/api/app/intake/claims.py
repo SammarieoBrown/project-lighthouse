@@ -1,9 +1,15 @@
-"""Authenticated, redacted claim operations read API.
+"""Authenticated claim operations read API.
 
 Even parish/community claim rows can re-identify a household when volume is
 low.  These routes therefore require the same short-lived human credential as
-approval actions and never return phones, names, transcripts, provider forms,
-media URIs, or raw evidence payloads.
+approval actions and never return phones, names, provider forms, media URIs,
+or raw evidence payloads.
+
+Revised 2026-08-30, deliberately: the operator view now carries the
+household's message text (``transcript``) and serves photo/audio evidence
+bytes through an authenticated route, because a clerk reviewing a claim needs
+to read what the household actually said.  The public portal keeps the full
+redaction — nothing here is reachable without an operator credential.
 """
 
 from __future__ import annotations
@@ -26,9 +32,15 @@ from lighthouse_contracts import (
     Verdict,
 )
 
+from app.config import get_settings
 from app.db import session_scope
 from app.human_auth import authenticate_human
-from app.intake.media import TWILIO_MEDIA_JOB_TYPE
+from app.intake.media import (
+    TWILIO_MEDIA_JOB_TYPE,
+    MediaBoundaryError,
+    MediaConfigurationError,
+    R2MediaStore,
+)
 from app.models import (
     AgentJob,
     Claim,
@@ -156,6 +168,7 @@ def _summary(session: Session, row) -> dict:
         "channel": row.channel,
         "filed_at": row.filed_at,
         "evidence_count": row.evidence_count,
+        "transcript": row.transcript,
     }
 
 
@@ -171,7 +184,7 @@ def list_redacted_claims(
             SELECT c.id, c.claim_ref, c.status::text AS status, c.damage_type,
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
                    c.severity, c.triage_rank,
-                   c.channel, c.filed_at,
+                   c.channel, c.filed_at, c.transcript,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
                      AS evidence_count,
                    CASE
@@ -301,7 +314,7 @@ def get_redacted_claim(session: Session, claim_id: uuid.UUID) -> dict | None:
             SELECT c.id, c.claim_ref, c.status::text AS status, c.damage_type,
                    c.reported_needs, sf.parish, sf.community, c.sol, c.partial,
                    c.severity, c.triage_rank,
-                   c.channel, c.filed_at,
+                   c.channel, c.filed_at, c.transcript,
                    (SELECT count(*) FROM evidence e WHERE e.claim_id = c.id)::int
                      AS evidence_count
             FROM claim c
@@ -436,6 +449,76 @@ def claim_detail_route(
         if detail is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="claim not found")
         return detail
+
+
+@router.get("/claims/{claim_id}/evidence/{evidence_id}/media")
+def claim_evidence_media_route(
+    claim_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    """Serve one stored photo or voice note to a signed-in operator.
+
+    The R2 URI itself still never leaves the API; the bytes are read back
+    through the same digest check the worker wrote them with, so a mutated
+    object serves a 502 rather than a wrong image.
+    """
+    with session_scope() as session:
+        authenticate_human(session, authorization, allowed_roles=_CLAIM_ROLES)
+        row = session.execute(
+            text(
+                """
+                SELECT uri, sha256, kind::text AS kind
+                FROM evidence
+                WHERE id = :evidence_id AND claim_id = :claim_id
+                """
+            ),
+            {"evidence_id": evidence_id, "claim_id": claim_id},
+        ).one_or_none()
+    if (
+        row is None
+        or row.kind not in {"PHOTO", "AUDIO"}
+        or not row.uri
+        or not row.sha256
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="media not found")
+
+    try:
+        store = R2MediaStore.from_settings(get_settings())
+    except MediaConfigurationError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="media store is not configured",
+        ) from None
+
+    prefix = f"r2://{store.bucket}/"
+    if not str(row.uri).startswith(prefix):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="media not found")
+
+    try:
+        media = store.get(str(row.uri)[len(prefix):], expected_sha256=str(row.sha256))
+    except MediaBoundaryError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="stored media failed integrity verification",
+        ) from None
+    except Exception:
+        # An object-store failure must not become a 500 with a stack trace; the
+        # operator needs "media unavailable", and the URI stays unlogged.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="stored media is unavailable",
+        ) from None
+
+    return Response(
+        content=media.data,
+        media_type=media.content_type or "application/octet-stream",
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 __all__ = [
