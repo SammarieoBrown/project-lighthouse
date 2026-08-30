@@ -12,9 +12,12 @@ we still have not lost a household's message.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lighthouse_contracts import __version__ as contracts_version
@@ -157,7 +160,48 @@ class BoundedApprovalBodyMiddleware:
         await self.app(scope, replay_receive, send)
 
 
-app = FastAPI(title="Lighthouse API", version="0.1.0")
+#: Namespace for the advisory lock the pool seeder takes. Arbitrary, but fixed:
+#: two instances booting together must contend on the same number.
+_POOL_SEED_LOCK = 0x4C48_0001
+
+
+def _ensure_donation_pools() -> None:
+    """Open the demo donation pools if they are not open already (DON-01).
+
+    This lives on boot rather than only in the deploy hook because the deploy
+    hook turned out not to run: the service auto-deploys on commit and does not
+    read ``render.yaml``, so a ``preDeployCommand`` added there is inert until
+    somebody sinks the Blueprint by hand. The portal's give form renders only
+    when a pool exists, so that left a public surface permanently in its empty
+    state — the exact failure the hook was written to end.
+
+    Guarded by a transaction-scoped advisory lock because ``donation_pool.name``
+    carries no unique constraint; two instances booting at once would otherwise
+    race to mint the same pot twice.
+
+    Never fatal. A pool that cannot be opened is a portal that cannot take a
+    donation, which is bad; an API that will not boot is every other surface
+    down as well, which is worse.
+    """
+    try:
+        from .replay.seed_claims import seed_pools
+
+        with session_scope() as session:
+            session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _POOL_SEED_LOCK})
+            created = seed_pools(session)
+        if created:
+            log.info("donation pools opened count=%d", created)
+    except Exception as exc:  # noqa: BLE001 - boot must survive any failure here
+        log.error("donation pool seeding failed type=%s", type(exc).__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    _ensure_donation_pools()
+    yield
+
+
+app = FastAPI(title="Lighthouse API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(BoundedApprovalBodyMiddleware)
 router = APIRouter()
 
