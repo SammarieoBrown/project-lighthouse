@@ -231,3 +231,29 @@ def test_seeding_pools_repairs_a_pool_seeded_with_a_drifted_scope(session):
     pools = list(session.scalars(select(DonationPool).where(DonationPool.name == "St Elizabeth pool")))
     assert len(pools) == 1
     assert pools[0].scope_value == "Saint Elizabeth"
+
+
+def test_the_deploy_hook_ensures_pools_and_touches_nothing_else(session, monkeypatch):
+    """``python -m app.replay.seed_pools`` runs after every production
+    migration. It must leave the pools standing and every other table alone —
+    the synthetic-claim replay staying a deliberate act is the reason the hook
+    exists separately at all."""
+    from contextlib import contextmanager
+
+    from app.models import DonationPool
+    from app.replay import seed_pools as deploy_hook
+
+    @contextmanager
+    def scoped():
+        yield session
+        session.flush()
+
+    monkeypatch.setattr(deploy_hook, "session_scope", scoped)
+
+    assert deploy_hook.main() == 0
+    assert deploy_hook.main() == 0  # a second deploy mints nothing
+
+    names = list(session.scalars(select(DonationPool.name)))
+    assert len(names) == 3
+    assert "St Elizabeth pool" in names
+    assert session.scalar(select(func.count(Claim.id))) == 0
