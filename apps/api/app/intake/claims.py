@@ -18,7 +18,7 @@ import math
 import re
 import uuid
 
-from fastapi import APIRouter, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Cookie, Header, HTTPException, Query, Response, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ from lighthouse_contracts import (
     Verdict,
 )
 
+from app.auth_session import read_session
 from app.config import get_settings
 from app.db import session_scope
 from app.human_auth import authenticate_human
@@ -417,16 +418,38 @@ def get_redacted_claim(session: Session, claim_id: uuid.UUID) -> dict | None:
     return detail
 
 
+def _authenticate_reader(
+    session, authorization: str | None, lh_session: str | None
+) -> None:
+    """An eight-hour shift cookie or a step-up bearer both open the reads.
+
+    This is the split ``auth_session`` documents: signing in opens the queues
+    a role permits, and only approving or signing re-proves the password. A
+    supplied bearer is still validated strictly — presenting a bad credential
+    never falls back to the cookie.
+    """
+    if authorization:
+        authenticate_human(session, authorization, allowed_roles=_CLAIM_ROLES)
+        return
+    user = read_session(session, lh_session)
+    if user.role not in _CLAIM_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="your role cannot read the claim queue",
+        )
+
+
 @router.get("/claims")
 def list_claims_route(
     response: Response,
     authorization: str | None = Header(default=None),
+    lh_session: str | None = Cookie(default=None),
     hazard_event_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> dict:
     response.headers["Cache-Control"] = "no-store"
     with session_scope() as session:
-        authenticate_human(session, authorization, allowed_roles=_CLAIM_ROLES)
+        _authenticate_reader(session, authorization, lh_session)
         return {
             "claims": list_redacted_claims(
                 session,
@@ -441,10 +464,11 @@ def claim_detail_route(
     claim_id: uuid.UUID,
     response: Response,
     authorization: str | None = Header(default=None),
+    lh_session: str | None = Cookie(default=None),
 ) -> dict:
     response.headers["Cache-Control"] = "no-store"
     with session_scope() as session:
-        authenticate_human(session, authorization, allowed_roles=_CLAIM_ROLES)
+        _authenticate_reader(session, authorization, lh_session)
         detail = get_redacted_claim(session, claim_id)
         if detail is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="claim not found")
@@ -456,6 +480,7 @@ def claim_evidence_media_route(
     claim_id: uuid.UUID,
     evidence_id: uuid.UUID,
     authorization: str | None = Header(default=None),
+    lh_session: str | None = Cookie(default=None),
 ) -> Response:
     """Serve one stored photo or voice note to a signed-in operator.
 
@@ -464,7 +489,7 @@ def claim_evidence_media_route(
     object serves a 502 rather than a wrong image.
     """
     with session_scope() as session:
-        authenticate_human(session, authorization, allowed_roles=_CLAIM_ROLES)
+        _authenticate_reader(session, authorization, lh_session)
         row = session.execute(
             text(
                 """
