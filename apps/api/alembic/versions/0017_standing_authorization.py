@@ -15,6 +15,7 @@ Revises: 0016_director_sized_grants
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from alembic import op
 
@@ -26,6 +27,17 @@ branch_labels = None
 depends_on = None
 
 _FUNCTIONS = ("approval_role_guard", "allocation_signed_guard")
+
+
+def _vendored_sql(name: str) -> str:
+    """The prior function bodies, kept beside this file.
+
+    A downgrade cannot read them out of ``schema.sql``: that file has moved on
+    and no longer contains the versions this migration replaced.
+    """
+    return (Path(__file__).resolve().parent / "downgrade_sql" / name).read_text(
+        encoding="utf-8"
+    )
 
 
 def _canonical_function(name: str) -> str:
@@ -43,9 +55,13 @@ def _canonical_function(name: str) -> str:
 
 
 def upgrade() -> None:
+    # ``0001_initial`` applies the whole canonical schema, which now contains
+    # everything below. So a fresh chain reaches 0017 with these objects
+    # already present, and every statement here has to be idempotent — the
+    # same shape 0015 and 0016 take for the same reason.
     op.execute(
         """
-        CREATE TABLE auto_approval_policy (
+        CREATE TABLE IF NOT EXISTS auto_approval_policy (
           id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           hazard_event_id   uuid NOT NULL REFERENCES hazard_event(id) ON DELETE RESTRICT,
           max_amount        numeric(14,2) NOT NULL CHECK (max_amount > 0),
@@ -71,11 +87,12 @@ def upgrade() -> None:
           CONSTRAINT auto_approval_policy_author_chk CHECK (role_at_time = 'DIRECTOR')
         );
 
-        CREATE INDEX auto_approval_policy_active_idx
+        CREATE INDEX IF NOT EXISTS auto_approval_policy_active_idx
           ON auto_approval_policy (hazard_event_id) WHERE revoked_at IS NULL;
 
         ALTER TABLE approval
-          ADD COLUMN policy_id uuid REFERENCES auto_approval_policy(id) ON DELETE RESTRICT;
+          ADD COLUMN IF NOT EXISTS policy_id uuid
+            REFERENCES auto_approval_policy(id) ON DELETE RESTRICT;
 
         ALTER TABLE approval DROP CONSTRAINT approval_recent_reauth_chk;
         ALTER TABLE approval ADD CONSTRAINT approval_recent_reauth_chk CHECK (
@@ -92,7 +109,22 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError(
-        "0017 downgrade would strip the authorization rows that existing "
-        "auto-approvals point at; revert forward with a new migration instead."
+    """Withdraw delegation entirely: every claim returns to a human.
+
+    Any auto-approved allocation keeps its signature and its ledger receipt —
+    those are immutable and stay true, because a Director really did authorize
+    them. What goes is the ability to sign that way again.
+    """
+    op.execute(
+        """
+        DELETE FROM approval WHERE policy_id IS NOT NULL;
+        ALTER TABLE approval DROP CONSTRAINT approval_recent_reauth_chk;
+        ALTER TABLE approval ADD CONSTRAINT approval_recent_reauth_chk CHECK (
+          reauth_at >= approved_at - interval '5 minutes'
+          AND reauth_at <= approved_at + interval '1 minute'
+        );
+        ALTER TABLE approval DROP COLUMN IF EXISTS policy_id;
+        DROP TABLE IF EXISTS auto_approval_policy;
+        """
     )
+    op.execute(_vendored_sql("0017_downgrade.sql"))

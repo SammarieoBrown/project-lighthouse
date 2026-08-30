@@ -13,6 +13,7 @@ the same pattern 0015 uses.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from alembic import op
 
@@ -30,6 +31,14 @@ _FUNCTIONS = (
     "disbursement_lifecycle_guard",
     "ledger_disbursement_receipt_guard",
 )
+
+
+def _vendored_sql(name: str) -> str:
+    """The pre-0016 function bodies, kept beside this file — ``schema.sql`` has
+    moved on and no longer contains them."""
+    return (Path(__file__).resolve().parent / "downgrade_sql" / name).read_text(
+        encoding="utf-8"
+    )
 
 
 def _canonical_function(name: str) -> str:
@@ -81,7 +90,44 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError(
-        "0016 downgrade would re-pin the flat grant over rows it no longer "
-        "matches; revert forward with a new migration instead."
+    """Re-pin the flat grant.
+
+    Allocations already signed at another figure would violate the restored
+    constraint, so they are removed with the rows that depend on them. This is
+    a development path — reverting a policy in production is a decision to make
+    forward, with a new migration and a Director behind it.
+    """
+    op.execute(
+        """
+        DELETE FROM disbursement;
+        DELETE FROM disbursement_batch;
+        DELETE FROM allocation WHERE resource = 'CASH' AND amount <> 45000.00;
+
+        ALTER TABLE allocation DROP CONSTRAINT allocation_release_policy_chk;
+        ALTER TABLE allocation ADD CONSTRAINT allocation_release_policy_chk CHECK (
+          (
+            resource = 'CASH'
+            AND amount = 45000.00
+            AND currency = 'JMD'
+            AND sku IS NULL
+            AND quantity IS NULL
+            AND warehouse_id IS NULL
+          ) OR (
+            resource = 'ITEM'
+            AND amount IS NULL
+            AND sku IS NOT NULL
+            AND quantity IS NOT NULL
+            AND quantity > 0
+            AND warehouse_id IS NOT NULL
+          )
+        );
+
+        ALTER TABLE disbursement_batch
+          DROP CONSTRAINT disbursement_batch_release_policy_chk;
+        ALTER TABLE disbursement_batch
+          ADD CONSTRAINT disbursement_batch_release_policy_chk CHECK (
+            total = 45000.00 AND channel IN ('BANK', 'MOBILE_MONEY', 'VOUCHER')
+          );
+        """
     )
+    op.execute(_vendored_sql("0016_downgrade.sql"))
