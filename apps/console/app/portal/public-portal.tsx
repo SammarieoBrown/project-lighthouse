@@ -31,8 +31,19 @@ type Pool = {
 type LedgerEntry = {
   seq: number;
   action: string;
-  ts: string;
+  /** Date only. The public ledger deliberately publishes the day an entry was
+   *  recorded, not the time — coarse on purpose for a public surface. */
+  recorded_on?: string;
 };
+
+/* A date, because a date is what the API publishes. Formatting it through
+ * `new Date(...).toLocaleString()` fabricated a midnight time the ledger never
+ * stated (rule C3) — and reading the old `ts` field, which the serializer does
+ * not send, rendered "Invalid Date" on every row. */
+const entryDate = new Intl.DateTimeFormat("en-JM", {
+  dateStyle: "medium",
+  timeZone: "UTC",
+});
 
 type Aggregate = {
   count: number;
@@ -484,8 +495,10 @@ export function PublicPortal() {
                     information the reader needs. */}
                 <span className="lh-data">{entry.seq}</span>
                 <span>{entry.action.replaceAll(".", " · ").replaceAll("_", " ")}</span>
-                <time className="lh-data" dateTime={entry.ts}>
-                  {new Date(entry.ts).toLocaleString()}
+                <time className="lh-data" dateTime={entry.recorded_on}>
+                  {entry.recorded_on
+                    ? entryDate.format(new Date(`${entry.recorded_on}T00:00:00Z`))
+                    : "—"}
                 </time>
               </li>
             ))}

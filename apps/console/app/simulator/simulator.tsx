@@ -382,7 +382,7 @@ export function StormSimulator() {
     : "Authored scenario · synthesised wind and impact · terrain excluded";
 
   return (
-    <main className={styles.page} data-theme="dark">
+    <main className={styles.page} data-theme="light">
       <header className={styles.header}>
         <div>
           <span className={styles.kicker}>Lighthouse planning instrument</span>

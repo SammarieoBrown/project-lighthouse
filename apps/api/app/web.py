@@ -31,6 +31,7 @@ from .donations import router as donations_router
 from .fnol import router as fnol_router
 from .intake import router as intake_router
 from .auth_session import router as auth_router
+from .hazard_live import router as hazard_live_router
 from .public_ledger import router as public_ledger_router
 from .verification_reviews import router as verification_reviews_router
 
@@ -201,3 +202,4 @@ app.include_router(verification_reviews_router)
 app.include_router(damage_assessment_reviews_router)
 app.include_router(public_ledger_router)
 app.include_router(auth_router)
+app.include_router(hazard_live_router)
