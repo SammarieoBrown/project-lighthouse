@@ -29,6 +29,7 @@ type Settlement = {
   channel: "BANK" | "MOBILE_MONEY" | "VOUCHER" | null;
   executor_provenance: "SIMULATED_DEMO" | null;
   provider_confirmation_ref: string | null;
+  voucher_reference: string | null;
   confirmed_at: string | null;
 };
 
@@ -269,6 +270,15 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
                     ) : null}
                     {item.provider_confirmation_ref ?? item.executor_provenance ?? "No execution record"}
                   </small>
+                  {/* What the household was told to quote. It exists only once
+                      the rail has answered, so its absence is a state rather
+                      than a gap. */}
+                  {item.voucher_reference ? (
+                    <small>
+                      Voucher <span className={styles.data}>{item.voucher_reference}</span>
+                      {" · sent to the household"}
+                    </small>
+                  ) : null}
                 </span>
                 <span>
                   <button
