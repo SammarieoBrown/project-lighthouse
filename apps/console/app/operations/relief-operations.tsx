@@ -169,6 +169,13 @@ type LedgerAggregate = {
   no_real_money_moved: true;
 };
 
+type DonationPool = {
+  pool_id: string;
+  name: string;
+  balance: string;
+  simulated: boolean;
+};
+
 type LoadState = "locked" | "loading" | "ready" | "error";
 
 /* J$ rather than a bare "$". `Intl` with en-JM renders JMD as "$45,000",
@@ -232,6 +239,8 @@ export function ReliefOperations() {
   const [credentialExpiry, setCredentialExpiry] = useState<number | null>(null);
   const [credentialNotice, setCredentialNotice] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [pools, setPools] = useState<DonationPool[]>([]);
+  const [payerChoice, setPayerChoice] = useState<string>("GOV_RELIEF");
   const [approving, setApproving] = useState(false);
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
@@ -298,6 +307,18 @@ export function ReliefOperations() {
     }
   }, []);
 
+  /* Pool balances are public by design (DON-02); the selector needs them to
+   * say which pool can actually cover a grant before the API refuses one. */
+  const loadPools = useCallback(async () => {
+    try {
+      const response = await fetch("/api/lighthouse/v1/public/pools", { cache: "no-store" });
+      const body = (await jsonOrDetail(response)) as { pools?: DonationPool[] };
+      setPools(Array.isArray(body.pools) ? body.pools : []);
+    } catch {
+      setPools([]);
+    }
+  }, []);
+
   const loadLedger = useCallback(async () => {
     try {
       const response = await fetch("/api/lighthouse/v1/public/ledger?latest=true&limit=50", {
@@ -326,15 +347,16 @@ export function ReliefOperations() {
   }, []);
 
   const refresh = useCallback(async () => {
-    await Promise.all([loadClaims(), loadLedger()]);
-  }, [loadClaims, loadLedger]);
+    await Promise.all([loadClaims(), loadLedger(), loadPools()]);
+  }, [loadClaims, loadLedger, loadPools]);
 
   useEffect(() => {
     void loadClaims();
     void loadLedger();
+    void loadPools();
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
-  }, [loadClaims, loadLedger, refresh]);
+  }, [loadClaims, loadLedger, loadPools, refresh]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -460,7 +482,8 @@ export function ReliefOperations() {
         resource: "CASH",
         amount: "45000.00",
         currency: "JMD",
-        payer_route: "GOV_RELIEF",
+        payer_route: payerChoice === "GOV_RELIEF" ? "GOV_RELIEF" : "DONOR_POOL",
+        pool_id: payerChoice === "GOV_RELIEF" ? undefined : payerChoice,
         note: note.trim() || undefined,
       });
       const intentSignature = `${selected.id}\n${requestBody}`;
@@ -487,7 +510,7 @@ export function ReliefOperations() {
       if (approvalIntent.current?.key === intentKey) approvalIntent.current = null;
       setApproval(result);
       setNote("");
-      await loadLedger();
+      await Promise.all([loadLedger(), loadPools()]);
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : "Approval failed.");
       if (credentialIsDead(error)) {
@@ -496,7 +519,7 @@ export function ReliefOperations() {
     } finally {
       setApproving(false);
     }
-  }, [selected, approvalReady, activeToken, note, loadLedger, closeCredential]);
+  }, [selected, approvalReady, activeToken, note, payerChoice, loadLedger, loadPools, closeCredential]);
 
   const approvalClaim = approval
     ? claims.find((claim) => claim.id === approval.allocation.claim_id) ?? null
@@ -832,7 +855,30 @@ export function ReliefOperations() {
                 <div><dt>Claim</dt><dd>{selected.claim_ref}</dd></div>
                 <div><dt>Eligibility</dt><dd>{selected.status}</dd></div>
                 <div><dt>Resource</dt><dd>{money.format(45_000)} cash grant</dd></div>
-                <div><dt>Payer</dt><dd>Government relief</dd></div>
+                <div>
+                  <dt><label htmlFor="payer-route">Payer</label></dt>
+                  <dd>
+                    <select
+                      id="payer-route"
+                      className={styles.payerSelect}
+                      value={payerChoice}
+                      disabled={approving}
+                      onChange={(event) => setPayerChoice(event.target.value)}
+                    >
+                      <option value="GOV_RELIEF">Government relief</option>
+                      {pools.map((pool) => {
+                        const balance = Number.parseFloat(pool.balance);
+                        const short = Number.isFinite(balance) && balance < 45_000;
+                        return (
+                          <option key={pool.pool_id} value={pool.pool_id} disabled={short}>
+                            {pool.name} · {money.format(Number.isFinite(balance) ? balance : 0)}
+                            {short ? " · below grant" : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </dd>
+                </div>
               </dl>
               {selected.transcript ? (
                 <div className={styles.householdMessage}>

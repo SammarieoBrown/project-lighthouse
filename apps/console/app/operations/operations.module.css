@@ -242,6 +242,8 @@
 .selection > div { border-bottom: 1px solid var(--lh-rule); display: flex; gap: var(--lh-space-3); justify-content: space-between; padding: var(--lh-space-3) 0; }
 .selection dt { color: var(--lh-quiet); font-size: var(--lh-text-fine); }
 .selection dd { font-family: var(--lh-font-data); font-size: var(--lh-text-fine); margin: 0; text-align: right; }
+.payerSelect { background: var(--lh-ground); border: 1px solid var(--lh-rule); border-radius: var(--lh-radius); color: inherit; font-family: var(--lh-font-data); font-size: var(--lh-text-fine); max-width: 100%; padding: var(--lh-space-1) var(--lh-space-2); }
+
 
 .verification { border-bottom: 1px solid var(--lh-rule); margin-bottom: var(--lh-space-5); padding-bottom: var(--lh-space-4); }
 .verificationHead { display: flex; justify-content: space-between; font-size: var(--lh-text-fine); margin-bottom: var(--lh-space-3); }
