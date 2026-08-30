@@ -219,6 +219,11 @@ def run_auto_approval(session: Session, claim_id: uuid.UUID) -> AutoApprovalDeci
 
     decision = evaluate(session, claim)
     if not decision.approved:
+        if decision.policy_id is None:
+            # Nothing was delegated, so nothing was deferred. Writing a
+            # deferral here would put a line in every claim's record saying
+            # a feature nobody switched on declined to act.
+            return decision
         # A deferral is a queue entry for a human, not a failure. Recorded so
         # the operator sees the reason beside the claim rather than guessing.
         ledger.append(
