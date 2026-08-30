@@ -53,6 +53,7 @@ def _response(
     outcome: VerificationRun,
     *,
     reviewer_id: uuid.UUID,
+    reviewer_role: str,
 ) -> dict:
     verification = outcome.verification
     claim = session.get(Claim, verification.claim_id)
@@ -70,7 +71,7 @@ def _response(
             "snapshot_hash": verification.snapshot_hash,
             "reviewed_by": {
                 "id": reviewer_id,
-                "role": "REVIEW_CLERK",
+                "role": reviewer_role,
             },
             "created_at": verification.created_at,
         },
@@ -105,7 +106,7 @@ def review_claim_route(
         human = authenticate_human(
             session,
             authorization,
-            allowed_roles={AppRole.REVIEW_CLERK},
+            allowed_roles={AppRole.REVIEW_CLERK, AppRole.DIRECTOR},
         )
         try:
             outcome = record_review_decision(
@@ -128,7 +129,12 @@ def review_claim_route(
             ) from exc
         if not outcome.created:
             response.status_code = status.HTTP_200_OK
-        return _response(session, outcome, reviewer_id=human.user.id)
+        return _response(
+            session,
+            outcome,
+            reviewer_id=human.user.id,
+            reviewer_role=str(human.user.role),
+        )
 
 
 __all__ = [

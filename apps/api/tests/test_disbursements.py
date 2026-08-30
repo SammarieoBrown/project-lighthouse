@@ -178,18 +178,19 @@ def test_finance_signature_is_atomic_bound_and_idempotent(session, monkeypatch):
     assert ledger.verify_chain(session) is True
 
 
-def test_batch_signing_requires_finance_role_and_supported_cash_channel(
+def test_batch_signing_requires_signing_role_and_supported_cash_channel(
     session, monkeypatch
 ):
+    # Since 0015 the Director may sign batches too; the clerk still may not.
     client = _client(monkeypatch, session)
     _, _, allocation_id = _approved_allocation(client, session)
-    _, director = _credential(session, AppRole.DIRECTOR)
+    _, clerk = _credential(session, AppRole.REVIEW_CLERK)
 
-    forbidden = _sign(client, allocation_id, director.token)
+    forbidden = _sign(client, allocation_id, clerk.token)
     invalid_channel = _sign(
         client,
         allocation_id,
-        director.token,
+        clerk.token,
         body={**SIGN_BODY, "channel": "GOODS"},
     )
 

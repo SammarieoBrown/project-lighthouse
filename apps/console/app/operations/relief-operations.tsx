@@ -564,7 +564,7 @@ export function ReliefOperations() {
       const result = (await jsonOrDetail(response)) as { idempotent_replay?: boolean };
       setReviewNote("");
       setReviewNotice(
-        `${verdict === "APPROVED" ? "Claim verified" : "Claim rejected"} by Review Clerk`
+        `${verdict === "APPROVED" ? "Claim verified" : "Claim rejected"} by your review`
         + (result.idempotent_replay ? " · existing decision replayed safely" : " · immutable decision recorded"),
       );
       await loadClaims();
@@ -900,7 +900,7 @@ export function ReliefOperations() {
               && ["REVIEW", "FLAGGED"].includes(claimDetail.verification.verdict)
               && selected.status === "FILED" ? (
                 <div className={styles.reviewGate}>
-                  <span className={styles.eyebrow}>Act 2 · Review Clerk decision</span>
+                  <span className={styles.eyebrow}>Act 2 · verification review</span>
                   <p className={styles.limit}>
                     The agent did not auto-verify this claim. Review all five signals and record a
                     reason. This decision does not allocate or move relief.

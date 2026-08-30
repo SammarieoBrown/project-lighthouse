@@ -106,7 +106,7 @@ class SimulatedExecutionRequest(BaseModel):
 class FinanceSignerResponse(BaseModel):
     id: uuid.UUID
     display_name: str
-    role: Literal["FINANCE_OFFICER"]
+    role: Literal["FINANCE_OFFICER", "DIRECTOR"]
 
 
 class BatchApprovalResponse(BaseModel):
@@ -851,7 +851,7 @@ def _batch_response(outcome: BatchSignOutcome) -> dict:
             "approved_by": {
                 "id": outcome.signer.id,
                 "display_name": outcome.signer.display_name,
-                "role": "FINANCE_OFFICER",
+                "role": str(outcome.signer.role),
             },
             "approved_at": outcome.approval.approved_at,
             "reauthenticated_at": outcome.approval.reauth_at,
@@ -939,7 +939,7 @@ def sign_batch_route(
         human = authenticate_human(
             session,
             authorization,
-            allowed_roles={AppRole.FINANCE_OFFICER},
+            allowed_roles={AppRole.FINANCE_OFFICER, AppRole.DIRECTOR},
         )
         try:
             outcome = sign_disbursement_batch(
@@ -972,7 +972,7 @@ def execute_disbursement_route(
         human = authenticate_human(
             session,
             authorization,
-            allowed_roles={AppRole.FINANCE_OFFICER},
+            allowed_roles={AppRole.FINANCE_OFFICER, AppRole.DIRECTOR},
         )
         try:
             executor = configured_executor(get_settings())

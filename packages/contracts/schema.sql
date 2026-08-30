@@ -473,6 +473,7 @@ RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
   )
 $$;
 
+-- VERIFICATION_SNAPSHOT_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION verification_snapshot_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -484,9 +485,10 @@ BEGIN
   IF NEW.actor_kind = 'HUMAN' THEN
     SELECT role, active INTO reviewer_role, reviewer_active
       FROM app_user WHERE id = NEW.actor_id;
-    IF NOT FOUND OR NOT reviewer_active OR reviewer_role <> 'REVIEW_CLERK' THEN
+    IF NOT FOUND OR NOT reviewer_active
+       OR reviewer_role NOT IN ('REVIEW_CLERK', 'DIRECTOR') THEN
       RAISE EXCEPTION
-        'human verification verdicts require an active REVIEW_CLERK';
+        'human verification verdicts require an active REVIEW_CLERK or DIRECTOR';
     END IF;
     IF NEW.agent_name IS NOT NULL THEN
       RAISE EXCEPTION 'human verification verdicts cannot assert an agent name';
@@ -549,6 +551,7 @@ BEGIN
   NEW.snapshot_hash := verification_snapshot_digest(NEW);
   RETURN NEW;
 END $$;
+-- VERIFICATION_SNAPSHOT_GUARD_FN_END
 -- VERIFICATION_OVERRIDE_GUARDS_END
 
 CREATE TRIGGER verification_snapshot_guard_trigger
@@ -830,7 +833,12 @@ CREATE TABLE approval (
     CHECK (request_hash IS NULL OR request_hash ~ '^[0-9a-f]{64}$'),
   CONSTRAINT approval_gate_role_chk CHECK (
     (gate IN ('ALERT_CASCADE', 'ALLOCATION_PLAN') AND role_at_time = 'DIRECTOR')
-    OR (gate = 'DISBURSEMENT_BATCH' AND role_at_time = 'FINANCE_OFFICER')
+    -- Demo decision 2026-08-30: the Director carries universal gate
+    -- authority, so one operator can walk every gate. Each signature still
+    -- names its human and its role; separation of duties is a deployment
+    -- choice again rather than a schema guarantee.
+    OR (gate = 'DISBURSEMENT_BATCH'
+        AND role_at_time IN ('FINANCE_OFFICER', 'DIRECTOR'))
   ),
   CONSTRAINT approval_recent_reauth_chk CHECK (
     reauth_at >= approved_at - interval '5 minutes'
@@ -849,6 +857,7 @@ CREATE UNIQUE INDEX approval_idempotency_uidx
 -- database checks it against the active user at the moment of signing and
 -- enforces the role assigned to each gate. approved_at is always database time
 -- so a caller cannot make stale reauthentication look current.
+-- APPROVAL_ROLE_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION approval_role_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -876,14 +885,16 @@ BEGIN
   END IF;
 
   IF NEW.gate = 'DISBURSEMENT_BATCH'
-     AND signer_role <> 'FINANCE_OFFICER' THEN
+     AND signer_role NOT IN ('FINANCE_OFFICER', 'DIRECTOR') THEN
     RAISE EXCEPTION
-      'gate DISBURSEMENT_BATCH requires FINANCE_OFFICER, got %', signer_role;
+      'gate DISBURSEMENT_BATCH requires FINANCE_OFFICER or DIRECTOR, got %',
+      signer_role;
   END IF;
 
   NEW.approved_at := statement_timestamp();
   RETURN NEW;
 END $$;
+-- APPROVAL_ROLE_GUARD_FN_END
 
 CREATE TRIGGER approval_role_guard_trigger
   BEFORE INSERT ON approval
@@ -1547,6 +1558,7 @@ CREATE OR REPLACE FUNCTION disbursement_batch_snapshot_digest(
   )
 $$;
 
+-- DISBURSEMENT_BATCH_SIGNED_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION disbursement_batch_signed_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -1567,9 +1579,10 @@ BEGIN
        AND a.gate = 'DISBURSEMENT_BATCH'
        AND a.subject_type = 'disbursement_batch'
        AND a.subject_id = NEW.id
-       AND a.role_at_time = 'FINANCE_OFFICER'
+       AND a.role_at_time IN ('FINANCE_OFFICER', 'DIRECTOR')
   ) THEN
-    RAISE EXCEPTION 'batch requires an exact Finance Officer signature';
+    RAISE EXCEPTION
+      'batch requires an exact Finance Officer or Director signature';
   END IF;
 
   expected_hash := disbursement_batch_snapshot_digest(NEW);
@@ -1580,6 +1593,7 @@ BEGIN
   NEW.snapshot_hash := expected_hash;
   RETURN NEW;
 END $$;
+-- DISBURSEMENT_BATCH_SIGNED_GUARD_FN_END
 
 CREATE TRIGGER disbursement_batch_signed_guard_trigger
   BEFORE INSERT OR UPDATE OR DELETE ON disbursement_batch
@@ -1605,6 +1619,7 @@ RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
   )
 $$;
 
+-- DISBURSEMENT_LIFECYCLE_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION disbursement_lifecycle_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -1668,8 +1683,10 @@ BEGIN
   IF OLD.status = 'PENDING' AND NEW.status = 'EXECUTING' THEN
     SELECT role, active INTO executor_role, executor_active
       FROM app_user WHERE id = NEW.execution_requested_by;
-    IF NOT FOUND OR NOT executor_active OR executor_role <> 'FINANCE_OFFICER' THEN
-      RAISE EXCEPTION 'disbursement execution requires an active Finance Officer';
+    IF NOT FOUND OR NOT executor_active
+       OR executor_role NOT IN ('FINANCE_OFFICER', 'DIRECTOR') THEN
+      RAISE EXCEPTION
+        'disbursement execution requires an active Finance Officer or Director';
     END IF;
     IF NEW.execution_idempotency_key IS NULL
        OR NEW.execution_request_hash IS NULL
@@ -1717,6 +1734,7 @@ BEGIN
   RAISE EXCEPTION 'illegal disbursement lifecycle transition % -> %',
     OLD.status, NEW.status;
 END $$;
+-- DISBURSEMENT_LIFECYCLE_GUARD_FN_END
 
 CREATE TRIGGER disbursement_lifecycle_guard_trigger
   BEFORE INSERT OR UPDATE OR DELETE ON disbursement
