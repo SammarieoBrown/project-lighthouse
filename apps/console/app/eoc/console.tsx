@@ -343,10 +343,12 @@ export function EocConsole() {
     () => (live && liveStorms ? nearestStorm(liveStorms) : null),
     [live, liveStorms],
   );
-  /* Centre only. No wind polygon, no cone, no track, no motion for the
-   * circulation marks: every one of those is an advisory product, and a
-   * position fix does not license drawing them (the flow marks' M1 exception
-   * derives its radius from a published polygon this board does not have). */
+  /* Positions and published outlook geometry only. No wind polygon, no cone,
+   * no track, no motion for the circulation marks: every one of those is an
+   * advisory product, and a position fix does not license drawing them (the
+   * flow marks' M1 exception derives its radius from a published polygon this
+   * board does not have). The formation areas are NHC's own polygons from the
+   * graphical outlook, passed through untouched. */
   const liveSnapshot = useMemo<Snapshot | null>(
     () =>
       live
@@ -357,13 +359,20 @@ export function EocConsole() {
             wind64: null,
             cone: null,
             track: null,
-            centre: liveFocus ? [liveFocus.lon, liveFocus.lat] : null,
+            centre: null,
             motion: null,
             districts: [],
             households: [],
+            liveStorms: (liveStorms ?? []).map((storm) => ({
+              lon: storm.lon,
+              lat: storm.lat,
+              name: storm.name,
+              intensityKt: storm.intensity_kt,
+            })),
+            outlook: liveBoard?.outlook?.features ?? null,
           }
         : null,
-    [live, liveFocus],
+    [live, liveStorms, liveBoard],
   );
 
   const replaySummary = useMemo(() => {

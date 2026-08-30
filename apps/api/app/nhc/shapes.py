@@ -75,12 +75,22 @@ def layers(archive: Path) -> tuple[str, ...]:
         return tuple(sorted({n[:-4] for n in z.namelist() if n.lower().endswith(".shp")}))
 
 
-def read_layer(archive: Path, suffix: str, *, required: bool = True) -> list[Feature]:
-    """Read the layer whose name ends with ``suffix``.
+def read_layer(
+    archive: Path | io.BytesIO,
+    suffix: str,
+    *,
+    required: bool = True,
+    contains: bool = False,
+) -> list[Feature]:
+    """Read the layer whose name ends with — or, with ``contains``, carries —
+    ``suffix``.
 
     Matching on a suffix rather than a full name because NHC embeds the advisory
     number in the layer name — ``al132025-025_5day_pgn`` — so the caller would
-    otherwise have to rebuild the filename it just derived the path from.
+    otherwise have to rebuild the filename it just derived the path from. The
+    graphical outlook bundle inverts that convention (``gtwo_areas_<stamp>``),
+    which is what ``contains`` is for. ``archive`` may be an in-memory zip: the
+    outlook is fetched live rather than pinned in a cache directory.
 
     Some layers are genuinely absent rather than missing. Melissa's advisory 40
     ships no watch/warning layer because by then every watch had been
@@ -90,11 +100,17 @@ def read_layer(archive: Path, suffix: str, *, required: bool = True) -> list[Fea
     """
     with zipfile.ZipFile(archive) as z:
         names = [n[:-4] for n in z.namelist() if n.lower().endswith(".shp")]
-        match = next((n for n in names if n.endswith(suffix)), None)
+        match = next(
+            (n for n in names if (suffix in n if contains else n.endswith(suffix))),
+            None,
+        )
         if match is None:
             if not required:
                 return []
-            raise KeyError(f"no layer ending in {suffix!r} in {archive.name}: {sorted(names)}")
+            raise KeyError(
+                f"no layer matching {suffix!r} in "
+                f"{getattr(archive, 'name', 'in-memory archive')}: {sorted(names)}"
+            )
 
         parts = {}
         for ext in ("shp", "dbf", "shx"):

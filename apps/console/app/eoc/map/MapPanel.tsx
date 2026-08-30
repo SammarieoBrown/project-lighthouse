@@ -90,6 +90,8 @@ export function MapPanel({
   evidenceKind?: EvidenceKind;
   sizeSource?: StormEntry["sizeSource"];
 }) {
+  // The live board is about the basin; everything else is about Jamaica.
+  const view = evidenceKind === "live" ? ("basin" as const) : ("island" as const);
   const [base, setBase] = useState<BaseView>("map");
   const [zoom, setZoom] = useState(7.4);
   const [failed, setFailed] = useState<string | null>(null);
@@ -212,7 +214,12 @@ export function MapPanel({
       <MapView
         snapshot={snapshot}
         base={base}
-        ariaLabel={`Interactive map of the selected ${evidenceLabel(evidenceKind)} and synthetic modelled impact across Jamaica`}
+        view={view}
+        ariaLabel={
+          evidenceKind === "live"
+            ? "Interactive map of live NHC storm positions and outlook areas across the Atlantic basin"
+            : `Interactive map of the selected ${evidenceLabel(evidenceKind)} and synthetic modelled impact across Jamaica`
+        }
         focus={focus}
         onZoomChange={onZoomChange}
         onFail={onFail}
@@ -306,7 +313,15 @@ function MapKey({
       >
         <summary className={styles.keyTitle}>Map key</summary>
         <div className={styles.keyBody}>
-          <span className={styles.keyGroup}>Storm centre · live NHC position</span>
+          <span className={styles.keyGroup}>Live · NHC products</span>
+          <div className={styles.keyGrid}>
+            <span className={styles.centreGlyph} aria-hidden="true">◌</span>
+            <span>Storm centre · name and sustained wind</span>
+            <span className={`${styles.keyMark} ${styles.outlookArea}`} aria-hidden="true" />
+            <span>Formation potential area · dashed · labelled with NHC&apos;s 7-day chance</span>
+            <span className={`${styles.keyMark} ${styles.outlookMove}`} aria-hidden="true" />
+            <span>Disturbance movement · NHC graphical outlook</span>
+          </div>
           <span className={styles.keyNote}>
             Wind extents, track and modelled impact appear when an advisory is
             ingested.

@@ -79,6 +79,8 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
     return {
       "lh-hazard": EMPTY, "lh-cone": EMPTY, "lh-track": EMPTY,
       "lh-storm": EMPTY, "lh-parish-impact": EMPTY, "lh-flow": EMPTY,
+      "lh-live-storms": EMPTY, "lh-outlook-area": EMPTY,
+      "lh-outlook-point": EMPTY, "lh-outlook-line": EMPTY,
     };
   }
 
@@ -134,6 +136,38 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
           features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: centre } }],
         }
       : EMPTY,
+    /* Live board layers. Empty outside the live view — the replay never
+     * carries them, so the same source set serves both modes and the map is
+     * still built exactly once. */
+    "lh-live-storms": {
+      type: "FeatureCollection",
+      features: (snapshot.liveStorms ?? []).map((storm) => ({
+        type: "Feature",
+        properties: {
+          // The label is composed here so the style expression stays a plain
+          // `get` and a storm with no reported intensity reads as its name
+          // alone rather than as "null kt".
+          label: storm.intensityKt == null
+            ? storm.name ?? "Unnamed system"
+            : `${storm.name ?? "Unnamed system"}\n${Math.round(storm.intensityKt)} kt`,
+        },
+        geometry: { type: "Point", coordinates: [storm.lon, storm.lat] },
+      })),
+    },
+    "lh-outlook-area": snapshot.outlook?.areas ?? EMPTY,
+    "lh-outlook-line": snapshot.outlook?.lines ?? EMPTY,
+    "lh-outlook-point": {
+      type: "FeatureCollection",
+      features: (snapshot.outlook?.points?.features ?? []).map((feature) => ({
+        ...feature,
+        properties: {
+          ...feature.properties,
+          label: feature.properties?.prob_7day == null
+            ? "chance unavailable"
+            : `${feature.properties.prob_7day}% · 7 d`,
+        },
+      })),
+    },
     "lh-parish-impact": {
       type: "FeatureCollection",
       features: impacts.map((impact) => ({
@@ -159,7 +193,7 @@ export function frameData(snapshot: Snapshot | null): Record<string, Collection>
 /* Point sources only. A polygon source with no tile buffer shows seams where a
  * wind band crosses a tile edge, and the wind bands are the largest polygons on
  * the map. */
-const UNBUFFERED = new Set(["lh-storm"]);
+const UNBUFFERED = new Set(["lh-storm", "lh-live-storms", "lh-outlook-point"]);
 
 export function dataSources(snapshot: Snapshot | null): Record<string, SourceSpecification> {
   const spec: Record<string, SourceSpecification> = {};
@@ -340,6 +374,74 @@ export function dataLayers(c: MapColours): LayerSpecification[] {
       },
     },
 
+    /* The graphical Tropical Weather Outlook, live board only. Dashed on
+     * purpose: a formation potential area is a "may", and the solid outlines
+     * on this map are reserved for extents an advisory has actually published.
+     * Drawn in the hazard ramp because formation potential is the same layer
+     * of meaning as hazard extent — cool, never a severity hue (rule C1: a
+     * probability is not an impact). The percent labels are NHC's published
+     * numbers, not a reading of the polygon. */
+    {
+      id: "lh-outlook-area-fill",
+      type: "fill",
+      source: "lh-outlook-area",
+      paint: { "fill-color": c.hazard34, "fill-opacity": 0.08 },
+    },
+    {
+      id: "lh-outlook-area-line",
+      type: "line",
+      source: "lh-outlook-area",
+      paint: {
+        "line-color": c.hazard50,
+        "line-width": 1.25,
+        "line-dasharray": [2, 3],
+        "line-opacity": 0.8,
+      },
+    },
+    /* NHC's movement arrow for a disturbance: where the system is heading,
+     * from the same bundle as the area it may form in. */
+    {
+      id: "lh-outlook-line",
+      type: "line",
+      source: "lh-outlook-line",
+      paint: {
+        "line-color": c.hazard50,
+        "line-width": 1,
+        "line-dasharray": [1, 3],
+        "line-opacity": 0.6,
+      },
+    },
+    {
+      id: "lh-outlook-point-mark",
+      type: "circle",
+      source: "lh-outlook-point",
+      paint: {
+        "circle-radius": 4,
+        "circle-color": "rgba(0,0,0,0)",
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": c.hazard50,
+        "circle-stroke-opacity": 0.9,
+      },
+    },
+    {
+      id: "lh-outlook-label",
+      type: "symbol",
+      source: "lh-outlook-point",
+      layout: {
+        "text-field": ["get", "label"],
+        "text-font": ["Noto Sans Medium"],
+        "text-size": 11,
+        "text-offset": [0, 1.1],
+        "text-anchor": "top",
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": c.figure,
+        "text-halo-color": c.ground,
+        "text-halo-width": 1.25,
+      },
+    },
+
     /* The storm centre, drawn exactly as the SVG fallback draws it — a ring and
      * a dot in the figure colour. Present here because the two maps must not
      * disagree about where the storm is, and because a wind field with no
@@ -362,6 +464,47 @@ export function dataLayers(c: MapColours): LayerSpecification[] {
       type: "circle",
       source: "lh-storm",
       paint: { "circle-radius": 2.5, "circle-color": c.figure },
+    },
+
+    /* Every live Atlantic storm, same ring-and-dot as the replay centre plus
+     * a name and intensity. The mark language must not change between a
+     * recorded storm and a live one — where a storm is has one drawing. */
+    {
+      id: "lh-live-storm-ring",
+      type: "circle",
+      source: "lh-live-storms",
+      paint: {
+        "circle-radius": 10,
+        "circle-color": "rgba(0,0,0,0)",
+        "circle-stroke-width": 1.25,
+        "circle-stroke-color": c.figure,
+        "circle-stroke-opacity": 0.8,
+      },
+    },
+    {
+      id: "lh-live-storm-eye",
+      type: "circle",
+      source: "lh-live-storms",
+      paint: { "circle-radius": 2.5, "circle-color": c.figure },
+    },
+    {
+      id: "lh-live-storm-label",
+      type: "symbol",
+      source: "lh-live-storms",
+      layout: {
+        "text-field": ["get", "label"],
+        "text-font": ["Noto Sans Medium"],
+        "text-size": 11,
+        "text-line-height": 1.05,
+        "text-offset": [0, 1.2],
+        "text-anchor": "top",
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": c.figure,
+        "text-halo-color": c.ground,
+        "text-halo-width": 1.25,
+      },
     },
   ] as LayerSpecification[];
 }

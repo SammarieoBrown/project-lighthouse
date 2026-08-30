@@ -29,6 +29,7 @@ different claim from either quiet or unreachable and is reported as itself.
 
 from __future__ import annotations
 
+import io
 import logging
 import re
 import threading
@@ -53,7 +54,13 @@ CURRENT_STORMS_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 # than an HTML or RSS wrapper: genuine line structure, no markup to strip, and
 # the most format-stable form the product has.
 TWO_ATLANTIC_URL = "https://tgftp.nws.noaa.gov/data/raw/ab/abnt20.knhc.two.at.txt"
+
+# The graphical outlook: NHC's own formation-potential polygons, disturbance
+# points and movement arrows, as shapefiles. This is the map half of the same
+# product as the text above — the geometry is published, not derived here.
+GTWO_URL = "https://www.nhc.noaa.gov/xgtwo/gtwo_shapefiles.zip"
 FETCH_TIMEOUT_S = 5.0
+GTWO_TIMEOUT_S = 10.0
 
 # One fetch per five minutes, shared across requests. NHC updates the storms
 # product on advisory cadence (hours) and the outlook four times a day;
@@ -64,6 +71,7 @@ CACHE_TTL_S = 300.0
 _cache_lock = threading.Lock()
 _cache: tuple[float, list[dict[str, Any]]] | None = None
 _two_cache: tuple[float, dict[str, Any]] | None = None
+_gtwo_cache: tuple[float, dict[str, Any]] | None = None
 
 
 def fetch_current_storms() -> list[dict[str, Any]]:
@@ -90,6 +98,85 @@ def fetch_two_text() -> str:
 
 # Second provider boundary, same rule: injectable, never live in tests.
 _fetch_two = fetch_two_text
+
+
+def fetch_gtwo_zip() -> bytes:
+    """Read the graphical outlook bundle. Raises on transport failure."""
+    response = httpx.get(GTWO_URL, timeout=GTWO_TIMEOUT_S)
+    response.raise_for_status()
+    return response.content
+
+
+# Third provider boundary, same rule again.
+_fetch_gtwo = fetch_gtwo_zip
+
+_PERCENT = re.compile(r"\s*(\d+)\s*%")
+
+
+def _gtwo_percent(value: Any) -> int | None:
+    match = _PERCENT.match(str(value or ""))
+    return int(match.group(1)) if match else None
+
+
+def parse_gtwo(raw: bytes) -> dict[str, Any]:
+    """The Atlantic features of the graphical outlook, as GeoJSON collections.
+
+    Geometry passes through exactly as NHC drew it; the properties carry the
+    published probabilities and nothing else. Pacific features are filtered on
+    the BASIN attribute for the same reason the storm list filters on the id
+    prefix: a Pacific disturbance on an Atlantic board is a true fact in a
+    false place.
+    """
+    from .nhc import shapes
+
+    def collection(stem: str) -> dict[str, Any]:
+        features = []
+        for feature in shapes.read_layer(
+            io.BytesIO(raw), stem, required=False, contains=True
+        ):
+            if feature.geometry is None:
+                continue
+            if str(feature.get("BASIN", "")).strip().lower() != "atlantic":
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": feature.geometry,
+                "properties": {
+                    "area": feature.get("AREA"),
+                    "prob_48h": _gtwo_percent(feature.get("PROB2DAY")),
+                    "risk_48h": str(feature.get("RISK2DAY") or "").lower() or None,
+                    "prob_7day": _gtwo_percent(feature.get("PROB7DAY")),
+                    "risk_7day": str(feature.get("RISK7DAY") or "").lower() or None,
+                },
+            })
+        return {"type": "FeatureCollection", "features": features}
+
+    return {
+        "areas": collection("gtwo_areas"),
+        "points": collection("gtwo_points"),
+        "lines": collection("gtwo_lines"),
+    }
+
+
+def _outlook_features() -> dict[str, Any] | None:
+    """The graphical outlook, cached like its siblings. ``None`` means the
+    geometry is unavailable — the text outlook stands on its own either way."""
+    global _gtwo_cache
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _gtwo_cache
+    if cached is not None and now - cached[0] < CACHE_TTL_S:
+        return cached[1]
+
+    try:
+        parsed = parse_gtwo(_fetch_gtwo())
+    except Exception as error:  # noqa: BLE001 — any failure means one thing here
+        log.warning("graphical outlook unavailable type=%s", type(error).__name__)
+        return cached[1] if cached is not None else None
+
+    with _cache_lock:
+        _gtwo_cache = (now, parsed)
+    return parsed
 
 
 _ISSUED = re.compile(r"^\d{3,4} [AP]M [A-Z]{2,5} [A-Za-z]{3} [A-Za-z]{3} \d{1,2} \d{4}$", re.M)
@@ -278,9 +365,13 @@ def hazard_live() -> dict[str, Any]:
             "source": "live hazard event" if event else "no live hazard event",
         }
 
+    # A copy, so attaching the geometry never mutates the cached text outlook.
+    outlook = dict(_outlook())
+    outlook["features"] = _outlook_features()
+
     return {
         "as_of": datetime.now(timezone.utc).isoformat(),
         "posture": posture,
         "basin": _basin(),
-        "outlook": _outlook(),
+        "outlook": outlook,
     }

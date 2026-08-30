@@ -107,6 +107,18 @@ export type Snapshot = {
   districts: District[];
   /** Only rendered past the zoom switch; absent in the SVG fallback. */
   households?: Household[];
+  /** Live board only: every active Atlantic storm position from NHC's
+   *  current-storm product, drawn with the same ring-and-dot as the replay
+   *  centre. Absent outside the live view. */
+  liveStorms?: { lon: number; lat: number; name: string | null; intensityKt: number | null }[] | null;
+  /** Live board only: NHC's graphical Tropical Weather Outlook — formation
+   *  potential areas, disturbance points and movement arrows, exactly as
+   *  published. Never derived from the text product. */
+  outlook?: {
+    areas: GeoJSON.FeatureCollection | null;
+    points: GeoJSON.FeatureCollection | null;
+    lines: GeoJSON.FeatureCollection | null;
+  } | null;
 };
 
 export type MapFocus = {
