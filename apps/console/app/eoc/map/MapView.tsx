@@ -218,6 +218,11 @@ export type MapViewProps = {
   /** The current advisory. Changes on every step of the replay. */
   snapshot: Snapshot | null;
   base: BaseView;
+  /** What the camera frames. The replay is about Jamaica; the live board is
+   *  about the basin, and opening it on the island would hide every
+   *  disturbance it exists to show. A jump, not an easing — changing view is
+   *  a state change, and rule M1 reserves motion for a summons. */
+  view?: "island" | "basin";
   /** Evidence-aware accessible name; a hindcast must never be announced as a forecast. */
   ariaLabel?: string;
   /** A list selection may centre the map on its district reference point. The
@@ -243,6 +248,7 @@ export type MapViewProps = {
 export default function MapView({
   snapshot,
   base,
+  view = "island",
   ariaLabel = "Interactive map of the selected replay with unavailable evidence provenance and synthetic modelled impact across Jamaica",
   focus = null,
   onZoomChange,
@@ -316,8 +322,13 @@ export default function MapView({
         center: JAMAICA_CENTER,
         zoom: JAMAICA_ZOOM,
         maxZoom: 17,
-        // Far enough out to see the whole basin and no further.
-        minZoom: 5.2,
+        // Far enough out that the basin view can fit the whole covered
+        // region — the live board frames COVERED with fitBounds, and a floor
+        // above the fitting zoom silently crops the Gulf and the Leewards off
+        // its edges (it did, at 5.2 and again at 4.5 on a half-width pane).
+        // No further out than the fit needs: past the fence there is only
+        // blank ocean to scroll into.
+        minZoom: 4,
         maxBounds: COVERED,
         bearing: 0,
         pitch: 0,
@@ -467,6 +478,18 @@ export default function MapView({
     if (!instance || !ready.current) return;
     applyFrame(instance, snapshot);
   }, [snapshot]);
+
+  /* The camera follows the selected view, instantly. Runs once at mount too,
+   * which is a no-op for the island view the map was built with. */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    if (view === "basin") {
+      instance.fitBounds(COVERED, { animate: false, padding: 24 });
+    } else {
+      instance.jumpTo({ center: JAMAICA_CENTER, zoom: JAMAICA_ZOOM });
+    }
+  }, [view]);
 
   /* The flow marks turn.
    *

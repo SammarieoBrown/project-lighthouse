@@ -56,6 +56,14 @@ export type LiveBoard = {
     status: "ok" | "stale" | "unreachable" | "unparsed";
     issued: string | null;
     areas: OutlookArea[] | null;
+    /** NHC's graphical outlook, exactly as published: formation potential
+     *  polygons, disturbance points, movement arrows. Null when the GIS
+     *  bundle is unavailable — the text areas above stand on their own. */
+    features?: {
+      areas: GeoJSON.FeatureCollection | null;
+      points: GeoJSON.FeatureCollection | null;
+      lines: GeoJSON.FeatureCollection | null;
+    } | null;
   };
 };
 

@@ -4,6 +4,7 @@ replay's posture as live, and keeps an empty basin distinct from a broken feed."
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,9 +18,11 @@ from factories import make_event
 def clear_basin_cache():
     hazard_live._cache = None
     hazard_live._two_cache = None
+    hazard_live._gtwo_cache = None
     yield
     hazard_live._cache = None
     hazard_live._two_cache = None
+    hazard_live._gtwo_cache = None
 
 
 # The Atlantic outlook of 2026-08-30 12z, verbatim: the morning the remnants
@@ -109,6 +112,51 @@ def test_area_with_drifted_chance_lines_is_kept_with_null_chances():
     dolly = parsed["areas"][0]
     assert dolly["chance_48h"] is None
     assert dolly["chance_7day"] == {"band": "low", "percent": 20}
+
+
+GTWO_FIXTURE = Path(__file__).parent / "fixtures" / "gtwo_sample.zip"
+
+
+def test_graphical_outlook_serves_atlantic_geometry_only():
+    parsed = hazard_live.parse_gtwo(GTWO_FIXTURE.read_bytes())
+
+    areas = parsed["areas"]["features"]
+    points = parsed["points"]["features"]
+    # The 2026-08-30 bundle holds two Atlantic and two Pacific areas; only the
+    # Atlantic pair may reach an Atlantic board.
+    assert len(areas) == 2
+    assert {a["properties"]["prob_7day"] for a in areas} == {20, 30}
+    assert all(a["geometry"]["type"] == "Polygon" for a in areas)
+    assert len(points) == 2
+    assert all(p["geometry"]["type"] == "Point" for p in points)
+    # "30%" strings became integers; risk bands became lowercase words.
+    al97 = next(a for a in areas if a["properties"]["prob_48h"] == 30)
+    assert al97["properties"]["risk_7day"] == "low"
+
+
+def test_graphical_outlook_failure_leaves_text_outlook_standing(session, monkeypatch):
+    def boom() -> bytes:
+        raise RuntimeError("refused")
+
+    monkeypatch.setattr(hazard_live, "_fetch", lambda: [])
+    monkeypatch.setattr(hazard_live, "_fetch_two", lambda: OUTLOOK_SAMPLE)
+    monkeypatch.setattr(hazard_live, "_fetch_gtwo", boom)
+
+    body = _client(monkeypatch, session).get("/v1/hazard/live").json()
+
+    assert body["outlook"]["features"] is None
+    assert len(body["outlook"]["areas"]) == 2
+
+
+def test_endpoint_carries_geometry_beside_the_text(session, monkeypatch):
+    monkeypatch.setattr(hazard_live, "_fetch", lambda: [])
+    monkeypatch.setattr(hazard_live, "_fetch_two", lambda: OUTLOOK_SAMPLE)
+    monkeypatch.setattr(hazard_live, "_fetch_gtwo", GTWO_FIXTURE.read_bytes)
+
+    body = _client(monkeypatch, session).get("/v1/hazard/live").json()
+
+    assert len(body["outlook"]["features"]["areas"]["features"]) == 2
+    assert len(body["outlook"]["areas"]) == 2
 
 
 def test_unsegmentable_outlook_reports_unparsed_not_quiet():

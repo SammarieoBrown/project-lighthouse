@@ -189,6 +189,26 @@
   background: none;
 }
 
+/* Live board marks. The formation area is the wind-band swatch with its
+ * border dashed, because that is exactly the relationship on the map: same
+ * meaning family, provisional outline. The movement mark is a dashed stroke.
+ * The centre is a text glyph, not a rounded box — the radius scale has two
+ * values and neither of them is a circle. */
+.outlookArea { color: var(--lh-hazard-50); border-style: dashed; }
+.outlookMove {
+  height: 0;
+  border: 0;
+  border-top: 1px dashed var(--lh-hazard-50);
+  background: none;
+}
+.centreGlyph {
+  color: var(--lh-figure);
+  font-size: var(--lh-text-base);
+  line-height: 1;
+  text-align: center;
+  width: var(--lh-space-5);
+}
+
 /* Three short strokes at the angle the marks are drawn at, so the key shows
  * the shape of the thing rather than a swatch standing in for it. */
 .flow {
