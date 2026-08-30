@@ -609,7 +609,7 @@ export function ReliefOperations() {
 
   if (sessionState.status !== "in") {
     return (
-      <main className={styles.screen} data-theme="dark">
+      <main className={styles.screen} data-theme="light">
         {chrome}
         {sessionState.status === "loading" ? (
           <p className={styles.empty}>Checking your session…</p>
@@ -623,7 +623,7 @@ export function ReliefOperations() {
   }
 
   return (
-    <main className={styles.screen} data-theme="dark">
+    <main className={styles.screen} data-theme="light">
       {chrome}
 
       <section className={styles.metrics} aria-label="Relief operation measures">

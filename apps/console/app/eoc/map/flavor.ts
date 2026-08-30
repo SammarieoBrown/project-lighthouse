@@ -61,6 +61,17 @@ function mix(a: string, b: string, amount: number): string {
     .join("")}`;
 }
 
+/* Which room the map is in. The flavor derives land and sea from the tokens,
+ * and the derivation has to know which way "recedes" points: on the dark
+ * ground the sea drops toward black, on the light ground it drops toward the
+ * figure — either way the land stays the lit surface and the sea recedes. */
+function isLightGround(ground: string): boolean {
+  const v = ground.replace("#", "");
+  const n = v.length === 3 ? v.split("").map((c) => c + c).join("") : v;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16));
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5;
+}
+
 /* Land is the lit surface and sea recedes — the opposite of a consumer map, and
  * the right way round for a screen where the land is the subject.
  *
@@ -77,8 +88,18 @@ function mix(a: string, b: string, amount: number): string {
  * footprint competing with a wind band is a map arguing with itself. `subject`
  * is the dedicated structure semantic: saturated cyan so mapped inventory is
  * distinct from both grey land and the muted forecast-blue ramp. */
+function landTone(t: Tokens): string {
+  // On the light ground the land is the panel tone barely warmed — bone paper
+  // with darker sea around it, the printed-chart arrangement. On the dark
+  // ground the land lifts a quarter of the way to the figure so Cuba and
+  // Hispaniola separate from the water at country zoom.
+  return isLightGround(t.ground)
+    ? mix(t.panel, t.figure, 0.05)
+    : mix(t.panel, t.figure, 0.26);
+}
+
 export function buildingWeights(t: Tokens): { quiet: string; subject: string } {
-  const land = mix(t.panel, t.figure, 0.26);
+  const land = landTone(t);
   return { quiet: mix(land, t.figure, 0.12), subject: t.structure };
 }
 
@@ -88,8 +109,10 @@ export function lighthouseFlavor(t: Tokens): Flavor {
   // half-transparent wind field lying over it. At a tenth of the way to the
   // figure colour it was a slightly different shade of dark, and Cuba and
   // Hispaniola were indistinguishable from the sea they sit in.
-  const land = mix(t.panel, t.figure, 0.26);
-  const sea = mix(t.ground, "#000000", 0.55);
+  const land = landTone(t);
+  const sea = isLightGround(t.ground)
+    ? mix(t.ground, t.figure, 0.16)
+    : mix(t.ground, "#000000", 0.55);
   const road = mix(t.rule, t.figure, 0.15);
   const casing = sea;
 

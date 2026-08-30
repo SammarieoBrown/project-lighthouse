@@ -103,17 +103,19 @@
 }
 
 /* =======================================================================
- * GROUND — two of them, and which one you get is a product decision rather
- * than a preference.
+ * GROUND — two are defined, one is the product.
  *
- * The console is dark because an EOC is read in a dim room during a storm,
- * often with the lights down and a projector running. The public portal is
- * light because it is read in daylight, on a phone, by a donor or an auditor
- * who is not in a crisis. Those are different rooms, so they get different
- * grounds, and the surface says which it is rather than asking the viewer.
+ * Revised Aug 30 (owner review): every operational and public surface now
+ * carries the warm bone light ground. The original split — dark console for a
+ * dim EOC room, light portal for daylight — was reviewed against the built
+ * screens and the dark console read as a prototype rather than an instrument;
+ * one ground also means the map, the queue and the ledger stop changing
+ * character at every navigation. The dark ground stays defined for the design
+ * specimen (both grounds must remain checkable) and for any future surface
+ * that genuinely needs it, with a written reason.
  *
- * The viewer preference still resolves the case where we have not said —
- * and an explicit data-theme always beats the system setting.
+ * The surface states its ground rather than asking the viewer — there is no
+ * theme toggle on an operational screen (design rules, Part 1 rule 30).
  *
  * Neither ground is a tint of the other. The dark is a faint green-grey
  * (instrument enamel, deliberately not midnight blue, which is where every
@@ -121,7 +123,7 @@
  * full of ruled data does not glare.
  * ==================================================================== */
 
-/* Dark — the default, and what the console always uses.
+/* Dark — kept for the specimen sheet, no longer any surface's default.
  *
  * Scoped by plain attribute rather than pinned to :root, so a region can carry
  * a ground of its own. That is not a decorative capability: the portal embeds
@@ -217,6 +219,15 @@
   --lh-quiet: #5c645f;
   --lh-figure: #141a18;
   --lh-structure: #004f91; /* same mapped-inventory role; dark enough over light land */
+
+  /* The hazard ramp inverts its emphasis with the ground: on dark the ramp
+   * brightens as the threshold rises, on light it darkens — either way the
+   * 64 kt band is the loudest mark on the map. The dark values on bone left
+   * the hurricane-force band the palest thing on screen, which ranked the
+   * thresholds backwards. */
+  --lh-hazard-34: #7ba3c9;
+  --lh-hazard-50: #4e83b6;
+  --lh-hazard-64: #24619e;
   --lh-weather-rain: #237d3d;
   --lh-weather-cold: #7d6d11;
   --lh-weather-deep: #945813;
@@ -245,6 +256,9 @@
     --lh-quiet: #5c645f;
     --lh-figure: #141a18;
     --lh-structure: #004f91;
+    --lh-hazard-34: #7ba3c9;
+    --lh-hazard-50: #4e83b6;
+    --lh-hazard-64: #24619e;
     --lh-weather-rain: #237d3d;
     --lh-weather-cold: #7d6d11;
     --lh-weather-deep: #945813;

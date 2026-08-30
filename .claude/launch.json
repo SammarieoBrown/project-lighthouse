@@ -11,6 +11,19 @@
       "cwd": "apps/console",
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "uvicorn",
+        "app.web:app",
+        "--port",
+        "8913"
+      ],
+      "cwd": "apps/api",
+      "port": 8913
     }
   ]
 }

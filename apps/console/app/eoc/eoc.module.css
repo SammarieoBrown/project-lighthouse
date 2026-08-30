@@ -142,19 +142,27 @@
   display: flex;
   grid-area: readings;
   align-items: stretch;
-  gap: var(--lh-space-5);
+  gap: var(--lh-space-6);
   padding-left: var(--lh-space-5);
   border-top: 1px solid var(--lh-rule);
 }
 
 .reading {
-  padding: var(--lh-space-3) 0;
+  padding: var(--lh-space-4) 0;
   display: flex;
   flex: 1 1 0;
   min-width: 0;
   flex-direction: column;
   justify-content: center;
   gap: var(--lh-space-1);
+}
+
+/* Ruled like the operations metrics band, because it is the same kind of
+ * band: peer figures in a row. Unruled, the five readings floated in shared
+ * space and the masthead read as crowding rather than as columns. */
+.reading + .reading {
+  border-left: 1px solid var(--lh-rule);
+  padding-left: var(--lh-space-6);
 }
 
 .readingValue {

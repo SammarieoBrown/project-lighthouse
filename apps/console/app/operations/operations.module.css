@@ -86,17 +86,35 @@
 .metrics strong[data-alert="true"] { color: var(--lh-critical); }
 .metrics span { display: block; color: var(--lh-quiet); font-size: var(--lh-text-micro); letter-spacing: 0.07em; margin-top: var(--lh-space-2); text-transform: uppercase; }
 
+/* The working row is bound to the viewport: the queue scrolls inside its own
+ * panel and the gate rail scrolls inside its own, so reaching the finance gate
+ * and the ledger below never means scrolling through a hundred claims. 168px
+ * is the measured header (72) plus the metrics band (95) on the desktop
+ * layout; below 900px both wrap and the media query hands the height back to
+ * the document. The floor keeps the row usable on a short window rather than
+ * collapsing the queue to a slit. */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(340px, 0.8fr);
   border-bottom: 1px solid var(--lh-rule);
+  height: calc(100dvh - 168px);
+  min-height: 480px;
 }
 
 .claims,
 .approval,
 .ledger,
 .settlement { padding: var(--lh-space-6); }
-.approval { border-left: 1px solid var(--lh-rule); }
+.claims {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+.approval {
+  border-left: 1px solid var(--lh-rule);
+  min-height: 0;
+  overflow-y: auto;
+}
 .ledger,
 .settlement { border-bottom: 1px solid var(--lh-rule); }
 
@@ -128,6 +146,19 @@
 
 .claimTable,
 .ledgerTable { border-top: 1px solid var(--lh-rule); }
+
+/* The queue scrolls; the page does not. The head stays put over the rows it
+ * labels, and carries the ground so rows do not show through it. */
+.claimTable {
+  min-height: 0;
+  overflow-y: auto;
+}
+.claimTable .tableHead {
+  background: var(--lh-ground);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 
 .tableHead,
 .claimRow {
@@ -272,14 +303,18 @@
   padding: var(--lh-space-2) var(--lh-space-3);
   text-transform: uppercase;
 }
+/* The button column sizes to its own label. Forced into a fraction of the row
+ * it wrapped "Open finance queue" onto two lines at ordinary widths, which
+ * read as a broken control rather than a tight one. */
 .settlementAccess {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) minmax(190px, 0.45fr);
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.1fr) auto;
   gap: var(--lh-space-4);
   align-items: end;
 }
 .settlementAccess .field,
 .settlementAccess .approveButton { margin-top: 0; }
+.settlementAccess .approveButton { white-space: nowrap; width: auto; }
 .settlementTable { border-top: 1px solid var(--lh-rule); margin-top: var(--lh-space-5); }
 .settlementHead,
 .settlementRow {
@@ -329,9 +364,15 @@
   .header { align-items: flex-start; flex-direction: column; }
   .metrics { display: grid; grid-template-columns: 1fr 1fr; }
   .metrics > div:nth-child(odd) { border-left: 0; padding-left: 0; }
-  .workspace { grid-template-columns: 1fr; }
-  .approval { border-left: 0; border-top: 1px solid var(--lh-rule); }
+  /* Stacked, the viewport binding would squeeze two panels into one screen
+   * height. The document scrolls again; only the queue keeps its own scroll,
+   * capped so the gate below it stays reachable. */
+  .workspace { grid-template-columns: 1fr; height: auto; min-height: 0; }
+  .claims { display: block; }
+  .claimTable { max-height: 60dvh; }
+  .approval { border-left: 0; border-top: 1px solid var(--lh-rule); overflow-y: visible; }
   .settlementAccess { grid-template-columns: 1fr; }
+  .settlementAccess .approveButton { width: 100%; }
   .settlementTable { overflow-x: auto; }
   .settlementHead, .settlementRow { min-width: 880px; }
   .tableHead { display: none; }
