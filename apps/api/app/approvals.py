@@ -35,7 +35,12 @@ from lighthouse_contracts import (
 
 from . import ledger
 from .db import session_scope
-from .donations_service import DonationRejected, PoolNotFound, draw_down
+from .donations_service import (
+    DonationRejected,
+    PoolNotFound,
+    draw_down,
+    ensure_pool_covers,
+)
 from .human_auth import AuthenticatedHuman, authenticate_human
 from .models import (
     Allocation,
@@ -54,7 +59,9 @@ from .public_taxonomy import (
 
 router = APIRouter(prefix="/v1", tags=["approvals"])
 
-_CASH_GRANT = Decimal("45000.00")
+#: The Director sizes each grant; the ceiling only guards against a mistyped
+#: figure signing away a pool in one keystroke.
+_CASH_GRANT_CEILING = Decimal("1000000.00")
 _IDEMPOTENCY_MAX_LENGTH = 200
 _SIGNAL_NAMES = frozenset(
     {
@@ -118,8 +125,15 @@ class AllocationApprovalRequest(BaseModel):
                 "pool_id is required for DONOR_POOL and not allowed otherwise"
             )
         if self.resource is ResourceKind.CASH:
-            if self.amount != _CASH_GRANT or self.currency != "JMD":
-                raise ValueError("the current cash grant is exactly JMD 45000.00")
+            if (
+                self.amount is None
+                or self.amount <= 0
+                or self.amount > _CASH_GRANT_CEILING
+                or self.currency != "JMD"
+            ):
+                raise ValueError(
+                    "a cash grant is a positive JMD amount up to 1,000,000.00"
+                )
             if (
                 self.sku is not None
                 or self.quantity is not None
@@ -548,7 +562,7 @@ def approve_claim_allocation(
         resource=request.resource,
         sku=None if is_cash else request.sku,
         quantity=None if is_cash else request.quantity,
-        amount=_CASH_GRANT if is_cash else None,
+        amount=request.amount.quantize(Decimal("0.01")) if is_cash else None,
         currency="JMD",
         payer_route=request.payer_route,
         pool_id=request.pool_id,
@@ -559,14 +573,24 @@ def approve_claim_allocation(
     if not is_cash:
         _decrement_stock(session, request)
     if request.payer_route is PayerRoute.DONOR_POOL:
-        # DON-03: allocations draw down pool balances visibly, in the signing
-        # transaction, for the same reason stock does.
         try:
-            draw_down(session, request.pool_id, allocation.amount or Decimal("0.00"))
+            ensure_pool_covers(
+                session, request.pool_id, allocation.amount or Decimal("0.00")
+            )
         except (PoolNotFound, DonationRejected) as exc:
             raise ApprovalServiceError(status.HTTP_409_CONFLICT, str(exc)) from exc
     session.add(allocation)
     session.flush()
+    if request.payer_route is PayerRoute.DONOR_POOL:
+        # DON-03: allocations draw down pool balances visibly, in the signing
+        # transaction, for the same reason stock does. The draw-down follows
+        # the insert: the signed-allocation guard checks the pool against the
+        # pre-debit balance, and debiting first would demand a pool hold twice
+        # the grant.
+        try:
+            draw_down(session, request.pool_id, allocation.amount or Decimal("0.00"))
+        except (PoolNotFound, DonationRejected) as exc:
+            raise ApprovalServiceError(status.HTTP_409_CONFLICT, str(exc)) from exc
 
     entry = ledger.append(
         session,

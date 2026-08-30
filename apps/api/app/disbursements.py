@@ -58,7 +58,6 @@ from .settlement_executor import (
 
 router = APIRouter(prefix="/v1", tags=["disbursements"])
 
-_CASH_GRANT = Decimal("45000.00")
 _IDEMPOTENCY_MAX_LENGTH = 200
 _SUPPORTED_CASH_CHANNELS = frozenset(
     {
@@ -436,9 +435,9 @@ def sign_disbursement_batch(
             status.HTTP_409_CONFLICT,
             "owning storm file must remain VERIFIED before batch signing",
         )
-    if allocation.amount != _CASH_GRANT or allocation.currency != "JMD":
+    if allocation.amount is None or allocation.amount <= 0 or allocation.currency != "JMD":
         raise SettlementServiceError(
-            status.HTTP_409_CONFLICT, "allocation is outside the fixed release policy"
+            status.HTTP_409_CONFLICT, "allocation is outside the release policy"
         )
     if session.scalar(
         select(Disbursement.id)
@@ -475,7 +474,7 @@ def sign_disbursement_batch(
     batch = DisbursementBatch(
         id=batch_id,
         channel=request.channel,
-        total=_CASH_GRANT,
+        total=allocation.amount,
         approval_id=approval.id,
     )
     session.add(batch)

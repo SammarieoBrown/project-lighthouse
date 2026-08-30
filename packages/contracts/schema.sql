@@ -1022,7 +1022,7 @@ CREATE TABLE allocation (
   CONSTRAINT allocation_release_policy_chk CHECK (
     (
       resource = 'CASH'
-      AND amount = 45000.00
+      AND amount > 0
       AND currency = 'JMD'
       AND sku IS NULL
       AND quantity IS NULL
@@ -1065,7 +1065,7 @@ CREATE TABLE disbursement_batch (
   snapshot_hash text NOT NULL CHECK (snapshot_hash ~ '^[0-9a-f]{64}$'),
   created_at    timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT disbursement_batch_release_policy_chk CHECK (
-    total = 45000.00 AND channel IN ('BANK', 'MOBILE_MONEY', 'VOUCHER')
+    total > 0 AND channel IN ('BANK', 'MOBILE_MONEY', 'VOUCHER')
   )
 );
 
@@ -1216,6 +1216,7 @@ CREATE UNIQUE INDEX ledger_disbursement_failed_subject_uidx
 -- An allocation can only be inserted as the one fixed release grant under an
 -- exact Director signature and the latest qualifying verification.  Updates
 -- and deletes are never corrections: the signed row is historical evidence.
+-- ALLOCATION_SIGNED_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION allocation_signed_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -1235,7 +1236,7 @@ BEGIN
   END IF;
 
   IF NEW.resource = 'CASH' THEN
-    IF NEW.amount IS DISTINCT FROM 45000.00
+    IF NEW.amount IS NULL OR NEW.amount <= 0
        OR NEW.currency <> 'JMD'
        OR NEW.sku IS NOT NULL
        OR NEW.quantity IS NOT NULL
@@ -1386,6 +1387,7 @@ BEGIN
 
   RETURN NEW;
 END $$;
+-- ALLOCATION_SIGNED_GUARD_FN_END
 
 CREATE TRIGGER allocation_signed_guard_trigger
   BEFORE INSERT OR UPDATE OR DELETE ON allocation
@@ -1394,6 +1396,7 @@ CREATE TRIGGER allocation_signed_guard_trigger
 -- Public classification remains inside the internal receipt so auditors can
 -- reproduce the decision, but only canonical closed-set values may be bound.
 -- The public view validates these again and then redacts them per household.
+-- LEDGER_ALLOCATION_APPROVAL_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION ledger_allocation_approval_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -1438,11 +1441,11 @@ BEGIN
           IS DISTINCT FROM allocation_row.verification_snapshot_hash
      OR NEW.payload ->> 'gate' IS DISTINCT FROM 'ALLOCATION_PLAN'
      -- The receipt states what was signed for, and the row is the referee.
-     -- A cash receipt still has to read exactly 45000.00 JMD; a goods receipt
-     -- has to name the SKU and count that came off the shelf.
+     -- A cash receipt has to read the exact amount the Director signed; a
+     -- goods receipt has to name the SKU and count that came off the shelf.
      OR NEW.payload ->> 'resource' IS DISTINCT FROM allocation_row.resource::text
      OR (allocation_row.resource = 'CASH' AND (
-          NEW.payload ->> 'amount' IS DISTINCT FROM '45000.00'
+          NEW.payload ->> 'amount' IS DISTINCT FROM allocation_row.amount::text
        OR NEW.payload ->> 'currency' IS DISTINCT FROM 'JMD'
        OR NEW.payload ? 'sku'
        OR NEW.payload ? 'quantity'
@@ -1480,6 +1483,7 @@ BEGIN
 
   RETURN NEW;
 END $$;
+-- LEDGER_ALLOCATION_APPROVAL_GUARD_FN_END
 
 CREATE TRIGGER ledger_allocation_approval_guard_trigger
   BEFORE INSERT ON ledger_entry
@@ -1568,9 +1572,9 @@ BEGIN
     RAISE EXCEPTION 'signed disbursement batch is immutable';
   END IF;
 
-  IF NEW.total IS DISTINCT FROM 45000.00
+  IF NEW.total IS NULL OR NEW.total <= 0
      OR NEW.channel NOT IN ('BANK', 'MOBILE_MONEY', 'VOUCHER') THEN
-    RAISE EXCEPTION 'disbursement batch is outside the fixed release policy';
+    RAISE EXCEPTION 'disbursement batch is outside the release policy';
   END IF;
   IF NOT EXISTS (
     SELECT 1
@@ -1640,10 +1644,10 @@ BEGIN
        OR NEW.approval_id IS DISTINCT FROM batch_row.approval_id
        OR NEW.channel IS DISTINCT FROM batch_row.channel
        OR batch_row.total IS DISTINCT FROM allocation_row.amount
-       OR allocation_row.amount IS DISTINCT FROM 45000.00
+       OR allocation_row.amount IS NULL OR allocation_row.amount <= 0
        OR allocation_row.currency <> 'JMD'
        OR allocation_row.resource <> 'CASH'
-       OR allocation_row.payer_route <> 'GOV_RELIEF' THEN
+       OR allocation_row.payer_route NOT IN ('GOV_RELIEF', 'DONOR_POOL') THEN
       RAISE EXCEPTION 'disbursement is not exactly bound to its signed allocation';
     END IF;
     IF NEW.status <> 'PENDING'
@@ -1742,6 +1746,7 @@ CREATE TRIGGER disbursement_lifecycle_guard_trigger
 
 -- Settlement payloads are closed contracts.  No arbitrary key can smuggle
 -- household data into an otherwise publishable money event.
+-- LEDGER_DISBURSEMENT_RECEIPT_GUARD_FN_BEGIN
 CREATE OR REPLACE FUNCTION ledger_disbursement_receipt_guard()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -1797,9 +1802,10 @@ BEGIN
           IS DISTINCT FROM allocation_row.verification_snapshot_hash
      OR NEW.payload ->> 'gate' IS DISTINCT FROM 'DISBURSEMENT_BATCH'
      OR NEW.payload ->> 'resource' IS DISTINCT FROM 'CASH'
-     OR NEW.payload ->> 'amount' IS DISTINCT FROM '45000.00'
+     OR NEW.payload ->> 'amount' IS DISTINCT FROM allocation_row.amount::text
      OR NEW.payload ->> 'currency' IS DISTINCT FROM 'JMD'
-     OR NEW.payload ->> 'payer_route' IS DISTINCT FROM 'GOV_RELIEF'
+     OR NEW.payload ->> 'payer_route'
+          IS DISTINCT FROM allocation_row.payer_route::text
      OR NEW.payload ->> 'channel' IS DISTINCT FROM disbursement_row.channel::text
      OR NEW.payload ->> 'executor_provider'
           IS DISTINCT FROM 'LIGHTHOUSE_DEMO_EXECUTOR_V1'
@@ -1877,6 +1883,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+-- LEDGER_DISBURSEMENT_RECEIPT_GUARD_FN_END
 
 CREATE TRIGGER ledger_disbursement_receipt_guard_trigger
   BEFORE INSERT ON ledger_entry

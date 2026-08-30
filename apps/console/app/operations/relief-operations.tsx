@@ -181,8 +181,12 @@ type DonationPool = {
 /* The default the Director sees, never the decision: the pool scoped to the
  * claim's parish when it can cover the flat grant, else the event-wide pool,
  * else government relief. A hand-picked payer is left alone. */
-function suggestPayer(pools: DonationPool[], parish: string | null): string {
-  const funded = pools.filter((pool) => Number.parseFloat(pool.balance) >= 45_000);
+function suggestPayer(
+  pools: DonationPool[],
+  parish: string | null,
+  amount: number,
+): string {
+  const funded = pools.filter((pool) => Number.parseFloat(pool.balance) >= amount);
   const parishPool = parish
     ? funded.find((pool) => pool.scope_kind === "PARISH" && pool.scope_value === parish)
     : undefined;
@@ -257,6 +261,7 @@ export function ReliefOperations() {
   const [note, setNote] = useState("");
   const [pools, setPools] = useState<DonationPool[]>([]);
   const [payerChoice, setPayerChoice] = useState<string>("GOV_RELIEF");
+  const [amount, setAmount] = useState("45000");
   const payerTouched = useRef(false);
   const [approving, setApproving] = useState(false);
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
@@ -492,13 +497,19 @@ export function ReliefOperations() {
     payerTouched.current = false;
   }, [selectedId]);
 
+  const amountValue = Number.parseFloat(amount);
+  const amountValid =
+    Number.isFinite(amountValue) && amountValue > 0 && amountValue <= 1_000_000;
+
   useEffect(() => {
     if (payerTouched.current) return;
-    setPayerChoice(suggestPayer(pools, selected?.parish ?? null));
-  }, [pools, selected, selectedId]);
+    setPayerChoice(
+      suggestPayer(pools, selected?.parish ?? null, amountValid ? amountValue : 45_000),
+    );
+  }, [pools, selected, selectedId, amountValid, amountValue]);
 
   const approve = useCallback(async () => {
-    if (!selected || !approvalReady || !activeToken) return;
+    if (!selected || !approvalReady || !activeToken || !amountValid) return;
     setApproving(true);
     setApproval(null);
     setApprovalError(null);
@@ -506,7 +517,7 @@ export function ReliefOperations() {
     try {
       const requestBody = JSON.stringify({
         resource: "CASH",
-        amount: "45000.00",
+        amount: amountValue.toFixed(2),
         currency: "JMD",
         payer_route: payerChoice === "GOV_RELIEF" ? "GOV_RELIEF" : "DONOR_POOL",
         pool_id: payerChoice === "GOV_RELIEF" ? undefined : payerChoice,
@@ -545,7 +556,7 @@ export function ReliefOperations() {
     } finally {
       setApproving(false);
     }
-  }, [selected, approvalReady, activeToken, note, payerChoice, loadLedger, loadPools, closeCredential]);
+  }, [selected, approvalReady, activeToken, note, payerChoice, amountValue, loadLedger, loadPools, closeCredential]);
 
   const approvalClaim = approval
     ? claims.find((claim) => claim.id === approval.allocation.claim_id) ?? null
@@ -880,7 +891,23 @@ export function ReliefOperations() {
               <dl className={styles.selection}>
                 <div><dt>Claim</dt><dd>{selected.claim_ref}</dd></div>
                 <div><dt>Eligibility</dt><dd>{selected.status}</dd></div>
-                <div><dt>Resource</dt><dd>{money.format(45_000)} cash grant</dd></div>
+                <div>
+                  <dt><label htmlFor="grant-amount">Amount · JMD</label></dt>
+                  <dd>
+                    <input
+                      id="grant-amount"
+                      className={styles.payerSelect}
+                      type="number"
+                      inputMode="decimal"
+                      min={1}
+                      max={1_000_000}
+                      step={500}
+                      value={amount}
+                      disabled={approving}
+                      onChange={(event) => setAmount(event.target.value)}
+                    />
+                  </dd>
+                </div>
                 <div>
                   <dt><label htmlFor="payer-route">Payer</label></dt>
                   <dd>
@@ -897,11 +924,13 @@ export function ReliefOperations() {
                       <option value="GOV_RELIEF">Government relief</option>
                       {pools.map((pool) => {
                         const balance = Number.parseFloat(pool.balance);
-                        const short = Number.isFinite(balance) && balance < 45_000;
+                        const need = amountValid ? amountValue : 45_000;
+                        const short = Number.isFinite(balance) && balance < need;
+
                         return (
                           <option key={pool.pool_id} value={pool.pool_id} disabled={short}>
                             {pool.name} · {money.format(Number.isFinite(balance) ? balance : 0)}
-                            {short ? " · below grant" : ""}
+                            {short ? " · below amount" : ""}
                           </option>
                         );
                       })}
@@ -1059,8 +1088,8 @@ export function ReliefOperations() {
                   ) : (
                     <>
                       <p className={styles.limit}>
-                        A range, not a figure. The estimate does not size the grant: relief is a
-                        flat J$45,000, and nothing is released by this decision.
+                        A range, not a figure. Use it to size the grant you approve below;
+                        nothing is released by this decision.
                       </p>
                       <label className={styles.field}>
                         <span>Decision reason · required</span>
@@ -1140,10 +1169,14 @@ export function ReliefOperations() {
               <button
                 type="button"
                 className={styles.approveButton}
-                disabled={approving || !approvalReady}
+                disabled={approving || !approvalReady || !amountValid}
                 onClick={() => void approve()}
               >
-                {approving ? "Signing…" : `Approve ${money.format(45_000)}`}
+                {approving
+                  ? "Signing…"
+                  : amountValid
+                    ? `Approve ${money.format(amountValue)}`
+                    : "Enter a grant amount"}
               </button>
               <p className={styles.noMovement}>
                 This records an approved allocation. It does not create or claim a bank transfer,

@@ -217,11 +217,11 @@ def _release(payload: dict) -> dict:
     payer_route = PayerRoute(payload["payer_route"])
     if (
         resource is not ResourceKind.CASH
-        or amount != Decimal("45000.00")
+        or amount <= 0
         or currency != "JMD"
-        or payer_route is not PayerRoute.GOV_RELIEF
+        or payer_route not in {PayerRoute.GOV_RELIEF, PayerRoute.DONOR_POOL}
     ):
-        raise ValueError("unexpected fixed relief grant")
+        raise ValueError("unexpected relief grant shape")
     return {
         "resource": resource,
         "amount": amount,
