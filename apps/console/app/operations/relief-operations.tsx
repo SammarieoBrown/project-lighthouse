@@ -1048,7 +1048,8 @@ export function ReliefOperations() {
                     </div>
                   </>
                 )}
-                <div hidden={resource !== "CASH"}>
+                {resource === "CASH" ? (
+                <div>
                   <dt><label htmlFor="payer-route">Payer</label></dt>
                   <dd>
                     <select
@@ -1077,6 +1078,7 @@ export function ReliefOperations() {
                     </select>
                   </dd>
                 </div>
+                ) : null}
               </dl>
               {selected.transcript ? (
                 <div className={styles.householdMessage}>
