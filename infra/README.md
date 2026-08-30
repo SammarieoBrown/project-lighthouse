@@ -54,7 +54,12 @@ integration has been separately reviewed.
 
 The worker inherits `DATABASE_URL` from the web service, so the credential has
 one source of truth. Alembic runs once as the paid web service's pre-deploy
-command over that direct connection. Neon recommends a direct connection for
+command over that direct connection, and the same hook then ensures the demo
+donation pools exist (`python -m app.replay.seed_pools`) — the portal's give
+form renders only when there is a pool to give to (DON-01). The hook is
+idempotent, repairs a drifted parish scope, and touches nothing beyond the
+`donation_pool` table; the synthetic-claim replay remains a deliberate,
+by-hand act. Neon recommends a direct connection for
 schema migrations; switch application traffic to a separate pooled setting
 only after the app supports separate migration and runtime URLs.
 

@@ -17,7 +17,13 @@ services:
     autoDeployTrigger: checksPass
     numInstances: 1
     buildCommand: python -m pip install uv==0.8.2 && uv sync --project apps/api --frozen --no-dev
-    preDeployCommand: cd apps/api && .venv/bin/alembic upgrade head
+    # Migrations first, then the demo donation pools. The portal's give form
+    # (DON-01) renders only when a pool exists, and pools used to be created
+    # only by the by-hand claim replay — which production never ran, leaving
+    # the public donation surface in its empty state. Seeding is idempotent by
+    # name and repairs drifted parish scope, so every deploy may run it; the
+    # synthetic-claim replay stays a deliberate act.
+    preDeployCommand: cd apps/api && .venv/bin/alembic upgrade head && .venv/bin/python -m app.replay.seed_pools
     startCommand: cd apps/api && .venv/bin/uvicorn app.web:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
