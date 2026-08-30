@@ -211,7 +211,7 @@ function evidenceSummary(value: Record<string, unknown> | undefined): string | n
 export function ReliefOperations() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
-  const [claimsState, setClaimsState] = useState<LoadState>("locked");
+  const [claimsState, setClaimsState] = useState<LoadState>("loading");
   const [ledgerState, setLedgerState] = useState<LoadState>("loading");
   const [ledgerChain, setLedgerChain] = useState<LedgerChain | null>(null);
   const [ledgerAggregate, setLedgerAggregate] = useState<LedgerAggregate | null>(null);
@@ -247,24 +247,19 @@ export function ReliefOperations() {
   const approvalIntent = useRef<{ signature: string; key: string } | null>(null);
 
   /* One way out of an open credential, taken by the expiry timer, by any 401
-   * the API answers, and by Sign out. It puts the queue back behind the
-   * password field so the recovery the error copy names actually exists on
-   * screen. */
+   * the API answers, and by Sign out. The queue itself stays readable — it
+   * belongs to the signed-in session; only the power to decide expires. */
   const closeCredential = useCallback((notice: string | null) => {
     setActiveToken("");
     setCredentialExpiry(null);
     setCredentialNotice(notice);
-    setClaims([]);
-    setSelectedId(null);
-    setClaimsState("locked");
-    setClaimsError(null);
   }, []);
 
   useEffect(() => {
     if (!credentialExpiry) return;
     const remaining = credentialExpiry - Date.now();
     const close = () => closeCredential(
-      "Your credential expired after five minutes. Confirm your password to reopen the queue.",
+      "Your credential expired after five minutes. Confirm your password to approve again.",
     );
     if (remaining <= 0) {
       close();
@@ -274,20 +269,15 @@ export function ReliefOperations() {
     return () => window.clearTimeout(timer);
   }, [credentialExpiry, closeCredential]);
 
-  const loadClaims = useCallback(async (token = activeToken) => {
+  /* The queue reads on the eight-hour session cookie — the proxy forwards it,
+   * so no credential header is involved until someone decides something. */
+  const loadClaims = useCallback(async () => {
     const requestId = ++claimsRequest.current;
-    if (!token) {
-      setClaims([]);
-      setClaimsState("locked");
-      setSelectedId(null);
-      return;
-    }
-    setClaimsState("loading");
+    setClaimsState((current) => (current === "ready" ? current : "loading"));
     setClaimsError(null);
     try {
       const response = await fetch("/api/lighthouse/api/claims?limit=100", {
         cache: "no-store",
-        headers: { authorization: `Bearer ${token}` },
       });
       const body = (await jsonOrDetail(response)) as { claims?: Claim[] };
       if (requestId !== claimsRequest.current) return;
@@ -301,18 +291,12 @@ export function ReliefOperations() {
       });
     } catch (error) {
       if (requestId !== claimsRequest.current) return;
-      if (credentialIsDead(error)) {
-        closeCredential(
-          error instanceof Error ? error.message : "Your credential is no longer accepted.",
-        );
-        return;
-      }
       setClaims([]);
       setSelectedId(null);
       setClaimsState("error");
       setClaimsError(error instanceof Error ? error.message : "Claims are unavailable.");
     }
-  }, [activeToken, closeCredential]);
+  }, []);
 
   const loadLedger = useCallback(async () => {
     try {
@@ -342,17 +326,18 @@ export function ReliefOperations() {
   }, []);
 
   const refresh = useCallback(async () => {
-    await Promise.all([activeToken ? loadClaims(activeToken) : Promise.resolve(), loadLedger()]);
-  }, [activeToken, loadClaims, loadLedger]);
+    await Promise.all([loadClaims(), loadLedger()]);
+  }, [loadClaims, loadLedger]);
 
   useEffect(() => {
+    void loadClaims();
     void loadLedger();
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
-  }, [loadLedger, refresh]);
+  }, [loadClaims, loadLedger, refresh]);
 
   useEffect(() => {
-    if (!selectedId || !activeToken) {
+    if (!selectedId) {
       setClaimDetail(null);
       setDetailState("locked");
       setDetailError(null);
@@ -363,7 +348,6 @@ export function ReliefOperations() {
     setDetailError(null);
     fetch(`/api/lighthouse/api/claims/${encodeURIComponent(selectedId)}`, {
       cache: "no-store",
-      headers: { authorization: `Bearer ${activeToken}` },
       signal: controller.signal,
     })
       .then(jsonOrDetail)
@@ -375,26 +359,20 @@ export function ReliefOperations() {
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        if (credentialIsDead(error)) {
-          closeCredential(
-            error instanceof Error ? error.message : "Your credential is no longer accepted.",
-          );
-          return;
-        }
         setClaimDetail(null);
         setDetailState("error");
         setDetailError(error instanceof Error ? error.message : "Claim evidence is unavailable.");
       });
     return () => controller.abort();
-  }, [selectedId, activeToken, detailRefresh, closeCredential]);
+  }, [selectedId, detailRefresh]);
 
-  /* Photo evidence arrives as bytes from an authenticated route, so a plain
-   * <img src> cannot carry the credential. Fetch with the bearer token and
-   * hold object URLs for exactly as long as the detail is on screen. */
+  /* Photo evidence arrives as bytes from an authenticated route; the session
+   * cookie rides along on the same-origin fetch, and the object URLs live
+   * exactly as long as the detail is on screen. */
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   useEffect(() => {
     setPhotoUrls({});
-    if (!claimDetail || !activeToken) return;
+    if (!claimDetail) return;
     const photos = claimDetail.evidence.filter(
       (item) => item.kind === "PHOTO" && item.has_uri,
     );
@@ -407,7 +385,6 @@ export function ReliefOperations() {
           `/api/lighthouse/api/claims/${encodeURIComponent(claimDetail.id)}/evidence/${encodeURIComponent(item.id)}/media`,
           {
             cache: "no-store",
-            headers: { authorization: `Bearer ${activeToken}` },
             signal: controller.signal,
           },
         );
@@ -427,7 +404,7 @@ export function ReliefOperations() {
       controller.abort();
       for (const url of created) URL.revokeObjectURL(url);
     };
-  }, [claimDetail, activeToken]);
+  }, [claimDetail]);
 
   const selected = useMemo(
     () => claims.find((claim) => claim.id === selectedId) ?? null,
@@ -470,12 +447,7 @@ export function ReliefOperations() {
   );
   const verified = claims.filter((claim) => claim.status === "VERIFIED").length;
   const safetyOfLife = claims.filter((claim) => claim.sol).length;
-  const metricReason =
-    claimsState === "locked"
-      ? "queue locked"
-      : claimsState === "loading"
-        ? "reading"
-        : "unavailable";
+  const metricReason = claimsState === "loading" ? "reading" : "unavailable";
 
   const approve = useCallback(async () => {
     if (!selected || !approvalReady || !activeToken) return;
@@ -595,7 +567,7 @@ export function ReliefOperations() {
         `${verdict === "APPROVED" ? "Claim verified" : "Claim rejected"} by Review Clerk`
         + (result.idempotent_replay ? " · existing decision replayed safely" : " · immutable decision recorded"),
       );
-      await loadClaims(activeToken);
+      await loadClaims();
       setDetailRefresh((value) => value + 1);
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : "Review decision failed.");
@@ -712,11 +684,7 @@ export function ReliefOperations() {
             <span className={styles.sync}>Refreshes every 15 seconds</span>
           </div>
 
-          {claimsState === "locked" ? (
-            <p className={styles.empty}>
-              Protected queue locked. Present a short-lived operator credential to read claims.
-            </p>
-          ) : claimsState === "error" ? (
+          {claimsState === "error" ? (
             <p className={styles.error}>{claimsError}</p>
           ) : claimsState === "loading" ? (
             <p className={styles.empty}>Reading the intake queue…</p>
@@ -801,7 +769,7 @@ export function ReliefOperations() {
               <button
                 type="button"
                 disabled={claimsState === "loading" || approving}
-                onClick={() => void loadClaims(activeToken)}
+                onClick={() => void loadClaims()}
               >
                 {claimsState === "loading" ? "Reading…" : "Refresh queue"}
               </button>
@@ -812,7 +780,7 @@ export function ReliefOperations() {
                 <p className={styles.credentialNotice} role="status">{credentialNotice}</p>
               ) : null}
               <label className={styles.field}>
-                <span>Your password · opens the claim queue</span>
+                <span>Your password · signs your approval decisions</span>
                 <input
                   type="password"
                   value={operatorPassword}
@@ -826,7 +794,7 @@ export function ReliefOperations() {
               <button
                 type="button"
                 className={styles.approveButton}
-                disabled={!operatorPassword || claimsState === "loading" || approving}
+                disabled={!operatorPassword || approving}
                 onClick={async () => {
                   setStepUpError(null);
                   try {
@@ -835,7 +803,6 @@ export function ReliefOperations() {
                     setCredentialNotice(null);
                     setActiveToken(token);
                     setCredentialExpiry(Date.now() + CREDENTIAL_LIFETIME_MS);
-                    await loadClaims(token);
                   } catch (failure) {
                     setStepUpError(
                       failure instanceof Error ? failure.message : "Could not confirm your password.",
@@ -843,7 +810,7 @@ export function ReliefOperations() {
                   }
                 }}
               >
-                {claimsState === "loading" ? "Opening…" : "Open protected queue"}
+                Confirm password
               </button>
               <p className={styles.noMovement}>
                 The credential stays in this tab&apos;s memory only and expires after five minutes.
