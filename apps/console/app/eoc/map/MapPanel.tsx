@@ -32,11 +32,12 @@ const MapView = dynamic(() => import("./MapView"), {
 });
 
 const BASES: BaseView[] = ["map", "satellite", "structures"];
-type EvidenceKind = "advisory" | "hindcast" | "unknown";
+type EvidenceKind = "advisory" | "hindcast" | "live" | "unknown";
 
 function evidenceLabel(kind: EvidenceKind): string {
   if (kind === "hindcast") return "historical hindcast";
   if (kind === "advisory") return "advisory forecast";
+  if (kind === "live") return "live NHC storm position";
   return "legacy replay with unavailable evidence provenance";
 }
 
@@ -45,11 +46,13 @@ function baseViewLabel(base: BaseView, kind: EvidenceKind): string {
   if (base === "structures") return "Structures";
   if (kind === "hindcast") return "Hindcast + impact";
   if (kind === "advisory") return "Forecast + impact";
+  if (kind === "live") return "Live positions";
   return "Replay + impact";
 }
 
 function windQualifierFor(kind: EvidenceKind, source: StormEntry["sizeSource"]): string {
   if (kind === "advisory") return "advisory forecast";
+  if (kind === "live") return "live position · no wind field is published with it";
   if (kind === "unknown") return "replay wind field with unavailable provenance";
   if (source === "modelled") return "modelled hindcast";
   if (source === "measured") return "measured-radii hindcast";
@@ -289,6 +292,29 @@ function MapKey({
    * initiate is exactly the divergence that snaps back on the next replay
    * frame. */
   const [keyOpen, setKeyOpen] = useState(true);
+
+  /* The live board draws one thing: the storm centre. A key listing wind
+   * bands and parish fills above an empty layer would decode marks that are
+   * not there, so live gets a one-line key. After the hook, so the key keeps
+   * an identical hook order whichever evidence kind is selected. */
+  if (evidenceKind === "live") {
+    return (
+      <details
+        className={styles.key}
+        open={keyOpen}
+        onToggle={(event) => setKeyOpen(event.currentTarget.open)}
+      >
+        <summary className={styles.keyTitle}>Map key</summary>
+        <div className={styles.keyBody}>
+          <span className={styles.keyGroup}>Storm centre · live NHC position</span>
+          <span className={styles.keyNote}>
+            Wind extents, track and modelled impact appear when an advisory is
+            ingested.
+          </span>
+        </div>
+      </details>
+    );
+  }
 
   return (
     <details

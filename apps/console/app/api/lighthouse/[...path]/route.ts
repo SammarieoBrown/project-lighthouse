@@ -43,6 +43,9 @@ function allowedPath(method: string, segments: string[]): string | null {
     // auditor who has no account and should not need one.
     || path === "/v1/public/pools"
     || path === "/v1/settlements"
+    // Public by design: the live board carries NHC's public product and a
+    // posture level, nothing household-shaped.
+    || path === "/v1/hazard/live"
     || path === "/v1/auth/session"
     || CLAIM_DETAIL.test(path)
     || DONOR_JOURNEY.test(path)

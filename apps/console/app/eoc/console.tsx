@@ -5,6 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import { LighthouseMark } from "../logo";
+import {
+  LIVE_STORM_ID,
+  bearingFromKingston,
+  classificationLabel,
+  compassPoint,
+  distanceKm,
+  nearestStorm,
+  useLive,
+} from "./live";
 import { MapPanel } from "./map/MapPanel";
 import {
   canonicalStormId,
@@ -22,7 +31,7 @@ import {
   type Replay,
   type StormEntry,
 } from "./replay";
-import type { District } from "./map";
+import type { District, Snapshot } from "./map";
 import styles from "./eoc.module.css";
 
 /* EOC console — Act 1.
@@ -179,6 +188,11 @@ export function EocConsole() {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(DEFAULT_RATE);
+  /* Replay or the present tense. The two never blend: live shows NHC's
+   * current positions and the sentinel's live posture, and everything the
+   * replay derives — wind fields, impact, the proposal — is absent rather
+   * than borrowed from a recording. */
+  const [live, setLive] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState<SelectedDistrict | null>(null);
   const opened = useRef<string | null>(null);
   const focusRequest = useRef(0);
@@ -322,6 +336,36 @@ export function EocConsole() {
     [replay, displayIndex],
   );
 
+  const liveState = useLive(live);
+  const liveBoard = liveState.status === "ready" ? liveState.board : null;
+  const liveStorms = liveBoard?.basin.storms ?? null;
+  const liveFocus = useMemo(
+    () => (live && liveStorms ? nearestStorm(liveStorms) : null),
+    [live, liveStorms],
+  );
+  /* Centre only. No wind polygon, no cone, no track, no motion for the
+   * circulation marks: every one of those is an advisory product, and a
+   * position fix does not license drawing them (the flow marks' M1 exception
+   * derives its radius from a published polygon this board does not have). */
+  const liveSnapshot = useMemo<Snapshot | null>(
+    () =>
+      live
+        ? {
+            parishes: [],
+            wind34: null,
+            wind50: null,
+            wind64: null,
+            cone: null,
+            track: null,
+            centre: liveFocus ? [liveFocus.lon, liveFocus.lat] : null,
+            motion: null,
+            districts: [],
+            households: [],
+          }
+        : null,
+    [live, liveFocus],
+  );
+
   const replaySummary = useMemo(() => {
     if (!replay) return { homes: 0, structures: null as number | null };
     let structures = 0;
@@ -445,24 +489,34 @@ export function EocConsole() {
   const missing = initialFailure;
 
   return (
-    // The console is dark because an EOC is read in a dim room during a storm.
-    // A product decision, so the surface states it rather than asking.
-    <main className={styles.screen} data-theme="dark">
+    // One ground for the whole product, decided Aug 30 after owner review: the
+    // warm bone light ground. A product decision, so the surface states it
+    // rather than asking (design rules, Part 1 rule 30).
+    <main className={styles.screen} data-theme="light">
       <header className={styles.chrome}>
         <div className={styles.brand}>
           <LighthouseMark size={24} title="Lighthouse" />
           <span className={styles.brandText}>
             <span className={styles.brandName}>Lighthouse</span>
             <span className={styles.stormLine}>
-            {library && library.storms.length > 1 ? (
+            {library ? (
               <label className={styles.stormPick}>
                 <span className={styles.srOnly}>Storm</span>
                 <select
                   className={styles.stormSelect}
-                  value={activeEntry?.id ?? requestedEntry?.id ?? ""}
-                  aria-label="Historical storm replay"
-                  onChange={(event) => onStormChange(event.target.value)}
+                  value={live ? LIVE_STORM_ID : activeEntry?.id ?? requestedEntry?.id ?? ""}
+                  aria-label="Storm view"
+                  onChange={(event) => {
+                    if (event.target.value === LIVE_STORM_ID) {
+                      setPlaying(false);
+                      setLive(true);
+                      return;
+                    }
+                    setLive(false);
+                    onStormChange(event.target.value);
+                  }}
                 >
+                  <option value={LIVE_STORM_ID}>Live — Atlantic basin now</option>
                   {library.storms.map((storm) => (
                     <option key={storm.id} value={storm.id}>
                       {storm.name} — {storm.kind === "hindcast" ? "hindcast" : "advisory replay"}
@@ -473,7 +527,11 @@ export function EocConsole() {
             ) : (
               <span className={styles.brandMode}>Emergency operations replay</span>
             )}
-            {evidenceEntry ? (
+            {live ? (
+              <span className={styles.provenance}>
+                Live NHC positions · wind fields require an ingested advisory
+              </span>
+            ) : evidenceEntry ? (
               /* What kind of claim this storm is, next to the storm's name.
                  An advisory replay is what forecasters published at the time;
                  a hindcast projects the track the storm actually took. */
@@ -491,16 +549,86 @@ export function EocConsole() {
         </div>
 
         <div className={styles.posture}>
-          <span className={styles.postureLabel}>National posture</span>
+          <span className={styles.postureLabel}>
+            {live ? "National posture · live" : "National posture"}
+          </span>
           <span
             className={styles.postureValue}
-            data-level={frame?.posture}
-            data-empty={frame ? undefined : "true"}
+            data-level={live ? liveBoard?.posture.level : frame?.posture}
+            data-empty={(live ? liveBoard : frame) ? undefined : "true"}
           >
-            {frame ? (POSTURE_PLAIN[frame.posture] ?? frame.posture) : "—"}
+            {live
+              ? liveBoard
+                ? POSTURE_PLAIN[liveBoard.posture.level] ?? liveBoard.posture.level
+                : "—"
+              : frame
+                ? POSTURE_PLAIN[frame.posture] ?? frame.posture
+                : "—"}
           </span>
         </div>
 
+        {live ? (
+          <div className={styles.readings}>
+            <div className={styles.reading}>
+              <span
+                className={styles.readingValue}
+                data-empty={liveFocus?.intensity_kt == null ? "true" : undefined}
+              >
+                {liveFocus?.intensity_kt == null
+                  ? "—"
+                  : `${Math.round(liveFocus.intensity_kt)} kt`}
+              </span>
+              <span className={styles.readingLabel}>
+                {liveFocus
+                  ? `NHC sustained wind · ${liveFocus.name ?? "unnamed system"}`
+                  : "NHC sustained wind · no active storm"}
+              </span>
+            </div>
+            <div className={styles.reading}>
+              <span
+                className={styles.readingValue}
+                data-empty={liveFocus?.pressure_mb == null ? "true" : undefined}
+              >
+                {liveFocus?.pressure_mb == null
+                  ? "—"
+                  : `${Math.round(liveFocus.pressure_mb)} mb`}
+              </span>
+              <span className={styles.readingLabel}>
+                {liveFocus
+                  ? `NHC central pressure · ${liveFocus.name ?? "unnamed system"}`
+                  : "NHC central pressure · no active storm"}
+              </span>
+            </div>
+            <div className={styles.reading}>
+              <span
+                className={styles.readingValue}
+                data-empty={liveStorms ? undefined : "true"}
+              >
+                {liveStorms ? liveStorms.length : "—"}
+              </span>
+              <span className={styles.readingLabel}>
+                {liveStorms
+                  ? "Active Atlantic systems · NHC"
+                  : "Active Atlantic systems · feed unreachable"}
+              </span>
+            </div>
+            <div className={styles.reading}>
+              <span
+                className={styles.readingValue}
+                data-empty={liveFocus ? undefined : "true"}
+              >
+                {liveFocus
+                  ? `${nf.format(distanceKm(liveFocus.lon, liveFocus.lat))} km`
+                  : "—"}
+              </span>
+              <span className={styles.readingLabel}>
+                {liveFocus
+                  ? `${bearingFromKingston(liveFocus.lon, liveFocus.lat)} of Kingston · nearest system`
+                  : "Distance from Kingston · nearest system"}
+              </span>
+            </div>
+          </div>
+        ) : (
         <div className={styles.readings}>
           <div className={styles.reading}>
             <span
@@ -556,6 +684,7 @@ export function EocConsole() {
               that failed; it is not the honest rendering of a measurement that
               was never taken. It returns when something is delivering. */}
         </div>
+        )}
 
         <div className={styles.stale}>
           {/* Navigation, not status. It sat in the status list reading as one
@@ -573,7 +702,7 @@ export function EocConsole() {
           {/* Both stay mounted and both are usually empty. A live region has to
               exist before its content does, or the first thing it ever says is
               the one thing nobody hears. */}
-          <span aria-live="polite">{replayAlert}</span>
+          <span aria-live="polite">{live ? null : replayAlert}</span>
           <span
             className={styles.connectivity}
             data-state={connectivity}
@@ -601,11 +730,11 @@ export function EocConsole() {
             {/* Mounted once the outcome of the fetch is known, so the map is
                 built exactly once. Advisory changes update its data sources;
                 rebuilding would refetch the basemap and drop the viewport. */}
-            {!replay && state.status === "loading" ? null : (
+            {!live && !replay && state.status === "loading" ? null : (
               <MapPanel
-                snapshot={snapshot}
-                focus={selectedDistrict}
-                evidenceKind={evidenceKind}
+                snapshot={live ? liveSnapshot : snapshot}
+                focus={live ? null : selectedDistrict}
+                evidenceKind={live ? "live" : evidenceKind}
                 sizeSource={windSource}
               />
             )}
@@ -621,6 +750,26 @@ export function EocConsole() {
               as if they were unrelated facts; `exposed` is a subset of
               `structures`, so saying so is both shorter and more informative
               than saying each separately. */}
+          {live ? (
+            <div className={styles.legend} aria-label="Live board provenance">
+              <span className={styles.legendItem}>
+                {liveState.status === "error"
+                  ? `Live board unreachable · ${liveState.reason}`
+                  : liveBoard
+                    ? liveBoard.basin.storms === null
+                      ? "NHC basin feed unreachable · posture remains live"
+                      : liveBoard.basin.storms.length === 0
+                        ? "No active Atlantic system in NHC's live feed"
+                        : `${liveBoard.basin.storms.length} active Atlantic system(s) · nearest centred on the map when in range`
+                    : "Reading the live board…"}
+              </span>
+              <span className={styles.legendItem}>
+                Positions and intensities are NHC&apos;s published current-storm
+                product. Wind fields, probabilities and modelled impact appear
+                when an advisory is ingested — none are drawn from a position fix.
+              </span>
+            </div>
+          ) : (
           <div className={styles.legend} aria-label="Map counts and data provenance">
             <span className={styles.legendItem}>
               {structures === null || exposed === null ? (
@@ -695,8 +844,111 @@ export function EocConsole() {
               </p>
             </details>
           </div>
+          )}
         </section>
 
+        {live ? (
+          <aside className={styles.side}>
+            <div className={styles.gate}>
+              <span className={styles.gateRole}>Live board</span>
+              <h2 className={styles.gateAsk}>
+                {liveBoard
+                  ? `Posture ${POSTURE_PLAIN[liveBoard.posture.level] ?? liveBoard.posture.level}`
+                  : "Reading the live board"}
+              </h2>
+              <p className={styles.gateDetail}>
+                {liveState.status === "error"
+                  ? liveState.reason
+                  : liveBoard
+                    ? liveBoard.posture.event
+                      ? `Set by ${liveBoard.posture.event.name}.`
+                      : "No live hazard event is open; quiet is the absence of one, not a measurement of safety."
+                    : "Posture and basin arrive together."}
+              </p>
+            </div>
+
+            <div className={styles.counts}>
+              <div className={`${styles.countRow} ${styles.head}`}>
+                <span>Active Atlantic systems · NHC</span>
+                <span className={styles.countValue}>kt</span>
+                <span className={styles.countValue}>km</span>
+              </div>
+              {liveStorms && liveStorms.length > 0 ? (
+                liveStorms.map((storm) => (
+                  <div className={styles.countRow} data-unlocated="true" key={storm.id ?? storm.name ?? `${storm.lat},${storm.lon}`}>
+                    <span className={styles.countPlace}>
+                      {storm.name ?? "Unnamed system"}
+                      <span className={styles.countParish}>
+                        {classificationLabel(storm.classification)}
+                        {storm.movement_dir_deg != null && storm.movement_speed_kt != null
+                          ? ` · moving ${compassPoint(storm.movement_dir_deg)} at ${Math.round(storm.movement_speed_kt)} kt`
+                          : ""}
+                        {` · ${bearingFromKingston(storm.lon, storm.lat)} of Kingston`}
+                      </span>
+                    </span>
+                    <span className={styles.countValue}>
+                      {storm.intensity_kt == null ? "—" : Math.round(storm.intensity_kt)}
+                    </span>
+                    <span className={styles.countValue}>
+                      {nf.format(distanceKm(storm.lon, storm.lat))}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className={styles.countRow} data-unlocated="true">
+                  <span className={styles.countPlace}>
+                    {liveStorms
+                      ? "No active system"
+                      : liveState.status === "error"
+                        ? "Live board unreachable"
+                        : liveBoard
+                          ? "NHC basin feed unreachable"
+                          : "Reading…"}
+                    <span className={styles.countParish}>
+                      {liveStorms
+                        ? "The basin is quiet in NHC's live feed"
+                        : "Positions unavailable · nothing is substituted"}
+                    </span>
+                  </span>
+                  <span className={styles.countValue}>—</span>
+                  <span className={styles.countValue}>—</span>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.feed}>
+              <div className={styles.panelHead}>
+                <span>Live board status</span>
+              </div>
+              <div className={styles.tline}>
+                <span className={styles.tlineEvent}>
+                  {liveBoard
+                    ? liveBoard.basin.status === "ok"
+                      ? "NHC current-storms feed read"
+                      : liveBoard.basin.status === "stale"
+                        ? "NHC feed unreachable · last successful read shown"
+                        : "NHC feed unreachable · no positions held"
+                    : liveState.status === "error"
+                      ? "Lighthouse API unreachable"
+                      : "Reading…"}
+                </span>
+                <span className={styles.tlineMeta}>
+                  {liveState.status === "ready"
+                    ? `as of ${hhmm(liveState.board.as_of)}Z · refreshes every five minutes`
+                    : "—"}
+                </span>
+              </div>
+              <div className={styles.tline}>
+                <span className={styles.tlineEvent}>
+                  Posture source · {liveBoard?.posture.source ?? "unknown"}
+                </span>
+                <span className={styles.tlineMeta}>
+                  forecast sentinel · replays excluded
+                </span>
+              </div>
+            </div>
+          </aside>
+        ) : (
         <aside className={styles.side}>
           {frame ? (
             <div className={styles.gate}>
@@ -809,8 +1061,21 @@ export function EocConsole() {
             ))}
           </div>
         </aside>
+        )}
       </div>
 
+      {live ? (
+        <footer className={styles.controller}>
+          <p className={styles.absent}>
+            Live board · no timeline to scrub — the present has one frame.
+            {liveState.status === "ready"
+              ? ` As of ${hhmm(liveState.board.as_of)}Z, refreshing every five minutes.`
+              : liveState.status === "error"
+                ? " The board is unreachable; nothing is substituted."
+                : " Reading…"}
+          </p>
+        </footer>
+      ) : (
       <footer className={styles.controller}>
         <div className={styles.transport}>
           <button
@@ -915,6 +1180,7 @@ export function EocConsole() {
           ) : null}
         </div>
       </footer>
+      )}
     </main>
   );
 }
