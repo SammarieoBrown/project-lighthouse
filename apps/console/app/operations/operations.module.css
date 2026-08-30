@@ -227,6 +227,17 @@
 .limit { color: var(--lh-elevated); margin: var(--lh-space-3) 0; }
 .noMovement { color: var(--lh-quiet); margin-top: var(--lh-space-3); }
 
+.messageLine { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.householdMessage { border-bottom: 1px solid var(--lh-rule); margin-bottom: var(--lh-space-4); padding-bottom: var(--lh-space-4); }
+.householdMessage > span { color: var(--lh-quiet); display: block; font-size: var(--lh-text-fine); margin-bottom: var(--lh-space-2); }
+.householdMessage p { font-size: var(--lh-text-fine); line-height: var(--lh-leading-base); margin: 0; overflow-wrap: anywhere; }
+
+.photoEvidence { border-bottom: 1px solid var(--lh-rule); margin-bottom: var(--lh-space-4); padding-bottom: var(--lh-space-4); }
+.photoEvidence > span { color: var(--lh-quiet); display: block; font-size: var(--lh-text-fine); margin-bottom: var(--lh-space-2); }
+.photoEvidence > div { display: flex; flex-wrap: wrap; gap: var(--lh-space-2); }
+.photoEvidence img { border: 1px solid var(--lh-rule); border-radius: var(--lh-radius); display: block; height: 96px; max-width: 100%; object-fit: cover; width: auto; }
+
 .selection { border-top: 1px solid var(--lh-rule); margin: 0 0 var(--lh-space-5); }
 .selection > div { border-bottom: 1px solid var(--lh-rule); display: flex; gap: var(--lh-space-3); justify-content: space-between; padding: var(--lh-space-3) 0; }
 .selection dt { color: var(--lh-quiet); font-size: var(--lh-text-fine); }

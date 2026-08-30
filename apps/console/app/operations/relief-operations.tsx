@@ -30,6 +30,7 @@ type Claim = {
   channel: string;
   filed_at: string;
   evidence_count: number;
+  transcript: string | null;
 };
 
 type ClaimDetail = Claim & {
@@ -387,6 +388,47 @@ export function ReliefOperations() {
     return () => controller.abort();
   }, [selectedId, activeToken, detailRefresh, closeCredential]);
 
+  /* Photo evidence arrives as bytes from an authenticated route, so a plain
+   * <img src> cannot carry the credential. Fetch with the bearer token and
+   * hold object URLs for exactly as long as the detail is on screen. */
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setPhotoUrls({});
+    if (!claimDetail || !activeToken) return;
+    const photos = claimDetail.evidence.filter(
+      (item) => item.kind === "PHOTO" && item.has_uri,
+    );
+    if (photos.length === 0) return;
+    const controller = new AbortController();
+    const created: string[] = [];
+    void Promise.all(
+      photos.map(async (item) => {
+        const response = await fetch(
+          `/api/lighthouse/api/claims/${encodeURIComponent(claimDetail.id)}/evidence/${encodeURIComponent(item.id)}/media`,
+          {
+            cache: "no-store",
+            headers: { authorization: `Bearer ${activeToken}` },
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) return null;
+        const url = URL.createObjectURL(await response.blob());
+        created.push(url);
+        return [item.id, url] as const;
+      }),
+    ).then((entries) => {
+      if (controller.signal.aborted) return;
+      setPhotoUrls(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, string]>));
+    }).catch(() => {
+      /* A missing thumbnail is not an error state; the evidence count and
+       * media integrity signal still tell the clerk media exists. */
+    });
+    return () => {
+      controller.abort();
+      for (const url of created) URL.revokeObjectURL(url);
+    };
+  }, [claimDetail, activeToken]);
+
   const selected = useMemo(
     () => claims.find((claim) => claim.id === selectedId) ?? null,
     [claims, selectedId],
@@ -706,6 +748,9 @@ export function ReliefOperations() {
                   <span>
                     <b>{claim.claim_ref}</b>
                     <small>{claim.damage_type?.replaceAll("_", " ") ?? "damage details pending"}</small>
+                    {claim.transcript ? (
+                      <small className={styles.messageLine}>“{claim.transcript}”</small>
+                    ) : null}
                   </span>
                   <span>
                     {claim.community ?? "Location pending"}
@@ -727,8 +772,8 @@ export function ReliefOperations() {
             </div>
           )}
           <p className={styles.privacy}>
-            Redacted operations view. Phone numbers, names, message bodies, transcripts, media URLs,
-            and raw provider payloads never leave the API.
+            Operator view: message text and photo evidence are shown to signed-in operators.
+            Phone numbers, names, media URLs, and raw provider payloads never leave the API.
           </p>
         </section>
 
@@ -816,6 +861,25 @@ export function ReliefOperations() {
                 <div><dt>Resource</dt><dd>{money.format(45_000)} cash grant</dd></div>
                 <div><dt>Payer</dt><dd>Government relief</dd></div>
               </dl>
+              {selected.transcript ? (
+                <div className={styles.householdMessage}>
+                  <span>Household message</span>
+                  <p>{selected.transcript}</p>
+                </div>
+              ) : null}
+              {Object.keys(photoUrls).length > 0 ? (
+                <div className={styles.photoEvidence}>
+                  <span>Photo evidence</span>
+                  <div>
+                    {Object.entries(photoUrls).map(([evidenceId, url], index) => (
+                      // eslint-disable-next-line @next/next/no-img-element -- blob
+                      // URLs from the authenticated media route; next/image
+                      // cannot optimise them and must not proxy them.
+                      <img key={evidenceId} src={url} alt={`Photo evidence ${index + 1}`} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {detailState === "loading" ? (
                 <p className={styles.empty}>Reading redacted evidence…</p>
               ) : claimDetail?.verification && hasCompleteSignalBundle ? (
