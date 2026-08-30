@@ -25,6 +25,20 @@ export type LiveStorm = {
   last_update: string | null;
 };
 
+export type OutlookChance = {
+  band: string;
+  percent: number;
+} | null;
+
+export type OutlookArea = {
+  title: string;
+  /** NHC's own prose, verbatim. The outlook publishes words and formation
+   *  chances, not fixes — so words and chances are all this carries. */
+  text: string;
+  chance_48h: OutlookChance;
+  chance_7day: OutlookChance;
+};
+
 export type LiveBoard = {
   as_of: string;
   posture: {
@@ -35,6 +49,13 @@ export type LiveBoard = {
   basin: {
     status: "ok" | "stale" | "unreachable";
     storms: LiveStorm[] | null;
+  };
+  /** Absent from an API older than the outlook — the board renders without
+   *  the section rather than claiming the outlook is empty or broken. */
+  outlook?: {
+    status: "ok" | "stale" | "unreachable" | "unparsed";
+    issued: string | null;
+    areas: OutlookArea[] | null;
   };
 };
 
