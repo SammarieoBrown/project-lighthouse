@@ -490,7 +490,9 @@ export function ReliefOperations() {
       await loadLedger();
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : "Approval failed.");
-      if (credentialIsDead(error)) closeCredential(null);
+      if (credentialIsDead(error)) {
+        closeCredential("Your credential expired. Confirm your password to continue.");
+      }
     } finally {
       setApproving(false);
     }
@@ -534,7 +536,9 @@ export function ReliefOperations() {
       await loadLedger();
     } catch (error) {
       setDamageError(error instanceof Error ? error.message : "Decision failed.");
-      if (credentialIsDead(error)) closeCredential(null);
+      if (credentialIsDead(error)) {
+        closeCredential("Your credential expired. Confirm your password to continue.");
+      }
     } finally {
       setDeciding(false);
     }
@@ -571,7 +575,9 @@ export function ReliefOperations() {
       setDetailRefresh((value) => value + 1);
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : "Review decision failed.");
-      if (credentialIsDead(error)) closeCredential(null);
+      if (credentialIsDead(error)) {
+        closeCredential("Your credential expired. Confirm your password to continue.");
+      }
     } finally {
       setReviewing(false);
     }
@@ -996,7 +1002,7 @@ export function ReliefOperations() {
                         <button
                           type="button"
                           className={styles.approveButton}
-                          disabled={deciding || damageNote.trim().length < 10}
+                          disabled={deciding || !activeToken || damageNote.trim().length < 10}
                           onClick={() => void decideDamage("APPROVED")}
                         >
                           {deciding ? "Recording\u2026" : "Approve estimate"}
@@ -1004,12 +1010,17 @@ export function ReliefOperations() {
                         <button
                           type="button"
                           className={`${styles.approveButton} ${styles.rejectButton}`}
-                          disabled={deciding || damageNote.trim().length < 10}
+                          disabled={deciding || !activeToken || damageNote.trim().length < 10}
                           onClick={() => void decideDamage("REJECTED")}
                         >
                           Reject estimate
                         </button>
                       </div>
+                      {!activeToken ? (
+                        <p className={styles.noMovement}>
+                          Confirm your password above to record this decision.
+                        </p>
+                      ) : null}
                     </>
                   )}
                   {damageNotice ? (
