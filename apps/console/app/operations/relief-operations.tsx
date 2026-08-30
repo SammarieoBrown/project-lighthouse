@@ -261,7 +261,8 @@ export function ReliefOperations() {
   const [note, setNote] = useState("");
   const [pools, setPools] = useState<DonationPool[]>([]);
   const [payerChoice, setPayerChoice] = useState<string>("GOV_RELIEF");
-  const [amount, setAmount] = useState("45000");
+  const [amount, setAmount] = useState("");
+  const amountTouched = useRef(false);
   const payerTouched = useRef(false);
   const [approving, setApproving] = useState(false);
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
@@ -496,6 +497,23 @@ export function ReliefOperations() {
   useEffect(() => {
     payerTouched.current = false;
   }, [selectedId]);
+
+  /* The figure is the Director's alone: the field starts empty, and when the
+   * vision model has priced the photos its upper estimate is offered as the
+   * starting point. A figure the Director typed is never overwritten. */
+  useEffect(() => {
+    amountTouched.current = false;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (amountTouched.current) return;
+    const estimate = claimDetail?.id === selectedId ? claimDetail?.damage_assessment : null;
+    setAmount(
+      estimate && estimate.estimate_high > 0
+        ? String(Math.round(estimate.estimate_high))
+        : "",
+    );
+  }, [claimDetail, selectedId]);
 
   const amountValue = Number.parseFloat(amount);
   const amountValid =
@@ -904,7 +922,11 @@ export function ReliefOperations() {
                       step={500}
                       value={amount}
                       disabled={approving}
-                      onChange={(event) => setAmount(event.target.value)}
+                      placeholder="Set by you"
+                      onChange={(event) => {
+                        amountTouched.current = true;
+                        setAmount(event.target.value);
+                      }}
                     />
                   </dd>
                 </div>
