@@ -921,9 +921,11 @@ def record_review_decision(
         storm_file is None
         or clerk is None
         or not clerk.active
-        or clerk.role is not AppRole.REVIEW_CLERK
+        or clerk.role not in {AppRole.REVIEW_CLERK, AppRole.DIRECTOR}
     ):
-        raise ReviewDecisionConflict("active Review Clerk authority is required")
+        raise ReviewDecisionConflict(
+            "active Review Clerk or Director authority is required"
+        )
 
     existing = session.scalars(
         select(Verification)

@@ -80,9 +80,11 @@ def _body(source: Verification, verdict: str = "APPROVED") -> dict:
     }
 
 
-def test_review_route_requires_active_review_clerk(session, monkeypatch):
+def test_review_route_requires_review_authority(session, monkeypatch):
+    # Since 0015 the Director carries universal gate authority, so the
+    # excluded role here is Finance — money hands still cannot judge evidence.
     _, claim, source = _review_source(session)
-    _, director_token = _credential(session, AppRole.DIRECTOR)
+    _, finance_token = _credential(session, AppRole.FINANCE_OFFICER)
     client = _client(monkeypatch, session)
     path = f"/v1/claims/{claim.id}/verification/review"
 
@@ -90,7 +92,7 @@ def test_review_route_requires_active_review_clerk(session, monkeypatch):
     forbidden = client.post(
         path,
         json=_body(source),
-        headers={"Authorization": f"Bearer {director_token}"},
+        headers={"Authorization": f"Bearer {finance_token}"},
     )
 
     assert missing.status_code == 401
