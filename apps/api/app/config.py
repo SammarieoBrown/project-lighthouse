@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     # paid vision calls just because a key happens to be set.
     damage_assessment_provider: Literal["disabled", "anthropic"] = "disabled"
 
+    # Whether the intake agent answers the household over WhatsApp — an
+    # acknowledgment with the claim reference, then at most three follow-up
+    # questions for missing fields. Disabled by default for the same reason as
+    # every other sender in this file: a message to a real phone must be a
+    # deliberate deployment decision, never a side effect of a key being set.
+    intake_reply_mode: Literal["disabled", "live"] = "disabled"
+
     # ALT-02. There is no live sender in this release and "simulated" is the
     # only implemented mode. The registry is synthetic and so are its phone
     # numbers; a real message to a real number is the one mistake in this

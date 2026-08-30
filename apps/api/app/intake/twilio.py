@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import math
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
@@ -39,6 +40,10 @@ class TwilioInbound:
     from_phone: str
     body: str
     media: tuple[TwilioMedia, ...]
+    #: A WhatsApp location share, when the household sent one. Both set or
+    #: both ``None`` — a lone coordinate is a malformed payload, not a point.
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,15 +189,41 @@ def parse_inbound(form: Mapping[str, object]) -> TwilioInbound:
             )
         )
 
-    if not body.strip() and not media:
-        raise InvalidTwilioPayload("message has no text or media")
+    latitude, longitude = _location(form)
+
+    if not body.strip() and not media and latitude is None:
+        raise InvalidTwilioPayload("message has no text, media, or location")
 
     return TwilioInbound(
         message_sid=sid,
         from_phone=phone,
         body=body,
         media=tuple(media),
+        latitude=latitude,
+        longitude=longitude,
     )
+
+
+def _location(form: Mapping[str, object]) -> tuple[float | None, float | None]:
+    """Parse a WhatsApp location share's coordinates, if the form carries one."""
+    raw_lat = str(form.get("Latitude") or "").strip()
+    raw_lon = str(form.get("Longitude") or "").strip()
+    if not raw_lat and not raw_lon:
+        return None, None
+    if not raw_lat or not raw_lon:
+        raise InvalidTwilioPayload("location share is missing a coordinate")
+    try:
+        latitude, longitude = float(raw_lat), float(raw_lon)
+    except ValueError as exc:
+        raise InvalidTwilioPayload("location coordinates are not numeric") from exc
+    if not (
+        math.isfinite(latitude)
+        and math.isfinite(longitude)
+        and -90.0 <= latitude <= 90.0
+        and -180.0 <= longitude <= 180.0
+    ):
+        raise InvalidTwilioPayload("location coordinates are out of range")
+    return latitude, longitude
 
 
 def parse_delivery_status(form: Mapping[str, object]) -> TwilioDeliveryStatus:

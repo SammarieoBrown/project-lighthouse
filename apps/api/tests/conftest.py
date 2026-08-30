@@ -102,3 +102,21 @@ def session_module(engine):
         s.close()
         outer.rollback()
         conn.close()
+
+
+@pytest.fixture(autouse=True)
+def _no_live_intake_replies(monkeypatch):
+    """Intake replies must never leave a test run.
+
+    The developer's .env may legitimately hold ``INTAKE_REPLY_MODE=live`` for
+    the demo; a test that processes an intake job must still not message a
+    real phone. Reply tests opt back in by monkeypatching the module
+    themselves, which overrides this fixture.
+    """
+    from app.config import get_settings
+    from app.intake import replies
+
+    base = get_settings()
+    if base.intake_reply_mode != "disabled":
+        muted = base.model_copy(update={"intake_reply_mode": "disabled"})
+        monkeypatch.setattr(replies, "get_settings", lambda: muted)

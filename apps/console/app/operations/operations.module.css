@@ -231,7 +231,7 @@
 
 .householdMessage { border-bottom: 1px solid var(--lh-rule); margin-bottom: var(--lh-space-4); padding-bottom: var(--lh-space-4); }
 .householdMessage > span { color: var(--lh-quiet); display: block; font-size: var(--lh-text-fine); margin-bottom: var(--lh-space-2); }
-.householdMessage p { font-size: var(--lh-text-fine); line-height: var(--lh-leading-base); margin: 0; overflow-wrap: anywhere; }
+.householdMessage p { font-size: var(--lh-text-fine); line-height: var(--lh-leading-base); margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
 
 .photoEvidence { border-bottom: 1px solid var(--lh-rule); margin-bottom: var(--lh-space-4); padding-bottom: var(--lh-space-4); }
 .photoEvidence > span { color: var(--lh-quiet); display: block; font-size: var(--lh-text-fine); margin-bottom: var(--lh-space-2); }
