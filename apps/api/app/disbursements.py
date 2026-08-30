@@ -48,6 +48,7 @@ from .models import (
     LedgerEntry,
     StormFile,
 )
+from .relief_notifications import notify_relief_confirmed, voucher_code
 from .settlement_executor import (
     ExecutorUnavailable,
     SIMULATED_EXECUTOR_PROVENANCE,
@@ -198,6 +199,9 @@ class SettlementQueueItem(BaseModel):
     channel: DisbursementChannel | None
     executor_provenance: Literal["SIMULATED_DEMO"] | None
     provider_confirmation_ref: str | None
+    #: What the household is told to quote. Present only once a confirmation
+    #: exists, because there is nothing to quote before then.
+    voucher_reference: str | None = None
     confirmed_at: datetime | None
 
 
@@ -756,6 +760,15 @@ def execute_simulated_disbursement(
         },
         enqueue_follow_on=False,
     )
+    # The household hears about it on the channel they claimed on. Last,
+    # because nothing about a settled claim may depend on a phone answering.
+    notify_relief_confirmed(
+        session,
+        claim=claim,
+        storm_file=storm_file,
+        disbursement=disbursement,
+        amount=f"{allocation.amount:,.2f}",
+    )
     return ExecutionOutcome(
         disbursement=disbursement,
         allocation=allocation,
@@ -805,6 +818,9 @@ def list_settlements(session: Session, *, limit: int = 100) -> list[dict]:
                 "channel": disbursement.channel if disbursement else None,
                 "executor_provenance": (
                     SIMULATED_EXECUTOR_PROVENANCE if disbursement else None
+                ),
+                "voucher_reference": (
+                    voucher_code(disbursement) if disbursement else None
                 ),
                 "provider_confirmation_ref": (
                     disbursement.external_ref if disbursement else None

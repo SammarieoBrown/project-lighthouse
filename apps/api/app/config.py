@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     # deliberate deployment decision, never a side effect of a key being set.
     intake_reply_mode: Literal["disabled", "live"] = "disabled"
 
+    # Whether a confirmed settlement tells the household on WhatsApp. Same
+    # fail-closed default and the same reason: a message about money is the
+    # one message that must never be sent by accident.
+    relief_notice_mode: Literal["disabled", "live"] = "disabled"
+
     # ALT-02. There is no live sender in this release and "simulated" is the
     # only implemented mode. The registry is synthetic and so are its phone
     # numbers; a real message to a real number is the one mistake in this

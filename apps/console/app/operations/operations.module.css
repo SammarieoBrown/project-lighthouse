@@ -242,6 +242,26 @@
 .selection > div { border-bottom: 1px solid var(--lh-rule); display: flex; gap: var(--lh-space-3); justify-content: space-between; padding: var(--lh-space-3) 0; }
 .selection dt { color: var(--lh-quiet); font-size: var(--lh-text-fine); }
 .selection dd { font-family: var(--lh-font-data); font-size: var(--lh-text-fine); margin: 0; text-align: right; }
+.timeline { border-top: 1px solid var(--lh-rule); margin-top: var(--lh-space-4); padding-top: var(--lh-space-3); }
+.timelineToggle { background: none; border: 0; color: var(--lh-quiet); cursor: pointer; font-family: inherit; font-size: var(--lh-text-fine); padding: 0; text-decoration: underline; }
+.timelineList { list-style: none; margin: var(--lh-space-3) 0 0; padding: 0; }
+.timelineList > li { border-left: 2px solid var(--lh-rule); display: flex; gap: var(--lh-space-3); padding: var(--lh-space-2) 0 var(--lh-space-2) var(--lh-space-3); }
+.timelineList > li[data-source="verification"] { border-left-color: var(--lh-figure); }
+.timelineList > li[data-source="damage_assessment"] { border-left-color: var(--lh-elevated); }
+.timelineWhen { color: var(--lh-quiet); flex: none; font-family: var(--lh-font-data); font-size: var(--lh-text-micro); width: 72px; }
+.timelineBody { min-width: 0; }
+.timelineBody b { display: block; font-size: var(--lh-text-fine); font-weight: 500; }
+.timelineBody small { color: var(--lh-quiet); display: block; font-size: var(--lh-text-micro); line-height: var(--lh-leading-base); margin-top: var(--lh-space-1); }
+.timelineActor { font-family: var(--lh-font-data); }
+.timelineFindings span { display: block; }
+
+.authorization { border-bottom: 1px solid var(--lh-rule); margin-bottom: var(--lh-space-5); padding-bottom: var(--lh-space-4); }
+.authorization h2 { margin: var(--lh-space-1) 0 var(--lh-space-3); }
+.authorizationActive { font-size: var(--lh-text-fine); line-height: var(--lh-leading-base); margin: 0 0 var(--lh-space-3); }
+.authorizationGrid { display: grid; gap: var(--lh-space-3); grid-template-columns: 1fr 1fr; margin-bottom: var(--lh-space-3); }
+.authorizationGrid .field { margin-top: 0; }
+.revokeButton { background: none; border: 1px solid var(--lh-critical); border-radius: var(--lh-radius); color: var(--lh-critical-text); cursor: pointer; font-family: inherit; font-size: var(--lh-text-fine); padding: var(--lh-space-2) var(--lh-space-4); width: 100%; }
+
 .payerSelect { background: var(--lh-ground); border: 1px solid var(--lh-rule); border-radius: var(--lh-radius); color: inherit; font-family: var(--lh-font-data); font-size: var(--lh-text-fine); max-width: 100%; padding: var(--lh-space-1) var(--lh-space-2); }
 
 

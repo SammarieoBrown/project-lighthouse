@@ -26,6 +26,8 @@ from . import ledger, queue
 from .alert_approvals import router as alert_approvals_router
 from .anticipatory_routes import router as anticipatory_router
 from .approvals import router as approvals_router
+from .auto_approval_routes import router as auto_approval_router
+from .logistics_routes import router as logistics_router
 from .config import get_settings
 from .damage_assessment_reviews import router as damage_assessment_reviews_router
 from .db import session_scope
@@ -246,4 +248,6 @@ app.include_router(verification_reviews_router)
 app.include_router(damage_assessment_reviews_router)
 app.include_router(public_ledger_router)
 app.include_router(auth_router)
+app.include_router(auto_approval_router)
+app.include_router(logistics_router)
 app.include_router(hazard_live_router)

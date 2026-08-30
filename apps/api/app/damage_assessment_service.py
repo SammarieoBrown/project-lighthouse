@@ -27,6 +27,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from lighthouse_contracts import (
+    SOL_PRIORITY,
     ActorKind,
     AgentName,
     AppRole,
@@ -36,7 +37,8 @@ from lighthouse_contracts import (
 )
 from lighthouse_contracts.agents import DamageAssessmentOutput, DamagePhotoFinding
 
-from app import ledger
+from app import ledger, queue
+from app.auto_approval_service import AUTO_APPROVAL_JOB_TYPE
 from app.config import get_settings
 from app.intake.media import FetchedMedia, MediaBoundaryError, R2MediaStore
 from app.models import AppUser, Claim, DamageAssessment, StormFile
@@ -589,6 +591,15 @@ def run_damage_assessment(
         output,
         action=Event.DAMAGE_ASSESSMENT_PROPOSED,
         actor_kind=ActorKind.AGENT,
+    )
+    # An estimate is the last thing the standing authorization was waiting
+    # for. Enqueued rather than run inline so a slow signing path cannot
+    # extend the transaction that holds the vision call's result.
+    queue.enqueue(
+        session,
+        job_type=AUTO_APPROVAL_JOB_TYPE,
+        priority=SOL_PRIORITY if claim.sol else 0,
+        payload={"claim_id": str(claim.id), "trigger": "damage_assessment"},
     )
 
     return DamageAssessmentRun(assessment, output, True)

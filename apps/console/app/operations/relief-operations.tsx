@@ -11,6 +11,8 @@ import {
 } from "./credential";
 import styles from "./operations.module.css";
 import { stepUp, useOperatorSession } from "./operator-session";
+import { AgentTimeline } from "./agent-timeline";
+import { AutoApproval } from "./auto-approval";
 import { SettlementWorkbench } from "./settlement-workbench";
 import { SignIn } from "./sign-in";
 
@@ -31,6 +33,7 @@ type Claim = {
   filed_at: string;
   evidence_count: number;
   transcript: string | null;
+  hazard_event_id: string;
 };
 
 type ClaimDetail = Claim & {
@@ -169,6 +172,13 @@ type LedgerAggregate = {
   no_real_money_moved: true;
 };
 
+type Warehouse = {
+  warehouse_id: string;
+  name: string;
+  parish: string | null;
+  stock: Array<{ sku: string; quantity: number }>;
+};
+
 type DonationPool = {
   pool_id: string;
   name: string;
@@ -262,6 +272,10 @@ export function ReliefOperations() {
   const [pools, setPools] = useState<DonationPool[]>([]);
   const [payerChoice, setPayerChoice] = useState<string>("GOV_RELIEF");
   const [amount, setAmount] = useState("");
+  const [resource, setResource] = useState<"CASH" | "ITEM">("CASH");
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [sku, setSku] = useState("tarpaulin");
+  const [quantity, setQuantity] = useState("2");
   const amountTouched = useRef(false);
   const payerTouched = useRef(false);
   const [approving, setApproving] = useState(false);
@@ -342,6 +356,16 @@ export function ReliefOperations() {
     }
   }, []);
 
+  const loadWarehouses = useCallback(async () => {
+    try {
+      const response = await fetch("/api/lighthouse/v1/warehouses", { cache: "no-store" });
+      const body = (await jsonOrDetail(response)) as { warehouses?: Warehouse[] };
+      setWarehouses(Array.isArray(body.warehouses) ? body.warehouses : []);
+    } catch {
+      setWarehouses([]);
+    }
+  }, []);
+
   const loadLedger = useCallback(async () => {
     try {
       const response = await fetch("/api/lighthouse/v1/public/ledger?latest=true&limit=50", {
@@ -370,16 +394,17 @@ export function ReliefOperations() {
   }, []);
 
   const refresh = useCallback(async () => {
-    await Promise.all([loadClaims(), loadLedger(), loadPools()]);
-  }, [loadClaims, loadLedger, loadPools]);
+    await Promise.all([loadClaims(), loadLedger(), loadPools(), loadWarehouses()]);
+  }, [loadClaims, loadLedger, loadPools, loadWarehouses]);
 
   useEffect(() => {
     void loadClaims();
     void loadLedger();
     void loadPools();
+    void loadWarehouses();
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
-  }, [loadClaims, loadLedger, loadPools, refresh]);
+  }, [loadClaims, loadLedger, loadPools, loadWarehouses, refresh]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -515,6 +540,14 @@ export function ReliefOperations() {
     );
   }, [claimDetail, selectedId]);
 
+  const quantityValue = Number.parseInt(quantity, 10);
+  const sourceDepot = warehouses.find((depot) =>
+    depot.stock.some((item) => item.sku === sku && item.quantity >= quantityValue),
+  );
+  const goodsReady = Boolean(
+    resource === "ITEM" && Number.isFinite(quantityValue) && quantityValue > 0 && sourceDepot,
+  );
+
   const amountValue = Number.parseFloat(amount);
   const amountValid =
     Number.isFinite(amountValue) && amountValue > 0 && amountValue <= 1_000_000;
@@ -527,20 +560,34 @@ export function ReliefOperations() {
   }, [pools, selected, selectedId, amountValid, amountValue]);
 
   const approve = useCallback(async () => {
-    if (!selected || !approvalReady || !activeToken || !amountValid) return;
+    if (!selected || !approvalReady || !activeToken) return;
+    if (resource === "CASH" ? !amountValid : !goodsReady) return;
     setApproving(true);
     setApproval(null);
     setApprovalError(null);
 
     try {
-      const requestBody = JSON.stringify({
-        resource: "CASH",
-        amount: amountValue.toFixed(2),
-        currency: "JMD",
-        payer_route: payerChoice === "GOV_RELIEF" ? "GOV_RELIEF" : "DONOR_POOL",
-        pool_id: payerChoice === "GOV_RELIEF" ? undefined : payerChoice,
-        note: note.trim() || undefined,
-      });
+      const requestBody = JSON.stringify(
+        resource === "CASH"
+          ? {
+            resource: "CASH",
+            amount: amountValue.toFixed(2),
+            currency: "JMD",
+            payer_route: payerChoice === "GOV_RELIEF" ? "GOV_RELIEF" : "DONOR_POOL",
+            pool_id: payerChoice === "GOV_RELIEF" ? undefined : payerChoice,
+            note: note.trim() || undefined,
+          }
+          : {
+            resource: "ITEM",
+            sku,
+            quantity: quantityValue,
+            warehouse_id: sourceDepot?.warehouse_id,
+            // Goods come off a shelf the programme already paid for; a donor
+            // pool funds cash, not inventory.
+            payer_route: "GOV_RELIEF",
+            note: note.trim() || undefined,
+          },
+      );
       const intentSignature = `${selected.id}\n${requestBody}`;
       if (approvalIntent.current?.signature !== intentSignature) {
         approvalIntent.current = {
@@ -565,7 +612,7 @@ export function ReliefOperations() {
       if (approvalIntent.current?.key === intentKey) approvalIntent.current = null;
       setApproval(result);
       setNote("");
-      await Promise.all([loadLedger(), loadPools()]);
+      await Promise.all([loadLedger(), loadPools(), loadWarehouses()]);
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : "Approval failed.");
       if (credentialIsDead(error)) {
@@ -574,7 +621,9 @@ export function ReliefOperations() {
     } finally {
       setApproving(false);
     }
-  }, [selected, approvalReady, activeToken, note, payerChoice, amountValue, loadLedger, loadPools, closeCredential]);
+  }, [selected, approvalReady, activeToken, note, payerChoice, amountValue, amountValid,
+      resource, sku, quantityValue, goodsReady, sourceDepot, loadLedger, loadPools,
+      loadWarehouses, closeCredential]);
 
   const approvalClaim = approval
     ? claims.find((claim) => claim.id === approval.allocation.claim_id) ?? null
@@ -830,6 +879,13 @@ export function ReliefOperations() {
         </section>
 
         <aside className={styles.approval}>
+          <AutoApproval
+            hazardEventId={selected?.hazard_event_id ?? claims[0]?.hazard_event_id ?? null}
+            pools={pools}
+            activeToken={activeToken}
+            onCredentialDead={closeCredential}
+            onChanged={() => void refresh()}
+          />
           <span className={styles.eyebrow}>Act 3 · human gate</span>
           <h2>Approve relief allocation</h2>
           {activeToken ? (
@@ -910,27 +966,89 @@ export function ReliefOperations() {
                 <div><dt>Claim</dt><dd>{selected.claim_ref}</dd></div>
                 <div><dt>Eligibility</dt><dd>{selected.status}</dd></div>
                 <div>
-                  <dt><label htmlFor="grant-amount">Amount · JMD</label></dt>
+                  <dt><label htmlFor="relief-resource">Relief</label></dt>
                   <dd>
-                    <input
-                      id="grant-amount"
+                    <select
+                      id="relief-resource"
                       className={styles.payerSelect}
-                      type="number"
-                      inputMode="decimal"
-                      min={1}
-                      max={1_000_000}
-                      step={500}
-                      value={amount}
+                      value={resource}
                       disabled={approving}
-                      placeholder="Set by you"
-                      onChange={(event) => {
-                        amountTouched.current = true;
-                        setAmount(event.target.value);
-                      }}
-                    />
+                      onChange={(event) =>
+                        setResource(event.target.value === "ITEM" ? "ITEM" : "CASH")}
+                    >
+                      <option value="CASH">Cash grant</option>
+                      <option value="ITEM">Goods from a depot</option>
+                    </select>
                   </dd>
                 </div>
-                <div>
+                {resource === "CASH" ? (
+                  <div>
+                    <dt><label htmlFor="grant-amount">Amount · JMD</label></dt>
+                    <dd>
+                      <input
+                        id="grant-amount"
+                        className={styles.payerSelect}
+                        type="number"
+                        inputMode="decimal"
+                        min={1}
+                        max={1_000_000}
+                        step={500}
+                        value={amount}
+                        disabled={approving}
+                        placeholder="Set by you"
+                        onChange={(event) => {
+                          amountTouched.current = true;
+                          setAmount(event.target.value);
+                        }}
+                      />
+                    </dd>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <dt><label htmlFor="goods-sku">Item</label></dt>
+                      <dd>
+                        <select
+                          id="goods-sku"
+                          className={styles.payerSelect}
+                          value={sku}
+                          disabled={approving}
+                          onChange={(event) => setSku(event.target.value)}
+                        >
+                          {["tarpaulin", "water", "food_pack", "med_kit"].map((option) => (
+                            <option key={option} value={option}>
+                              {option.replaceAll("_", " ")}
+                            </option>
+                          ))}
+                        </select>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt><label htmlFor="goods-quantity">Count</label></dt>
+                      <dd>
+                        <input
+                          id="goods-quantity"
+                          className={styles.payerSelect}
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={quantity}
+                          disabled={approving}
+                          onChange={(event) => setQuantity(event.target.value)}
+                        />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>From depot</dt>
+                      <dd>
+                        {sourceDepot
+                          ? `${sourceDepot.name}`
+                          : "no depot holds that many"}
+                      </dd>
+                    </div>
+                  </>
+                )}
+                <div hidden={resource !== "CASH"}>
                   <dt><label htmlFor="payer-route">Payer</label></dt>
                   <dd>
                     <select
@@ -966,6 +1084,7 @@ export function ReliefOperations() {
                   <p>{selected.transcript}</p>
                 </div>
               ) : null}
+              <AgentTimeline claimId={selected.id} />
               {Object.keys(photoUrls).length > 0 ? (
                 <div className={styles.photoEvidence}>
                   <span>Photo evidence</span>
@@ -1191,14 +1310,22 @@ export function ReliefOperations() {
               <button
                 type="button"
                 className={styles.approveButton}
-                disabled={approving || !approvalReady || !amountValid}
+                disabled={
+                  approving
+                  || !approvalReady
+                  || (resource === "CASH" ? !amountValid : !goodsReady)
+                }
                 onClick={() => void approve()}
               >
                 {approving
                   ? "Signing…"
-                  : amountValid
-                    ? `Approve ${money.format(amountValue)}`
-                    : "Enter a grant amount"}
+                  : resource === "ITEM"
+                    ? goodsReady
+                      ? `Approve ${quantityValue} × ${sku.replaceAll("_", " ")}`
+                      : "No depot holds that many"
+                    : amountValid
+                      ? `Approve ${money.format(amountValue)}`
+                      : "Enter a grant amount"}
               </button>
               <p className={styles.noMovement}>
                 This records an approved allocation. It does not create or claim a bank transfer,

@@ -42,6 +42,7 @@ from lighthouse_contracts.agents import (
 
 from app import ledger, queue, statemachine
 from app.config import get_settings
+from app.auto_approval_service import AUTO_APPROVAL_JOB_TYPE
 from app.damage_assessment_service import has_readable_photo_evidence
 from app.routing_service import route_claim
 from app.models import AppUser, Claim, StormFile, Verification
@@ -716,18 +717,29 @@ def _enqueue_damage_assessment(session: Session, claim: Claim, storm_file: Storm
     than a second, looser query, so the enqueue side cannot drift from what
     the handler will actually accept.
     """
-    if get_settings().damage_assessment_provider == "disabled":
+    assessable = (
+        get_settings().damage_assessment_provider != "disabled"
+        and has_readable_photo_evidence(session, claim.id)
+    )
+    if assessable:
+        queue.enqueue(
+            session,
+            job_type=AgentName.DAMAGE_ASSESSMENT_AGENT,
+            priority=SOL_PRIORITY if claim.sol else 0,
+            payload={
+                "claim_id": str(claim.id),
+                "storm_file_id": str(storm_file.id),
+            },
+        )
         return
-    if not has_readable_photo_evidence(session, claim.id):
-        return
+    # No estimate is coming for this claim. Hand it to the standing
+    # authorization now rather than leaving it to wait on a job that will
+    # never be enqueued; it will defer to a human, and say why.
     queue.enqueue(
         session,
-        job_type=AgentName.DAMAGE_ASSESSMENT_AGENT,
+        job_type=AUTO_APPROVAL_JOB_TYPE,
         priority=SOL_PRIORITY if claim.sol else 0,
-        payload={
-            "claim_id": str(claim.id),
-            "storm_file_id": str(storm_file.id),
-        },
+        payload={"claim_id": str(claim.id), "trigger": "verification"},
     )
 
 
