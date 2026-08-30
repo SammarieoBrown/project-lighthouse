@@ -161,6 +161,28 @@ def record_donation(
     return DonationReceipt(donation=donation, pool_balance=pool.balance)
 
 
+def ensure_pool_covers(
+    session: Session, pool_id: uuid.UUID, amount: Decimal
+) -> None:
+    """Lock the pool and refuse an amount it cannot cover, without spending.
+
+    The signed-allocation guard makes the same refusal in the database, but as
+    an unhandled raise; checking here first turns an underfunded pool into an
+    answer the operator can act on, and the row lock it takes is the same one
+    ``draw_down`` will reuse a moment later in this transaction.
+    """
+    pool = session.scalar(
+        select(DonationPool).where(DonationPool.id == pool_id).with_for_update()
+    )
+    if pool is None:
+        raise PoolNotFound("donation pool does not exist")
+    if (pool.balance or Decimal("0.00")) < amount:
+        raise DonationRejected(
+            f"pool holds {pool.balance or Decimal('0.00'):.2f} against a "
+            f"{amount:.2f} allocation"
+        )
+
+
 def draw_down(session: Session, pool_id: uuid.UUID, amount: Decimal) -> Decimal:
     """Spend from a pool against a signed allocation (DON-03).
 

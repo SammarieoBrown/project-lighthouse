@@ -444,7 +444,9 @@ def test_public_ledger_withholds_every_entry_when_chain_verification_fails(
         {**BODY, "payer_route": "INSURER"},
         {**BODY, "payer_route": "BOTH"},
         {**BODY, "payer_route": "DONOR_POOL"},
-        {**BODY, "amount": "44999.99"},
+        {**BODY, "amount": "0.00"},
+        {**BODY, "amount": "-45000.00"},
+        {**BODY, "amount": "1000000.01"},
         {**BODY, "currency": "USD"},
     ],
 )
@@ -857,17 +859,18 @@ def test_signing_for_stock_that_is_not_there_is_refused(session, monkeypatch):
     assert session.scalar(select(StockItem.quantity)) == 1
 
 
-def test_cash_is_still_exactly_the_flat_grant(session, monkeypatch):
-    """Widening the path for goods must not have loosened the cash half."""
+def test_the_director_sizes_the_grant(session, monkeypatch):
+    """Since 0016 the amount is the Director's figure, bounded but not fixed."""
     storm_file, claim = _verified_claim(session)
     director, issued = _credential(session)
     client = _client(monkeypatch, session)
 
-    inflated = {**BODY, "amount": "90000.00"}
-    response = _approve(client, claim, issued.token, body=inflated)
+    sized = {**BODY, "amount": "90000.00"}
+    response = _approve(client, claim, issued.token, body=sized)
 
-    assert response.status_code == 422
-    assert session.scalar(select(func.count()).select_from(Allocation)) == 0
+    assert response.status_code == 201
+    allocation = session.scalar(select(Allocation))
+    assert str(allocation.amount) == "90000.00"
 
 
 def test_a_goods_request_without_a_warehouse_is_refused(session, monkeypatch):
