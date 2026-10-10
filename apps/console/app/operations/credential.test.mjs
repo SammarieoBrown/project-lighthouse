@@ -67,7 +67,9 @@ test("the way back in is on screen whenever the credential is not", () => {
   // field, nothing cleared the token when the API stopped accepting it, and an
   // operator six minutes into a shift read "Credential active" above a queue
   // that had locked, with the field the error message named nowhere on screen.
-  const rail = source("./relief-operations.tsx");
+  const rail = ["./relief-operations.tsx", "./auto-approval.tsx"]
+    .map(source)
+    .join("\n");
 
   assert.ok(
     rail.includes("const closeCredential = useCallback("),
@@ -77,7 +79,7 @@ test("the way back in is on screen whenever the credential is not", () => {
   // Every catch that handles a request carrying the credential has to answer a
   // dead one by closing it. Count the token-bearing fetches against the calls.
   const bearers = rail.match(/authorization: `Bearer \$\{/g) ?? [];
-  const closes = rail.match(/credentialIsDead\(error\)/g) ?? [];
+  const closes = rail.match(/credentialIsDead\((?:error|failure)\)/g) ?? [];
   assert.ok(bearers.length >= 5, `expected the rail to carry the credential, saw ${bearers.length}`);
   assert.ok(
     closes.length >= 5,
