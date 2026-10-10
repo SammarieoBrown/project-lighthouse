@@ -19,6 +19,8 @@ export type Operator = {
   email: string;
   display_name: string;
   role: string;
+  /** Set by the console proxy when it signs in on the visitor's behalf. */
+  open_demo?: boolean;
 };
 
 export type SessionState =

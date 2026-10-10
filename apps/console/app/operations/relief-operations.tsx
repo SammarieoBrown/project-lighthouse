@@ -716,6 +716,17 @@ export function ReliefOperations() {
    * read; it never approves anything on its own — that still costs a password
    * and produces a five-minute credential. */
   const { state: sessionState, signIn, signOut } = useOperatorSession();
+  const openDemo = sessionState.status === "in" && sessionState.operator.open_demo === true;
+
+  // Open demo: the proxy holds the real credential, so confirm without asking.
+  useEffect(() => {
+    if (!openDemo || activeToken) return;
+    void stepUp("open-demo").then((token) => {
+      setCredentialNotice(null);
+      setActiveToken(token);
+      setCredentialExpiry(Date.now() + CREDENTIAL_LIFETIME_MS);
+    });
+  }, [openDemo, activeToken]);
 
   const chrome = (
     <>
@@ -741,15 +752,17 @@ export function ReliefOperations() {
             >
               Refresh
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                closeCredential(null);
-                void signOut();
-              }}
-            >
-              Sign out
-            </button>
+            {openDemo ? null : (
+              <button
+                type="button"
+                onClick={() => {
+                  closeCredential(null);
+                  void signOut();
+                }}
+              >
+                Sign out
+              </button>
+            )}
           </>
         ) : null}
       </nav>
@@ -925,6 +938,8 @@ export function ReliefOperations() {
                 {claimsState === "loading" ? "Reading…" : "Refresh queue"}
               </button>
             </p>
+          ) : openDemo ? (
+            <p className={styles.credentialLine}>Confirming…</p>
           ) : (
             <>
               {credentialNotice ? (
@@ -1362,7 +1377,7 @@ export function ReliefOperations() {
         </aside>
       </div>
 
-      <SettlementWorkbench onLedgerChanged={loadLedger} />
+      <SettlementWorkbench onLedgerChanged={loadLedger} openDemo={openDemo} />
 
       <section className={styles.ledger}>
         <div className={styles.sectionHead}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { jsonOrDetail } from "./credential";
 import styles from "./operations.module.css";
@@ -51,6 +51,8 @@ type ActionResult = {
 
 type Props = {
   onLedgerChanged: () => Promise<void>;
+  /** The console proxy signs in for the visitor; no password field. */
+  openDemo?: boolean;
 };
 
 /* J$ rather than a bare "$", matching the approval rail — and null-safe,
@@ -72,7 +74,7 @@ function stateLabel(state: SettlementState): string {
   }[state];
 }
 
-export function SettlementWorkbench({ onLedgerChanged }: Props) {
+export function SettlementWorkbench({ onLedgerChanged, openDemo = false }: Props) {
   const [tokenDraft, setTokenDraft] = useState("");
   const [token, setToken] = useState("");
   const [queue, setQueue] = useState<SettlementQueue | null>(null);
@@ -104,6 +106,14 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
       setLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!openDemo || token) return;
+    void stepUp("open-demo").then((next) => {
+      setToken(next);
+      void load(next);
+    });
+  }, [openDemo, token, load]);
 
   const intentKey = useCallback((signature: string) => {
     const existing = intents.current.get(signature);
@@ -174,18 +184,20 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
       </div>
 
       <div className={styles.settlementAccess}>
-        <label className={styles.field}>
-          <span>Finance Officer password · opens the settlement queue</span>
-          <input
-            type="password"
-            value={tokenDraft}
-            autoComplete="current-password"
-            spellCheck={false}
-            disabled={loading || busyId !== null}
-            onChange={(event) => setTokenDraft(event.target.value)}
-            placeholder="Password"
-          />
-        </label>
+        {openDemo ? null : (
+          <label className={styles.field}>
+            <span>Finance Officer password · opens the settlement queue</span>
+            <input
+              type="password"
+              value={tokenDraft}
+              autoComplete="current-password"
+              spellCheck={false}
+              disabled={loading || busyId !== null}
+              onChange={(event) => setTokenDraft(event.target.value)}
+              placeholder="Password"
+            />
+          </label>
+        )}
         <label className={styles.field}>
           <span>Signature note · optional</span>
           <input
@@ -199,14 +211,14 @@ export function SettlementWorkbench({ onLedgerChanged }: Props) {
         <button
           type="button"
           className={`${styles.approveButton} ${styles.openButton}`}
-          disabled={!tokenDraft || loading || busyId !== null}
+          disabled={(!tokenDraft && !openDemo) || loading || busyId !== null}
           onClick={async () => {
             /* The Finance Officer steps up separately from the Director, and
              * that is the control: one role per account means the person who
              * approved the allocation cannot be the person who signs its
              * disbursement, and each proves themselves at their own gate. */
             try {
-              const next = await stepUp(tokenDraft);
+              const next = await stepUp(openDemo ? "open-demo" : tokenDraft);
               setTokenDraft("");
               setToken(next);
               await load(next);
