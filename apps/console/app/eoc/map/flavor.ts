@@ -25,6 +25,9 @@ export type Tokens = {
   quiet: string;
   figure: string;
   structure: string;
+  /** Basemap sea and land, when the host stylesheet defines them. */
+  water?: string;
+  land?: string;
 };
 
 /** Read the design tokens off the document, so there is one source of truth. */
@@ -42,6 +45,8 @@ export function readTokens(el: HTMLElement = document.documentElement): Tokens {
     // The locked map-inventory token is mandatory in tokens.css. Figure is a
     // conservative no-new-hue fallback for an incomplete host stylesheet.
     structure: get("--lh-structure", figure),
+    water: get("--lh-water", ""),
+    land: get("--lh-land", ""),
   };
 }
 
@@ -89,6 +94,7 @@ function isLightGround(ground: string): boolean {
  * is the dedicated structure semantic: saturated cyan so mapped inventory is
  * distinct from both grey land and the muted forecast-blue ramp. */
 function landTone(t: Tokens): string {
+  if (t.land) return t.land;
   // On the light ground the land is the panel tone barely warmed — bone paper
   // with darker sea around it, the printed-chart arrangement. On the dark
   // ground the land lifts a quarter of the way to the figure so Cuba and
@@ -110,7 +116,9 @@ export function lighthouseFlavor(t: Tokens): Flavor {
   // figure colour it was a slightly different shade of dark, and Cuba and
   // Hispaniola were indistinguishable from the sea they sit in.
   const land = landTone(t);
-  const sea = isLightGround(t.ground)
+  const sea = t.water
+    ? t.water
+    : isLightGround(t.ground)
     ? mix(t.ground, t.figure, 0.16)
     : mix(t.ground, "#000000", 0.55);
   const road = mix(t.rule, t.figure, 0.15);

@@ -575,3 +575,23 @@
     grid-column: 1 / -1;
   }
 }
+
+/* =========================================================================
+ * REDESIGN LAYER
+ *
+ * Ink masthead and white toolbar to match the other screens. Presentation
+ * only; the map, scenario controls and model are untouched.
+ * ====================================================================== */
+
+.header {
+  background: var(--lh-ink);
+  border-bottom: 0;
+  color: var(--lh-ink-fg);
+}
+.header p, .header .kicker, .nav { color: var(--lh-ink-fg); opacity: 0.8; }
+.header h1 { font-size: var(--lh-text-display); font-weight: 900; }
+.nav a { color: var(--lh-ink-fg); opacity: 1; text-decoration-thickness: 2px; text-underline-offset: 6px; }
+.header :focus-visible { outline-color: var(--lh-ink-fg); }
+.toolbar { background: var(--lh-panel); }
+
+.page { grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; }

@@ -573,3 +573,165 @@
   margin-top: var(--lh-space-1);
   text-transform: uppercase;
 }
+
+/* =========================================================================
+ * REDESIGN LAYER
+ *
+ * Ink masthead, coloured measure tiles, white working cards on a cool ground.
+ * Presentation only: no markup or data behaviour depends on anything below.
+ * ====================================================================== */
+
+.screen { background: var(--lh-ground); }
+
+.header {
+  background: var(--lh-ink);
+  color: var(--lh-ink-fg);
+  border-bottom: 0;
+  min-height: 76px;
+}
+.mode, .sync { color: var(--lh-ink-fg); opacity: 0.75; }
+.sync[data-valid="true"] { color: var(--lh-ink-fg); opacity: 1; }
+.brand { font-size: 20px; }
+.nav a, .nav button {
+  color: var(--lh-ink-fg);
+  text-decoration-color: rgb(255 255 255 / 0.4);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.nav a:hover, .nav button:hover { text-decoration-color: currentColor; }
+.nav button:disabled { color: rgb(244 248 247 / 0.5); }
+.header :focus-visible { outline-color: var(--lh-ink-fg); }
+.operator { color: var(--lh-ink-fg); opacity: 0.8; }
+
+/* Measures: four fields. Red only while something is actually urgent. */
+.metrics {
+  border-bottom: 0;
+  gap: var(--lh-space-4);
+  padding: var(--lh-space-5) var(--lh-space-6) 0;
+}
+.metrics > div,
+.metrics > div + div {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-left: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+  padding: var(--lh-space-5);
+}
+.metrics > div:nth-child(1) { background: var(--lh-watch); border-color: var(--lh-watch); color: var(--lh-on-watch); }
+.metrics > div:nth-child(2) { background: var(--lh-confirmed); border-color: var(--lh-confirmed); color: var(--lh-on-confirmed); }
+.metrics > div:nth-child(4) { background: var(--lh-ink); border-color: var(--lh-ink); color: var(--lh-ink-fg); }
+.metrics > div:has(strong[data-alert="true"]) { background: var(--lh-critical); border-color: var(--lh-critical); color: var(--lh-on-critical); }
+.metrics strong { font-size: 40px; font-weight: 600; }
+.metrics strong[data-alert="true"] { color: inherit; }
+.metrics span,
+.metricWhy { color: inherit; opacity: 0.88; }
+
+.workspace {
+  border-bottom: 0;
+  gap: var(--lh-space-4);
+  padding: var(--lh-space-4) var(--lh-space-6);
+  height: calc(100dvh - 250px);
+  min-height: 520px;
+}
+.claims,
+.approval,
+.ledger,
+.settlement {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+}
+.approval { border-left: 1px solid var(--lh-rule); }
+.ledger,
+.settlement { margin: var(--lh-space-4) var(--lh-space-6) 0; }
+
+.sectionHead h1 { font-size: 30px; font-weight: 800; font-variation-settings: "wdth" 112; }
+.sectionHead h2, .approval h2 { font-weight: 800; }
+.eyebrow { color: var(--lh-watch-text); font-weight: 600; }
+
+.claimTable, .ledgerTable, .settlementTable { border-top: 0; }
+.claimTable .tableHead { background: var(--lh-panel); }
+.tableHead, .ledgerHead, .settlementHead { border-bottom: 2px solid var(--lh-figure); color: var(--lh-figure); font-weight: 600; }
+.claimRow { border-radius: var(--lh-radius); }
+.claimRow:hover { background: var(--lh-ground); }
+.claimRow[data-selected="true"] { background: var(--lh-ground); box-shadow: inset 4px 0 0 var(--lh-ink); }
+.claimRow[data-sol="true"] { box-shadow: inset 4px 0 0 var(--lh-critical); }
+
+.triage {
+  background: var(--lh-ground);
+  border-radius: 6px;
+  display: inline-block;
+  font-family: var(--lh-font-data);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  text-transform: uppercase;
+  width: fit-content;
+}
+.triage[data-severity="URGENT"], .claimRow[data-sol="true"] .triage { background: var(--lh-critical); color: var(--lh-on-critical); }
+.triage[data-severity="HIGH"] { background: var(--lh-elevated); color: var(--lh-on-elevated); }
+.triage[data-severity="MED"] { background: var(--lh-watch); color: var(--lh-on-watch); }
+.state[data-state="VERIFIED"] {
+  background: var(--lh-confirmed);
+  border-radius: 6px;
+  color: var(--lh-on-confirmed);
+  display: inline-block;
+  padding: 3px 8px;
+}
+
+.selection { border-top: 0; }
+.signals { border-top: 0; }
+.signals > div { border-radius: var(--lh-radius); padding: var(--lh-space-3) var(--lh-space-3); }
+.signals > div:nth-child(odd) { background: var(--lh-ground); }
+.signals b { font-weight: 600; }
+.verificationHead { font-weight: 600; }
+
+.field input, .field textarea, .payerSelect {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius);
+}
+.field input:focus, .field textarea:focus {
+  border-color: var(--lh-ink);
+  box-shadow: 0 0 0 3px rgb(29 112 210 / 0.25);
+}
+
+.approveButton {
+  background: var(--lh-confirmed);
+  border-color: var(--lh-confirmed);
+  border-radius: var(--lh-radius);
+  color: var(--lh-on-confirmed);
+  padding: var(--lh-space-4) var(--lh-space-5);
+}
+.approveButton:hover:not(:disabled) { filter: brightness(0.94); }
+.approveButton:disabled { background: var(--lh-ground); border-color: var(--lh-rule); color: var(--lh-quiet); }
+.signIn .approveButton { background: var(--lh-ink); border-color: var(--lh-ink); color: var(--lh-ink-fg); }
+.signIn .approveButton:disabled { background: var(--lh-ground); border-color: var(--lh-rule); color: var(--lh-quiet); }
+.approveButton.openButton, .openButton { background: transparent; border-color: var(--lh-figure); color: var(--lh-figure); }
+.approveButton.rejectButton, .rejectButton { background: transparent; border-color: var(--lh-critical); color: var(--lh-critical-text); }
+.rowAction { border-radius: var(--lh-radius); border-color: var(--lh-ink); color: var(--lh-ink); }
+.rowAction:hover:not(:disabled) { background: var(--lh-ink); color: var(--lh-ink-fg); }
+.reviewGate { border-top: 3px solid var(--lh-elevated); }
+.success { border-top: 3px solid var(--lh-confirmed); }
+.settlementRow[data-state="SIMULATED_CONFIRMED"] { box-shadow: inset 4px 0 0 var(--lh-confirmed); }
+
+.simulationBadge {
+  background: var(--lh-elevated);
+  border: 0;
+  border-radius: 6px;
+  color: var(--lh-on-elevated);
+  font-weight: 600;
+}
+.signIn { box-shadow: var(--lh-shadow); }
+
+@media (max-width: 900px) {
+  .metrics { padding-inline: var(--lh-space-4); }
+  .workspace { height: auto; padding-inline: var(--lh-space-4); }
+  .ledger, .settlement { margin-inline: var(--lh-space-4); }
+  .metrics > div:nth-child(odd) { padding-left: var(--lh-space-5); }
+}
+
+/* The navigation strip carries the brand. */
+.identity svg, .brand { display: none; }

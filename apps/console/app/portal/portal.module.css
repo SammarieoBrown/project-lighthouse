@@ -298,3 +298,98 @@
 @media (max-width: 40rem) {
   .give { grid-template-columns: 1fr; }
 }
+
+/* =========================================================================
+ * REDESIGN LAYER
+ *
+ * A teal masthead, three coloured figures, and the five sections as white
+ * cards in two columns. Presentation only.
+ * ====================================================================== */
+
+.ground { background: var(--lh-ground); }
+.page {
+  display: grid;
+  gap: var(--lh-space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  max-width: 1120px;
+  padding: var(--lh-space-6) var(--lh-space-5) var(--lh-space-8);
+}
+.head, .asOf, .figures { grid-column: 1 / -1; }
+
+.head {
+  align-items: center;
+  background: var(--lh-sea);
+  border-bottom: 0;
+  border-radius: var(--lh-radius-lg);
+  color: var(--lh-sea-fg);
+  gap: var(--lh-space-5);
+  padding: var(--lh-space-7) var(--lh-space-7);
+}
+.head svg { color: var(--lh-sea-fg); flex: none; height: 56px; width: auto; }
+.head h1 { font-size: clamp(36px, 5vw, 56px); font-variation-settings: "wdth" 120; font-weight: 900; line-height: 1; }
+.head p { color: var(--lh-sea-fg); font-size: var(--lh-text-lead); opacity: 0.92; }
+
+.asOf { border-left: 4px solid var(--lh-confirmed); margin: 0; padding-left: var(--lh-space-4); }
+.asOf[data-stale="true"] { border-left-color: var(--lh-elevated); }
+
+.figures {
+  border-bottom: 0;
+  gap: var(--lh-space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-bottom: 0;
+}
+.figures > div {
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+  padding: var(--lh-space-6);
+}
+.figures > div:nth-child(1) { background: var(--lh-sun); color: var(--lh-on-elevated); }
+.figures > div:nth-child(2) { background: var(--lh-watch); color: var(--lh-on-watch); }
+.figures > div:nth-child(3) { background: var(--lh-ink); color: var(--lh-ink-fg); }
+.figures .figureLabel, .figures small { color: inherit; opacity: 0.88; }
+.figures strong { font-size: clamp(28px, 4vw, 44px); font-weight: 600; margin: var(--lh-space-3) 0 var(--lh-space-2); }
+
+.page > section:not(.figures) {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+  padding: var(--lh-space-6);
+}
+.page h2 { font-size: var(--lh-text-title); font-variation-settings: "wdth" 112; font-weight: 800; margin: 0 0 var(--lh-space-3); }
+
+.table th { border-bottom: 2px solid var(--lh-figure); color: var(--lh-figure); }
+.table tbody tr:nth-child(even) { background: var(--lh-ground); }
+.table td { border-bottom-color: transparent; padding-block: var(--lh-space-4); }
+
+.lookup input, .give input, .give select { background: var(--lh-panel); }
+.lookup input:focus, .give input:focus, .give select:focus { border-color: var(--lh-ink); box-shadow: 0 0 0 3px rgb(29 112 210 / 0.25); outline: 0; }
+.lookup button { background: var(--lh-ink); color: var(--lh-ink-fg); padding-block: var(--lh-space-3); }
+.give button { background: var(--lh-sun); border-color: var(--lh-sun); color: var(--lh-on-elevated); font-weight: 800; padding: var(--lh-space-4) var(--lh-space-7); }
+.give button:hover:not(:disabled) { filter: brightness(0.96); }
+.receipt { border-left: 4px solid var(--lh-confirmed); }
+
+.journey { margin-top: var(--lh-space-4); }
+.journey li { border-top: 0; grid-template-columns: 36px 1fr; padding: var(--lh-space-3) 0; }
+.journey li::before {
+  align-items: center;
+  background: var(--lh-confirmed);
+  border-radius: 50%;
+  color: var(--lh-on-confirmed);
+  display: grid;
+  font-weight: 600;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+.entries li { border-top: 0; border-bottom: 1px solid var(--lh-rule); padding: var(--lh-space-3) 0; }
+.entries li:last-child { border-bottom: 0; }
+
+@media (max-width: 56rem) {
+  .page { grid-template-columns: minmax(0, 1fr); }
+  .figures { grid-template-columns: minmax(0, 1fr); }
+  .head { padding: var(--lh-space-5); }
+}
+
+.figures strong { font-size: clamp(24px, 2.8vw, 36px); overflow-wrap: anywhere; }

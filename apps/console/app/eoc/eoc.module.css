@@ -1164,3 +1164,170 @@
     min-width: 44px;
   }
 }
+
+/* =========================================================================
+ * REDESIGN LAYER
+ *
+ * Coloured fields instead of ruled panels. The masthead takes the colour of
+ * the current posture, the approval gate is an amber field, the working
+ * surfaces are white cards on a cool ground, and the controller is an ink bar.
+ * Kept at the end of the file and kept to presentation: nothing here changes
+ * what is shown, so the whole layer can be lifted out without touching data
+ * rendering.
+ * ====================================================================== */
+
+.screen { background: var(--lh-ground); }
+
+.chrome {
+  --chrome-bg: var(--lh-ink);
+  --chrome-fg: var(--lh-ink-fg);
+  --chrome-soft: rgb(255 255 255 / 0.13);
+  background: var(--chrome-bg);
+  color: var(--chrome-fg);
+  border-bottom: 0;
+}
+.chrome:has(.postureValue[data-level="ACT"]) {
+  --chrome-bg: var(--lh-critical);
+  --chrome-fg: var(--lh-on-critical);
+}
+.chrome:has(.postureValue[data-level="READY"]) {
+  --chrome-bg: var(--lh-elevated);
+  --chrome-fg: var(--lh-on-elevated);
+  --chrome-soft: rgb(15 31 41 / 0.1);
+}
+.chrome:has(.postureValue[data-level="WATCH"]) {
+  --chrome-bg: var(--lh-watch);
+  --chrome-fg: var(--lh-on-watch);
+}
+
+.brandName { font-size: var(--lh-text-lead); }
+.brandMode,
+.postureLabel,
+.readingLabel,
+.provenance,
+.stale { color: var(--chrome-fg); opacity: 0.82; }
+.stale > span:not(:empty) + span:not(:empty)::before { background: currentColor; opacity: 0.4; }
+
+.chrome .postureValue[data-level],
+.chrome .postureValue[data-empty] {
+  color: var(--chrome-fg);
+  font-size: var(--lh-text-hero);
+  font-variation-settings: "wdth" 125;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+.chrome .postureLabel { letter-spacing: 0.12em; }
+
+.navLink {
+  color: var(--chrome-fg);
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.navLink:hover { opacity: 0.85; }
+.connectivity[data-state="offline"] { color: var(--chrome-fg); }
+.stormSelect { color: var(--chrome-fg); }
+.stormSelect:hover { border-color: currentColor; }
+.stormSelect option { color: var(--lh-figure); background: var(--lh-panel); }
+.chrome :focus-visible { outline-color: var(--chrome-fg); }
+
+.readings {
+  border-top: 0;
+  gap: var(--lh-space-4);
+  padding: 0 0 var(--lh-space-5) var(--lh-space-5);
+}
+.reading {
+  background: var(--chrome-soft);
+  border-radius: var(--lh-radius);
+  padding: var(--lh-space-4) var(--lh-space-5);
+  gap: var(--lh-space-2);
+}
+.reading + .reading { border-left: 0; padding-left: var(--lh-space-5); }
+.readingValue { color: var(--chrome-fg); font-size: 30px; font-weight: 600; }
+.readingValue[data-empty="true"] { color: var(--chrome-fg); opacity: 0.6; }
+.readingLabel { margin-top: 0; }
+
+/* Cards on the cool ground. */
+.body { gap: var(--lh-space-4); padding: var(--lh-space-4); }
+.mapPanel,
+.side {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+}
+.mapPanel { overflow: hidden; }
+.mapCanvas { padding: 0; }
+.legend { background: var(--lh-panel); }
+.legendItem { color: var(--lh-figure); }
+.panelHead { background: var(--lh-ground); padding-block: var(--lh-space-3); }
+
+/* The approval field. Amber is the colour of an open decision. */
+.gate {
+  background: var(--lh-elevated);
+  color: var(--lh-on-elevated);
+  border-bottom: 0;
+  padding: var(--lh-space-5) var(--lh-space-5) var(--lh-space-6);
+}
+.sideLive .gate { background: var(--lh-ink); color: var(--lh-ink-fg); }
+.gateRole { color: inherit; opacity: 0.85; }
+.gateAsk { font-size: var(--lh-text-title); font-variation-settings: "wdth" 112; font-weight: 800; }
+.gateDetail { color: inherit; opacity: 0.88; font-size: var(--lh-text-base); }
+.gateButton {
+  background: var(--lh-ink);
+  border-color: var(--lh-ink);
+  color: var(--lh-ink-fg);
+  padding: var(--lh-space-4) var(--lh-space-6);
+}
+.gateButton:disabled {
+  background: rgb(15 31 41 / 0.12);
+  border-color: rgb(15 31 41 / 0.35);
+  color: var(--lh-on-elevated);
+  opacity: 0.85;
+}
+
+.counts { border-bottom: 1px solid var(--lh-rule); }
+.countRow.head { color: var(--lh-quiet); }
+.countRow:not(.head):not([data-unlocated="true"]):hover { background: var(--lh-ground); }
+.countRow[data-selected="true"] { background: var(--lh-ground); outline: 2px solid var(--lh-ink); outline-offset: -2px; }
+.countValue[data-band="destroyed"] { color: var(--lh-critical-text); font-weight: 600; }
+.countValue[data-band="major"] { color: var(--lh-elevated-text); font-weight: 600; }
+.tlineDisposer { background: var(--lh-confirmed); color: var(--lh-on-confirmed); border-radius: 6px; padding: 2px var(--lh-space-3); }
+.outlookChance { color: var(--lh-watch-text); }
+
+/* Controller: an ink bar under the cards. */
+.controller {
+  background: var(--lh-ink);
+  color: var(--lh-ink-fg);
+  border-top: 0;
+}
+.clock,
+.clockLabel,
+.clockNext,
+.absent { color: var(--lh-ink-fg); }
+.clockLabel, .clockNext { opacity: 0.75; }
+.transportButton {
+  color: var(--lh-ink-fg);
+  border-color: rgb(255 255 255 / 0.4);
+  border-radius: var(--lh-radius);
+}
+.transportButton:hover:not(:disabled) { border-color: var(--lh-ink-fg); }
+.transportButton[aria-pressed="true"] { background: var(--lh-ink-fg); color: var(--lh-ink); border-color: var(--lh-ink-fg); }
+.transportButton:disabled { color: rgb(244 248 247 / 0.5); border-color: rgb(255 255 255 / 0.2); }
+.tickNone { background: rgb(255 255 255 / 0.22); }
+.tick[data-current="true"] { outline-color: var(--lh-ink-fg); }
+.controller :focus-visible { outline-color: var(--lh-ink-fg); }
+
+@media (max-width: 56em) {
+  .body { padding: var(--lh-space-3); }
+  .readings { padding-left: 0; }
+  .chrome .postureValue[data-level], .chrome .postureValue[data-empty] { font-size: var(--lh-text-display); }
+}
+
+/* Navigation strip, masthead, guide, body, controller. */
+.screen { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+@media (max-width: 56em) { .screen { grid-template-rows: none; } }
+
+/* The navigation strip carries the brand; the masthead keeps the storm picker. */
+.brandName, .brand svg { display: none; }
+.brand { padding-left: var(--lh-space-5); }

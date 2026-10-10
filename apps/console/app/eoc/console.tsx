@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
+import { AppNav } from "../app-nav";
 import { LighthouseMark } from "../logo";
+import { ScreenGuide } from "../screen-guide";
 import {
   LIVE_STORM_ID,
   bearingFromKingston,
@@ -502,6 +503,7 @@ export function EocConsole() {
     // warm bone light ground. A product decision, so the surface states it
     // rather than asking (design rules, Part 1 rule 30).
     <main className={styles.screen} data-theme="light">
+      <AppNav />
       <header className={styles.chrome}>
         <div className={styles.brand}>
           <LighthouseMark size={24} title="Lighthouse" />
@@ -650,8 +652,8 @@ export function EocConsole() {
             </span>
             <span className={styles.readingLabel}>
               {isHindcast
-                ? "Historical best-track sustained wind"
-                : isAdvisory ? "Advisory sustained wind" : "Replay sustained wind · provenance unavailable"}
+                ? "Wind speed · historical"
+                : isAdvisory ? "Wind speed · advisory" : "Replay sustained wind · provenance unavailable"}
             </span>
           </div>
           <div className={styles.reading}>
@@ -665,8 +667,8 @@ export function EocConsole() {
             </span>
             <span className={styles.readingLabel}>
               {isHindcast
-                ? "Historical best-track central pressure"
-                : isAdvisory ? "Advisory central pressure" : "Replay central pressure · provenance unavailable"}
+                ? "Pressure · historical"
+                : isAdvisory ? "Pressure · advisory" : "Replay central pressure · provenance unavailable"}
             </span>
           </div>
           <div className={styles.reading}>
@@ -677,7 +679,7 @@ export function EocConsole() {
               {isHindcast
                 ? "Contemporaneous 64 kt probability · unavailable"
                 : isAdvisory
-                  ? "Forecast 64 kt chance · Montego Bay at 48 h"
+                  ? "Chance of hurricane winds · Montego Bay, 48 h"
                   : "64 kt probability · provenance unavailable"}
             </span>
           </div>
@@ -685,7 +687,7 @@ export function EocConsole() {
             <span className={styles.readingValue} data-empty={frame ? undefined : "true"}>
               {frame ? nf.format(atRisk) : "—"}
             </span>
-            <span className={styles.readingLabel}>Modelled households · major or worse</span>
+            <span className={styles.readingLabel}>Homes likely badly damaged · modelled</span>
           </div>
           {/* Observed relief delivery had a reading here, permanently a dash,
               holding a fifth of this band to report that a delivery path does
@@ -700,14 +702,6 @@ export function EocConsole() {
               more piece of metadata, separated from the sync text by the same
               hairline — so the only way between this console's three screens
               looked like something to skim past. */}
-          <nav className={styles.nav} aria-label="Lighthouse screens">
-            <Link className={styles.navLink} href="/simulator">
-              Storm simulator
-            </Link>
-            <Link className={styles.navLink} href="/operations">
-              Relief operations
-            </Link>
-          </nav>
           {/* Both stay mounted and both are usually empty. A live region has to
               exist before its content does, or the first thing it ever says is
               the one thing nobody hears. */}
@@ -721,6 +715,27 @@ export function EocConsole() {
           </span>
         </div>
       </header>
+
+      <ScreenGuide
+        what={
+          live
+            ? "Live view of the storm picture over Jamaica."
+            : "A replay of a real hurricane over a made-up registry of households."
+        }
+        steps={
+          live
+            ? [
+                "Read the posture at the top. It says how worried everyone should be.",
+                "Check the map for where the storm is and which places are exposed.",
+                "Open Claims and payments to act on what households report.",
+              ]
+            : [
+                "Press Play at the bottom to move through the storm.",
+                "Click a place in the table to centre the map on it.",
+                "The amber box is the next step a person would approve. In a replay nothing is sent.",
+              ]
+        }
+      />
 
       <div className={styles.body}>
         {/* The screen's heading. It was a full-width caption bar above the map
@@ -1016,9 +1031,9 @@ export function EocConsole() {
         <aside className={styles.side}>
           {frame ? (
             <div className={styles.gate}>
-              <span className={styles.gateRole}>Replay proposal</span>
+              <span className={styles.gateRole}>Suggested next step</span>
               <h2 className={styles.gateAsk}>
-                Alert cascade for {nf.format(atRisk)} modelled households
+                Warn {nf.format(atRisk)} households
               </h2>
               <p className={styles.gateDetail}>
                 {warning ? `${warning} in effect. ` : ""}Patois and English, WhatsApp
@@ -1036,7 +1051,7 @@ export function EocConsole() {
                   disabled
                   aria-describedby="replay-action-limit"
                 >
-                  Approval unavailable in replay
+                  Replay only · cannot send
                 </button>
               </div>
               <span className={styles.srOnly} id="replay-action-limit">

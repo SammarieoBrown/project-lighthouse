@@ -57,10 +57,13 @@ export function AutoApproval({
       });
       const body = (await jsonOrDetail(response)) as { policies?: Policy[] };
       setPolicies(Array.isArray(body.policies) ? body.policies : []);
-    } catch {
+    } catch (failure) {
+      if (credentialIsDead(failure)) {
+        onCredentialDead("Your credential expired. Confirm your password to continue.");
+      }
       setPolicies([]);
     }
-  }, [activeToken]);
+  }, [activeToken, onCredentialDead]);
 
   useEffect(() => {
     void load();
