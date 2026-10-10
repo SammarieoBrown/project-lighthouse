@@ -25,6 +25,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
+import os
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -221,6 +223,56 @@ def sign_in(body: SignInRequest, response: Response) -> SignInResponse:
             role=user.role.value,
             expires_at=expires,
         )
+
+
+class OpenDemoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+
+
+class OpenDemoResponse(BaseModel):
+    session_cookie: str
+    token: str
+
+
+def _open_demo_passwords() -> dict[str, str]:
+    """Demo-day switch: LIGHTHOUSE_OPEN_DEMO_OPERATORS, unset means off."""
+    try:
+        entries = json.loads(os.environ.get("LIGHTHOUSE_OPEN_DEMO_OPERATORS", "") or "[]")
+        return {
+            str(entry["email"]).strip().lower(): str(entry["password"])
+            for entry in entries
+        }
+    except (ValueError, TypeError, KeyError):
+        return {}
+
+
+@router.post("/open-demo", response_model=OpenDemoResponse)
+def open_demo(body: OpenDemoRequest) -> OpenDemoResponse:
+    """Sign a configured demo operator in without a visitor typing a password.
+
+    The console proxy calls this server-side. It goes through the same password
+    check and issues the same session and five-minute credential as a person
+    signing in, so ``approved_by`` stays a named account. Off unless the
+    environment variable is set.
+    """
+    email = body.email.strip().lower()
+    password = _open_demo_passwords().get(email)
+    if password is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    with session_scope() as session:
+        user = session.scalars(
+            select(AppUser).where(func.lower(AppUser.email) == email).limit(1)
+        ).one_or_none()
+        if user is None or not user.active or not verify_password(password, user.password_hash):
+            raise _unauthorized()
+        cookie, _ = mint_session(user)
+        try:
+            issued = issue_human_credential(session, email=user.email, password=password)
+        except CredentialError:
+            raise _unauthorized() from None
+        return OpenDemoResponse(session_cookie=cookie, token=issued.token)
 
 
 @router.get("/session", response_model=SignInResponse)

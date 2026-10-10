@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { fetchAsDemoOperator, openDemoEnabled } from "../open-demo";
+
 export const dynamic = "force-dynamic";
 
 /* `cookie` carries the operator session upstream and `set-cookie` carries it
@@ -180,14 +182,43 @@ async function proxy(
   }
   if (body !== undefined) headers.set("content-type", "application/json");
 
+  const base = apiBase();
+  const openDemo = base !== null && await openDemoEnabled(base);
+  if (openDemo) {
+    const route = target.pathname;
+    // Nothing to sign out of, and the step-up password is the proxy's to give.
+    if (request.method === "DELETE" && route === "/v1/auth/session") {
+      return new NextResponse(null, { status: 204 });
+    }
+    if (request.method === "POST" && route === "/v1/auth/step-up") {
+      return NextResponse.json({
+        token: "open-demo-credential-held-by-the-console-proxy",
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+    }
+  }
+
   try {
-    const response = await fetch(target, {
-      method: request.method,
-      headers,
-      body,
-      cache: "no-store",
-      redirect: "manual",
-    });
+    const response = base && openDemo
+      ? await fetchAsDemoOperator(base, target, { method: request.method, headers, body })
+      : await fetch(target, {
+        method: request.method,
+        headers,
+        body,
+        cache: "no-store",
+        redirect: "manual",
+      });
+    if (
+      openDemo
+      && request.method === "GET"
+      && target.pathname === "/v1/auth/session"
+      && response.ok
+    ) {
+      const operator = (await response.json()) as Record<string, unknown>;
+      return NextResponse.json({ ...operator, open_demo: true }, {
+        headers: { "cache-control": "no-store" },
+      });
+    }
     const responseBody = await response.arrayBuffer();
     const responseHeaders = new Headers({
       "cache-control": "no-store",
