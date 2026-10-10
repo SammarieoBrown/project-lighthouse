@@ -5,12 +5,14 @@ import styles from "./screen-guide.module.css";
 export function ScreenGuide({
   what,
   steps,
+  defaultOpen = true,
 }: {
   what: string;
   steps: readonly string[];
+  defaultOpen?: boolean;
 }) {
   return (
-    <details className={styles.guide} open>
+    <details className={styles.guide} open={defaultOpen}>
       <summary className={styles.summary}>
         <span className={styles.what}>{what}</span>
         <span className={styles.toggle} aria-hidden="true" />
