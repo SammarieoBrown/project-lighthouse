@@ -86,8 +86,8 @@
    * two steps, applied to every control and surface identically. It is not a
    * licence for a third value or for a pill. See the signed exception in
    * docs/design/lighthouse-design-rules.md, Part 1 rule 15. */
-  --lh-radius: 8px;
-  --lh-radius-lg: 12px;
+  --lh-radius: 10px;
+  --lh-radius-lg: 16px;
 
   /* ---------------------------------------------------------------------
    * MOTION — the whole budget.
@@ -100,6 +100,25 @@
   --lh-motion-fast: 120ms;
   --lh-motion-base: 200ms;
   --lh-ease: cubic-bezier(0.2, 0, 0, 1); /* ease-out, no overshoot, no bounce */
+
+  /* ---------------------------------------------------------------------
+   * BRAND FIELDS — the redesign layer.
+   *
+   * Surfaces are coloured fields now, not ruled panels: the masthead takes the
+   * colour of the current posture, the approval gate is amber, the footer
+   * controller is ink. Each field has a paired "on" colour so text on it
+   * always clears 4.5:1.
+   * ------------------------------------------------------------------ */
+  --lh-ink: #0f2a38;        /* deep sea. Controller bar, quiet masthead, hero fields */
+  --lh-ink-fg: #f4f8f7;
+  --lh-sea: #0b6e75;        /* public surfaces: the portal masthead and its accents */
+  --lh-sea-fg: #ffffff;
+  --lh-sun: #ffb400;        /* donate and hero highlight on the public side */
+  --lh-on-critical: #ffffff;
+  --lh-on-elevated: #0f1f29;
+  --lh-on-watch: #ffffff;
+  --lh-on-confirmed: #ffffff;
+  --lh-shadow: 0 1px 2px rgb(15 31 41 / 0.06), 0 4px 14px rgb(15 31 41 / 0.06);
 }
 
 /* =======================================================================
@@ -135,6 +154,8 @@
   --lh-rule: #2e3532;     /* the hairline. Load-bearing for Registers I and III */
   --lh-quiet: #7f8b85;    /* secondary text, and the QUIET / LOW states */
   --lh-figure: #e9eae4;   /* primary text and marks */
+  --lh-water: #0a1517;    /* basemap sea */
+  --lh-land: #26302d;     /* basemap land */
 
   /* MEANING — four hues for the entire product, named for what they mean
    * rather than what they look like or where they sit. A hue owns its meaning
@@ -213,11 +234,13 @@
  * system-preference case because CSS cannot assign a custom property
  * conditionally without repeating the block. */
 [data-theme="light"] {
-  --lh-ground: #f1f2ec;
-  --lh-panel: #fafaf6;
-  --lh-rule: #c9ccc3;
-  --lh-quiet: #5c645f;
-  --lh-figure: #141a18;
+  --lh-ground: #edf1f0;
+  --lh-panel: #ffffff;
+  --lh-rule: #d2dbd9;
+  --lh-quiet: #4f615d;
+  --lh-figure: #0f1f29;
+  --lh-water: #bfe4ec;    /* basemap sea: a clear aqua, so the island reads at a glance */
+  --lh-land: #f6ecd6;     /* basemap land: sand */
   --lh-structure: #004f91; /* same mapped-inventory role; dark enough over light land */
 
   /* The hazard ramp inverts its emphasis with the ground: on dark the ramp
@@ -238,23 +261,25 @@
   /* Marks first, at 3:1 or better — these stay recognisably red, amber, blue
    * and green, because a swatch that has to be explained is not carrying its
    * meaning. Text second, at 4.5:1 or better, which is darker by necessity. */
-  --lh-critical: #cf3b2b;
-  --lh-critical-text: #a8251a;
-  --lh-elevated: #b0700a;
-  --lh-elevated-text: #7a4f04;
-  --lh-watch: #2870bd;
-  --lh-watch-text: #1f5fa8;
-  --lh-confirmed: #2a7f50;
-  --lh-confirmed-text: #1f6b41;
+  --lh-critical: #d63a2a;
+  --lh-critical-text: #b22416;
+  --lh-elevated: #f0a20a;
+  --lh-elevated-text: #8a5300;
+  --lh-watch: #1d70d2;
+  --lh-watch-text: #1a5fb4;
+  --lh-confirmed: #14935c;
+  --lh-confirmed-text: #0e7048;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]):not([data-theme="light"]) {
-    --lh-ground: #f1f2ec;
-    --lh-panel: #fafaf6;
-    --lh-rule: #c9ccc3;
-    --lh-quiet: #5c645f;
-    --lh-figure: #141a18;
+    --lh-ground: #edf1f0;
+    --lh-panel: #ffffff;
+    --lh-rule: #d2dbd9;
+    --lh-quiet: #4f615d;
+    --lh-figure: #0f1f29;
+    --lh-water: #bfe4ec;
+    --lh-land: #f6ecd6;
     --lh-structure: #004f91;
     --lh-hazard-34: #7ba3c9;
     --lh-hazard-50: #4e83b6;
@@ -266,14 +291,14 @@
     --lh-weather-core: #94105e;
     --lh-weather-extreme: #8b4766;
 
-    --lh-critical: #cf3b2b;
-    --lh-critical-text: #a8251a;
-    --lh-elevated: #b0700a;
-    --lh-elevated-text: #7a4f04;
-    --lh-watch: #2870bd;
-    --lh-watch-text: #1f5fa8;
-    --lh-confirmed: #2a7f50;
-    --lh-confirmed-text: #1f6b41;
+    --lh-critical: #d63a2a;
+    --lh-critical-text: #b22416;
+    --lh-elevated: #f0a20a;
+    --lh-elevated-text: #8a5300;
+    --lh-watch: #1d70d2;
+    --lh-watch-text: #1a5fb4;
+    --lh-confirmed: #14935c;
+    --lh-confirmed-text: #0e7048;
   }
 }
 

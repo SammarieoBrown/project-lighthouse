@@ -318,3 +318,101 @@
   .foot .container { grid-template-columns: 1fr; }
   .footNote { text-align: left; }
 }
+
+/* =========================================================================
+ * REDESIGN LAYER
+ *
+ * Ink bar, teal hero field, white cards on a cool ground, ink footer.
+ * Presentation only.
+ * ====================================================================== */
+
+.topbar { background: var(--lh-ink); border-bottom: 0; color: var(--lh-ink-fg); }
+.topbar nav a { color: var(--lh-ink-fg); }
+.topbar nav a:focus-visible { outline-color: var(--lh-ink-fg); }
+.topbar svg { color: var(--lh-ink-fg); }
+
+.hero { background: var(--lh-sea); border-bottom: 0; color: var(--lh-sea-fg); }
+.hero h1 { font-variation-settings: "wdth" 120; font-weight: 900; }
+.heroSide p { font-size: var(--lh-text-lead); opacity: 0.94; }
+.motto { border-left: 4px solid var(--lh-sun); }
+.primary, .secondary { border-radius: var(--lh-radius); font-size: var(--lh-text-base); padding: var(--lh-space-4) var(--lh-space-6); }
+.primary { background: var(--lh-sun); border-color: var(--lh-sun); color: var(--lh-on-elevated); }
+.secondary { border-color: var(--lh-sea-fg); color: var(--lh-sea-fg); }
+.primary:focus-visible, .secondary:focus-visible { outline-color: var(--lh-sea-fg); }
+
+.figures { background: transparent; border-bottom: 0; }
+.figures .container { gap: var(--lh-space-3); padding-bottom: var(--lh-space-5); padding-top: var(--lh-space-5); }
+.figures .container > div,
+.figures .container > div:first-child {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+  padding: var(--lh-space-5);
+}
+.figures .container > div:nth-child(1) strong { color: var(--lh-watch-text); }
+.figures .container > div:nth-child(2) strong { color: var(--lh-confirmed-text); }
+.figures .container > div:nth-child(3) strong { color: var(--lh-elevated-text); }
+.figures .container > div:nth-child(4) strong { color: var(--lh-critical-text); }
+
+.band { border-bottom: 0; }
+.kicker { color: var(--lh-figure); font-family: var(--lh-font-display); font-size: var(--lh-text-title); font-variation-settings: "wdth" 112; font-weight: 800; letter-spacing: -0.01em; text-transform: none; }
+
+.acts { gap: var(--lh-space-4); }
+.acts li, .acts li:first-child {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+  padding: var(--lh-space-6);
+}
+.ordinal {
+  align-items: center;
+  background: var(--lh-ink);
+  border-radius: 50%;
+  color: var(--lh-ink-fg);
+  display: grid;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+.rowLink { color: var(--lh-watch-text); }
+
+.agents { border: 0; gap: var(--lh-space-3); }
+.agents li {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  box-shadow: var(--lh-shadow);
+}
+.authority {
+  background: var(--lh-ground);
+  border-radius: 6px;
+  color: var(--lh-figure);
+  padding: 3px 8px;
+  width: fit-content;
+}
+
+.surfaces li {
+  background: var(--lh-panel);
+  border: 1px solid var(--lh-rule);
+  border-radius: var(--lh-radius-lg);
+  margin-bottom: var(--lh-space-3);
+  padding: var(--lh-space-5) var(--lh-space-6);
+}
+.surfaces li:last-child { border-bottom: 1px solid var(--lh-rule); }
+
+.foot { background: var(--lh-ink); color: var(--lh-ink-fg); margin-top: var(--lh-space-7); }
+.foot p, .footNote { color: var(--lh-ink-fg) !important; opacity: 0.85; }
+
+@media (max-width: 64rem) {
+  .acts li, .acts li:first-child { border-top: 1px solid var(--lh-rule); padding: var(--lh-space-5); }
+  .figures .container > div:nth-child(4) { padding-left: var(--lh-space-5); }
+}
+@media (max-width: 40rem) {
+  .figures .container > div:nth-child(odd),
+  .figures .container > div:nth-child(even) { border-left: 1px solid var(--lh-rule); padding-left: var(--lh-space-5); }
+}
+
+/* The headline is a name for the thing; at full size it ran to five lines. */
+.hero h1 { font-size: clamp(40px, 5vw, 76px); font-variation-settings: "wdth" 108; line-height: 1.02; }

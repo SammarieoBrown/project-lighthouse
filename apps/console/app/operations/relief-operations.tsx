@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AppNav } from "../app-nav";
 import { LighthouseMark } from "../logo";
+import { ScreenGuide } from "../screen-guide";
 import {
   CREDENTIAL_LIFETIME_MS,
   credentialIsDead,
@@ -716,17 +718,17 @@ export function ReliefOperations() {
   const { state: sessionState, signIn, signOut } = useOperatorSession();
 
   const chrome = (
+    <>
+    <AppNav />
     <header className={styles.header}>
       <div className={styles.identity}>
         <LighthouseMark size={28} title="Lighthouse" />
         <div>
           <span className={styles.brand}>Lighthouse</span>
-          <span className={styles.mode}>Relief operations · Acts 2 and 3</span>
+          <span className={styles.mode}>Claims and payments</span>
         </div>
       </div>
       <nav className={styles.nav} aria-label="Lighthouse products">
-        <Link href="/eoc">EOC map</Link>
-        <Link href="/simulator">Storm simulator</Link>
         {sessionState.status === "in" ? (
           <>
             <span className={styles.operator}>
@@ -752,6 +754,15 @@ export function ReliefOperations() {
         ) : null}
       </nav>
     </header>
+    <ScreenGuide
+      what="Households report damage on WhatsApp. People check each claim, then approve and sign the payment."
+      steps={[
+        "Pick a claim in the inbox and read what the household said.",
+        "Check the evidence and the five signals, then verify or flag it.",
+        "Approve a payment on the right. Each approval asks for your password again.",
+      ]}
+    />
+    </>
   );
 
   if (sessionState.status !== "in") {
@@ -780,14 +791,14 @@ export function ReliefOperations() {
             dash rather than left to be inferred (rule C4). */}
         <div>
           <strong>{claimsState === "ready" ? claims.length : "—"}</strong>
-          <span>Redacted claims received</span>
+          <span>Claims received</span>
           {claimsState !== "ready" ? (
             <small className={styles.metricWhy}>{metricReason}</small>
           ) : null}
         </div>
         <div>
           <strong>{claimsState === "ready" ? verified : "—"}</strong>
-          <span>Verified · eligible for allocation</span>
+          <span>Verified, ready for payment</span>
           {claimsState !== "ready" ? (
             <small className={styles.metricWhy}>{metricReason}</small>
           ) : null}
@@ -796,14 +807,14 @@ export function ReliefOperations() {
           <strong data-alert={safetyOfLife > 0 ? "true" : undefined}>
             {claimsState === "ready" ? safetyOfLife : "—"}
           </strong>
-          <span>Safety-of-life priority</span>
+          <span>Urgent, life at risk</span>
           {claimsState !== "ready" ? (
             <small className={styles.metricWhy}>{metricReason}</small>
           ) : null}
         </div>
         <div>
           <strong>{ledgerState === "ready" ? ledgerAggregate?.count ?? 0 : "—"}</strong>
-          <span>Simulated confirmations · no real funds</span>
+          <span>Payments confirmed · simulated</span>
         </div>
       </section>
 
@@ -811,7 +822,7 @@ export function ReliefOperations() {
         <section className={styles.claims}>
           <div className={styles.sectionHead}>
             <div>
-              <span className={styles.eyebrow}>Act 2 · intake</span>
+              <span className={styles.eyebrow}>Inbox</span>
               <h1>WhatsApp claim queue</h1>
             </div>
             <span className={styles.sync}>Refreshes every 15 seconds</span>

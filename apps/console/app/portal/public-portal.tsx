@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { AppNav } from "../app-nav";
 import { LighthouseMark } from "../logo";
 import styles from "./portal.module.css";
 
@@ -230,6 +231,7 @@ export function PublicPortal() {
 
   return (
     <div className={styles.ground} data-theme="light">
+    <AppNav />
     <main className={styles.page}>
       <header className={styles.head}>
         <LighthouseMark size={32} title="Lighthouse" />

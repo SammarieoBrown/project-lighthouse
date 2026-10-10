@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import { AppNav } from "../app-nav";
+import { ScreenGuide } from "../screen-guide";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -383,6 +384,7 @@ export function StormSimulator() {
 
   return (
     <main className={styles.page} data-theme="light">
+      <AppNav />
       <header className={styles.header}>
         <div>
           <span className={styles.kicker}>Lighthouse planning instrument</span>
@@ -390,11 +392,18 @@ export function StormSimulator() {
           <p>{sourceLabel}</p>
         </div>
         <nav className={styles.nav} aria-label="Simulator navigation">
-          <Link href="/eoc">Operational replay</Link>
-          <Link href="/operations">Relief operations</Link>
           <span data-numeric>{saveState === "saved" ? "Scenario saved locally" : "Unsaved changes"}</span>
         </nav>
       </header>
+
+      <ScreenGuide
+        what="Try out a storm and see roughly how many homes it could damage. This is a planning tool, not a forecast."
+        steps={[
+          "Pick a past storm, or start a new one and draw its track on the map.",
+          "Set the wind speed, size and forward speed on the left.",
+          "Press Play at the bottom to watch the modelled impact build up.",
+        ]}
+      />
 
       <section className={styles.toolbar} aria-label="Scenario source and editing">
         <label className={styles.catalogueSearch}>

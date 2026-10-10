@@ -1,0 +1,60 @@
+/* Orientation strip. Presentation only. */
+
+.guide {
+  background: var(--lh-panel);
+  border-bottom: 1px solid var(--lh-rule);
+  color: var(--lh-figure);
+  padding: var(--lh-space-3) var(--lh-space-5);
+}
+.summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--lh-space-4);
+  justify-content: space-between;
+  list-style: none;
+}
+.summary::-webkit-details-marker { display: none; }
+.what { font-size: var(--lh-text-base); font-weight: 600; }
+.toggle::after {
+  color: var(--lh-quiet);
+  content: "Hide";
+  font-size: var(--lh-text-fine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.guide:not([open]) .toggle::after { content: "What is this?"; }
+.steps {
+  counter-reset: step;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lh-space-3) var(--lh-space-6);
+  list-style: none;
+  margin-top: var(--lh-space-3);
+  padding-bottom: var(--lh-space-2);
+}
+.steps li {
+  align-items: baseline;
+  color: var(--lh-quiet);
+  display: flex;
+  flex: 1 1 22ch;
+  font-size: var(--lh-text-base);
+  gap: var(--lh-space-3);
+}
+.steps li::before {
+  background: var(--lh-ink);
+  border-radius: 50%;
+  color: var(--lh-ink-fg);
+  content: counter(step);
+  counter-increment: step;
+  display: inline-grid;
+  flex: none;
+  font-family: var(--lh-font-data);
+  font-size: var(--lh-text-fine);
+  font-weight: 600;
+  height: 22px;
+  place-items: center;
+  width: 22px;
+}
+.summary:focus-visible { outline: 2px solid var(--lh-figure); outline-offset: 2px; }
