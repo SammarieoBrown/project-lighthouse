@@ -397,6 +397,7 @@ export function StormSimulator() {
       </header>
 
       <ScreenGuide
+        defaultOpen={false}
         what="Try out a storm and see roughly how many homes it could damage. This is a planning tool, not a forecast."
         steps={[
           "Pick a past storm, or start a new one and draw its track on the map.",

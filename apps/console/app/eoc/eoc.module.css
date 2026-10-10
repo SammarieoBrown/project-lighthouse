@@ -1211,7 +1211,7 @@
 .chrome .postureValue[data-level],
 .chrome .postureValue[data-empty] {
   color: var(--chrome-fg);
-  font-size: var(--lh-text-hero);
+  font-size: var(--lh-text-display);
   font-variation-settings: "wdth" 125;
   font-weight: 900;
   letter-spacing: -0.01em;
@@ -1233,17 +1233,17 @@
 
 .readings {
   border-top: 0;
-  gap: var(--lh-space-4);
-  padding: 0 0 var(--lh-space-5) var(--lh-space-5);
+  gap: var(--lh-space-3);
+  padding: 0 0 var(--lh-space-3) var(--lh-space-5);
 }
 .reading {
   background: var(--chrome-soft);
   border-radius: var(--lh-radius);
-  padding: var(--lh-space-4) var(--lh-space-5);
-  gap: var(--lh-space-2);
+  padding: var(--lh-space-3) var(--lh-space-4);
+  gap: var(--lh-space-1);
 }
-.reading + .reading { border-left: 0; padding-left: var(--lh-space-5); }
-.readingValue { color: var(--chrome-fg); font-size: 30px; font-weight: 600; }
+.reading + .reading { border-left: 0; padding-left: var(--lh-space-4); }
+.readingValue { color: var(--chrome-fg); font-size: var(--lh-text-title); font-weight: 600; }
 .readingValue[data-empty="true"] { color: var(--chrome-fg); opacity: 0.6; }
 .readingLabel { margin-top: 0; }
 

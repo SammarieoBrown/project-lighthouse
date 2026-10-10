@@ -717,6 +717,7 @@ export function EocConsole() {
       </header>
 
       <ScreenGuide
+        defaultOpen={false}
         what={
           live
             ? "Live view of the storm picture over Jamaica."
